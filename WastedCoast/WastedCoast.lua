@@ -20,6 +20,7 @@ local addonName, ns = ...
 --   * v0.8.1: legacy points pr. ven på WoW Forever
 --   * v0.9.1: honor points og honorable kills pr. ven
 --   * v0.9.2: nyt navn: Wasted Coast Forever (WC4ever), /wc4ever (/wc4l virker stadig)
+--   * v0.9.3: på Forever bruger vinduet spillets egne rammer, faner og knapper (/wc4ever stil skifter)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -5434,7 +5435,31 @@ function ns.BuildMinimapButton()
     ns.minimapButton = b
 end
 
+-- Udseende: "native" bruger spillets egne rammer, faner og knapper (som resten af WoW Forevers UI),
+-- "classic" er addonets egen flade stil. Standard: native på Forever, classic ellers.
+function ns.UseNativeSkin()
+    local skin = db and db.settings.skin
+    if skin == "native" then return true end
+    if skin == "classic" then return false end
+    return GAME.isForever and true or false
+end
+
 local function BuildUI()
+    -- Opretter en frame med en af spillets templates; nil hvis templaten ikke findes i denne klient
+    local function TryTemplate(kind, name, parent, template)
+        local ok, fr = pcall(CreateFrame, kind, name, parent, template)
+        if ok and fr then return fr end
+    end
+
+    -- Farverne skifter til varme, neutrale toner, der passer til spillets mørke paneler
+    local function NativePalette()
+        local function set(t, r, g, b, a) t[1], t[2], t[3], t[4] = r, g, b, a end
+        set(COL_PANEL, 0.09, 0.08, 0.07, 0.85)
+        set(COL_BORDER, 0.32, 0.28, 0.21, 1)
+        set(COL_BTN, 0.13, 0.12, 0.10, 1)
+        set(COL_SELECT, 0.42, 0.31, 0.08, 1)
+    end
+
     -- Faneblade: (ikon +) tekst; den valgte får guldtekst og en guldstreg forneden
     local function MakeTab(parent, w, h, label, icon, onClick, font)
         local tb = MakeBox("Button", parent, COL_BTN, COL_BORDER)
@@ -5520,19 +5545,59 @@ local function BuildUI()
 
     AddShadow(f, 8)
 
-    -- Header: guldskær fra venstre, ikon og titel i quest-skriften
-    local band = f:CreateTexture(nil, "BORDER", nil, 1)
+    -- Native ramme fra spillet (titellinje, portræt med logoet, lukkeknap og et indsænket panel)
+    local chrome = ns.UseNativeSkin() and TryTemplate("Frame", "WastedCoastChrome", f, "ButtonFrameTemplate")
+    if chrome then
+        NativePalette()
+        chrome:SetAllPoints(f)
+        chrome:SetFrameLevel(math.max(0, (f:GetFrameLevel() or 2) - 1))
+        f:SetBackdrop(nil)
+        f.sheen:Hide()
+        f.shadow:Hide()
+        if chrome.SetTitle then
+            chrome:SetTitle("Wasted Coast Forever")
+        else
+            local tt = chrome.TitleText or (type(chrome.TitleContainer) == "table" and chrome.TitleContainer.TitleText)
+            if type(tt) == "table" then tt:SetText("Wasted Coast Forever") end
+        end
+        if chrome.SetPortraitToAsset then
+            chrome:SetPortraitToAsset(ns.LOGO)
+        elseif chrome.SetPortraitTextureRaw then
+            chrome:SetPortraitTextureRaw(ns.LOGO)
+        else
+            local pt = chrome.portrait or (type(chrome.PortraitContainer) == "table" and chrome.PortraitContainer.portrait)
+            if type(pt) == "table" then pt:SetTexture(ns.LOGO) end
+        end
+        if type(chrome.CloseButton) == "table" then
+            -- Over hovedvinduet, så den kan klikkes, og den skal lukke hele vinduet
+            chrome.CloseButton:SetFrameLevel((f:GetFrameLevel() or 2) + 20)
+            chrome.CloseButton:SetScript("OnClick", function() f:Hide() end)
+        end
+        if type(chrome.Inset) == "table" then
+            chrome.Inset:ClearAllPoints()
+            chrome.Inset:SetPoint("TOPLEFT", f, "TOPLEFT", 6, -66)
+            chrome.Inset:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -6, 30)
+        end
+        f.chrome = chrome
+    end
+    ns.native = chrome and true or false
+
+    -- Header: guldskær fra venstre, ikon og titel i quest-skriften (kun i den klassiske stil)
+    local header = CreateFrame("Frame", nil, f)
+    header:SetAllPoints(f)
+    header:SetShown(not ns.native)
+    local band = header:CreateTexture(nil, "BORDER", nil, 1)
     band:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
     band:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
     band:SetHeight(36)
     Gradient(band, "HORIZONTAL", COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.16, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0)
 
-    local logo = f:CreateTexture(nil, "ARTWORK")
+    local logo = header:CreateTexture(nil, "ARTWORK")
     logo:SetSize(30, 30)
     logo:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -4)
     logo:SetTexture(ns.LOGO)
 
-    local title = Txt(f, "GameFontNormalLarge")
+    local title = Txt(header, "GameFontNormalLarge")
     title:SetPoint("LEFT", logo, "RIGHT", 8, 0)
     title:SetFont("Fonts\\MORPHEUS.TTF", 21, "")
     if not title:GetFont() then title:SetFontObject("GameFontNormalLarge") end
@@ -5541,42 +5606,82 @@ local function BuildUI()
     title:SetText("Wasted Coast Forever")
     title:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
 
-    local sub = Txt(f, "GameFontHighlightSmall")
+    local sub = Txt(header, "GameFontHighlightSmall")
     sub:SetPoint("LEFT", title, "RIGHT", 10, -2)
     sub:SetTextColor(0.6, 0.6, 0.68)
     sub:SetText("WC4ever  -  vi dør sammen")
 
     local ver = Txt(f, "GameFontHighlightSmall")
-    ver:SetPoint("TOPRIGHT", f, "TOPRIGHT", -36, -13)
+    if ns.native then
+        -- I titellinjen, til venstre for lukkeknappen
+        ver:SetPoint("TOPRIGHT", f, "TOPRIGHT", -30, -6)
+    else
+        ver:SetPoint("TOPRIGHT", f, "TOPRIGHT", -36, -13)
+    end
     ver:SetJustifyH("RIGHT")
     ver:SetTextColor(0.45, 0.45, 0.5)
     local version = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata or function() end)(addonName, "Version")
     ver:SetText(GAME.label .. (version and ("  -  v" .. version) or ""))
 
-    local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
-
-    FadeLine(f, -37, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.45)
+    if not ns.native then
+        local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+        close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
+        FadeLine(f, -37, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.45)
+    end
 
     -- Fire store faner og en række små undersider under den valgte
     ns.tabs, ns.subTabs = {}, {}
+    -- Native: spillets faner hænger under vinduet (som Character-vinduet), og undersiderne ligger øverst
+    local nativeTabs = ns.native and PanelTemplates_SetTab and TryTemplate("Button", "WastedCoastFrameTab1", f, "PanelTabButtonTemplate")
     for gi, grp in ipairs(GROUPS) do
-        local tb = MakeTab(f, 178, 30, grp.label, grp.icon, function() ns.ShowTab(grp.pages[1]) end, "GameFontNormalLarge")
-        tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + (gi - 1) * 184.6, -42)
+        local tb
+        if nativeTabs then
+            tb = (gi == 1) and nativeTabs or TryTemplate("Button", "WastedCoastFrameTab" .. gi, f, "PanelTabButtonTemplate")
+            tb:SetID(gi)
+            tb:SetText(grp.label)
+            if PanelTemplates_TabResize then PanelTemplates_TabResize(tb, 0) end
+            if gi == 1 then
+                tb:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 11, 2)
+            else
+                tb:SetPoint("LEFT", ns.tabs[gi - 1], "RIGHT", GAME.isForever and 3 or -15, 0)
+            end
+            function tb:SetActive(on)
+                self.active = on
+                if on then PanelTemplates_SetTab(f, self:GetID()) end
+            end
+            tb:SetScript("OnClick", function()
+                if SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB) end
+                ns.ShowTab(grp.pages[1])
+            end)
+        else
+            tb = MakeTab(f, 178, 30, grp.label, grp.icon, function() ns.ShowTab(grp.pages[1]) end, "GameFontNormalLarge")
+            tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + (gi - 1) * 184.6, -42)
+        end
         ns.tabs[gi] = tb
         ns.subTabs[gi] = {}
         for si, pg in ipairs(grp.pages) do
-            local sb = MakeTab(f, 112, 20, grp.names[si], nil, function() ns.ShowTab(pg) end, "GameFontHighlightSmall")
-            sb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + (si - 1) * 116, -79)
+            local sb
+            if ns.native then
+                -- Til højre for portrættet
+                sb = MakeTab(f, 104, 22, grp.names[si], nil, function() ns.ShowTab(pg) end, "GameFontHighlightSmall")
+                sb:SetPoint("TOPLEFT", f, "TOPLEFT", 62 + (si - 1) * 108, -36)
+            else
+                sb = MakeTab(f, 112, 20, grp.names[si], nil, function() ns.ShowTab(pg) end, "GameFontHighlightSmall")
+                sb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + (si - 1) * 116, -79)
+            end
             ns.subTabs[gi][si] = sb
         end
     end
+    if nativeTabs then
+        f.numTabs = #GROUPS
+        if PanelTemplates_SetNumTabs then PanelTemplates_SetNumTabs(f, #GROUPS) end
+    end
 
-    FadeLine(f, -104, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.35)
+    if not ns.native then FadeLine(f, -104, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.35) end
 
     -- Sider
     local content = CreateFrame("Frame", nil, f)
-    content:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -112)
+    content:SetPoint("TOPLEFT", f, "TOPLEFT", 14, ns.native and -74 or -112)
     content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 36)
 
     ns.pages = {}
@@ -5594,30 +5699,39 @@ local function BuildUI()
     BuildRacePage(ns.pages[7])
     for i, pg in pairs(EXTRA_PAGES) do pg.build(ns.pages[i]) end
 
-    -- Footer: lidt mørkere bånd med en streg over
-    local foot = f:CreateTexture(nil, "BORDER", nil, 1)
+    -- Footer: lidt mørkere bånd med en streg over (native: spillets egen knaplinje)
+    local foot = header:CreateTexture(nil, "BORDER", nil, 1)
     foot:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
     foot:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
     foot:SetHeight(32)
     Gradient(foot, "VERTICAL", 0, 0, 0, 0.35, 0, 0, 0, 0.1)
-    local footLine = f:CreateTexture(nil, "ARTWORK")
+    local footLine = header:CreateTexture(nil, "ARTWORK")
     footLine:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 33)
     footLine:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 33)
     footLine:SetHeight(1)
     footLine:SetColorTexture(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 0.8)
 
     f.me = Txt(f, "GameFontHighlightSmall")
-    f.me:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 16, 14)
+    f.me:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 16, ns.native and 10 or 14)
 
-    local switch = MakeButton(f, 50, 20, "Skift", function() ns.ShowIdentityPicker() end)
+    -- Native: spillets røde knapper
+    local function FooterButton(w, label, onClick)
+        local b = ns.native and TryTemplate("Button", nil, f, "UIPanelButtonTemplate")
+        if not b then return MakeButton(f, w, 20, label, onClick) end
+        b:SetSize(w + 10, 22)
+        b:SetText(label)
+        b:SetScript("OnClick", onClick)
+        return b
+    end
+    local switch = FooterButton(50, "Skift", function() ns.ShowIdentityPicker() end)
     switch:SetPoint("LEFT", f.me, "RIGHT", 10, 0)
-    local opts = MakeButton(f, 100, 20, "Indstillinger", function() ns.OpenOptions() end)
+    local opts = FooterButton(100, "Indstillinger", function() ns.OpenOptions() end)
     opts:SetPoint("LEFT", switch, "RIGHT", 6, 0)
-    local refresh = MakeButton(f, 80, 20, "Opdater", function() ns.RefreshNow() end)
+    local refresh = FooterButton(80, "Opdater", function() ns.RefreshNow() end)
     refresh:SetPoint("LEFT", opts, "RIGHT", 6, 0)
 
     local hint = Txt(f, "GameFontHighlightSmall")
-    hint:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, 14)
+    hint:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, ns.native and 10 or 14)
     hint:SetJustifyH("RIGHT")
     hint:SetTextColor(0.5, 0.5, 0.56)
     hint:SetText("Klik på et kort for at se vennens karakterer")
@@ -6085,6 +6199,11 @@ SlashCmdList["WASTEDCOAST"] = function(input)
 
     if cmd == "" or cmd == "show" or cmd == "toggle" then
         ns.frame:SetShown(not ns.frame:IsShown())
+    elseif cmd == "skin" or cmd == "stil" then
+        local native = ns.UseNativeSkin()
+        db.settings.skin = native and "classic" or "native"
+        Print("Udseende: " .. (native and "addonets egen stil" or "spillets egne rammer (native)") ..
+            ". Skriv |cffffd100/reload|r for at se det.")
     elseif cmd == "minimap" then
         db.settings.minimapHide = not db.settings.minimapHide
         if ns.minimapButton then ns.minimapButton:SetShown(not db.settings.minimapHide) end
@@ -6201,6 +6320,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print("  /wc4ever sound        - slå lyd til/fra  (|cffffd100sound <event>|r tester en lyd)")
         print("  /wc4ever toast        - slå popups (online, wipe, level) til/fra")
         print("  /wc4ever minimap      - vis/skjul WC4ever-knappen ved minimappet")
+        print("  /wc4ever stil         - skift mellem spillets egne rammer og addonets egen stil")
         print("  /wc4ever testtoast    - vis eksempler på popups")
         print("  /wc4ever announce     - slå chat-beskeder til/fra")
         print("  /wc4ever angrib <ven> - send et emote-angreb til en ven")

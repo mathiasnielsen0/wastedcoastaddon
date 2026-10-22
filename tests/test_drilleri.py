@@ -1,4 +1,4 @@
-# Test af Drilleri.lua med en lille WoW-attrap. Kør: pip install lupa && python3 tests/test_drilleri.py WastedCoast
+# Test af addonet med en lille WoW-attrap. Kør: pip install lupa && python3 tests/test_drilleri.py WastedCoast [native]
 import sys, lupa.lua51 as L
 
 ADDON = sys.argv[1]
@@ -123,6 +123,16 @@ end
 '''
 
 lua.execute(MOCK)
+# "native": test spillets egne rammer/faner (som på WoW Forever) i stedet for den klassiske stil
+NATIVE = len(sys.argv) > 2 and sys.argv[2] == "native"
+if NATIVE:
+    lua.execute('''
+WastedCoastDB = { settings = { skin = "native" } }
+TABSET = {}
+function PanelTemplates_SetTab(f, id) TABSET[#TABSET+1] = id or true end
+function PanelTemplates_SetNumTabs() end
+function PanelTemplates_TabResize() end
+''')
 ns = lua.table()
 for f in ["Sounds.lua", "WastedCoast.lua", "Drilleri.lua", "Dueller.lua"]:
     code = open(f"{ADDON}/{f}", encoding="utf-8").read()
@@ -355,6 +365,12 @@ ns.ShowTab(1)
 ns.frame:Show()
 ns.frame.scripts.OnShow(ns.frame)
 check(#ns.tabs == 4, "fire faner")
+if TABSET then
+  check(ns.native and ns.frame.chrome ~= nil, "native stil bruger spillets ramme")
+  check(#TABSET > 0, "native faner vælges med PanelTemplates_SetTab")
+else
+  check(not ns.native, "klassisk stil uden for Forever")
+end
 for i = 1, #ns.pages do ns.ShowTab(i) end
 ns.ShowTab(3)
 check(ns.tabs[1].active and not ns.tabs[2].active, "karakterer hører under Venner")

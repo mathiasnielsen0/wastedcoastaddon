@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.9.2. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.9.3. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -64,11 +64,16 @@ nogle små undersider lige under fanerne:
 | Fane | Undersider |
 |---|---|
 | **Venner** | Kort (forsiden), Karakterer, Gear, Professions, Reputation, Guld |
-| **Rangliste** | Scoreboard, Race |
+| **Rangliste** | Scoreboard, Race, Dueller |
 | **Loot & død** | Loot, Instanser, Statistik |
 | **Sjov** | Trofæer, Drilleri |
 
 Klik på en vens kort for at se vennens karakterer.
+
+På WoW Forever bruger vinduet spillets egne rammer, faner og knapper, så det ligner resten
+af Forevers UI: titellinje med logoet som portræt, fanerne hængende under vinduet og røde
+knapper forneden. På TBC Anniversary bruger det addonets egen mørke stil. Skift med
+`/wc4ever stil` og skriv `/reload` bagefter.
 
 ---
 
@@ -288,6 +293,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever sound` | Slå lyd til/fra |
 | `/wc4ever sound <event>` | Test en lyd: `death`, `loot`, `wipe`, `online`, `levelup`, `achievement`, `bosskill` |
 | `/wc4ever toast` | Slå popups (online, level, wipe) til/fra |
+| `/wc4ever stil` | Skift mellem spillets egne rammer (native) og addonets egen stil (kræver /reload) |
 | `/wc4ever minimap` | Vis/skjul WC4ever-logoet ved minimappet (klik åbner vinduet, træk flytter det) |
 | `/wc4ever testtoast` | Vis eksempler på popups (sendes ikke til de andre) |
 | `/wc4ever announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
