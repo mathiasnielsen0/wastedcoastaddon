@@ -652,7 +652,7 @@ local function BuildPage(page)
         row.rank = C.Field(row, 4, 20, "CENTER", "GameFontHighlightSmall")
         row.name = C.Field(row, 26, 96, "LEFT", "GameFontNormal")
         row.barBG = row:CreateTexture(nil, "ARTWORK")
-        row.barBG:SetColorTexture(0.17, 0.17, 0.21, 1)
+        C.BarFill(row.barBG, 0.22, 0.22, 0.27, 1)
         row.barBG:SetSize(130, 8)
         row.barBG:SetPoint("LEFT", row, "LEFT", 126, 0)
         row.bar = row:CreateTexture(nil, "OVERLAY")
@@ -773,7 +773,7 @@ local function RefreshPage()
         if d.st then
             local p = d.st.pct / 100
             row.bar:SetWidth(math.max(1, 130 * p))
-            row.bar:SetColorTexture(1 - p * 0.75, 0.3 + p * 0.6, 0.3, 1)
+            C.BarFill(row.bar, 1 - p * 0.75, 0.3 + p * 0.6, 0.3, 1)
             row.bar:Show()
             row.pct:SetText(string.format("%d%%", math.floor(d.st.pct + 0.5)))
         else

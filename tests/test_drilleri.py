@@ -344,6 +344,18 @@ check(findSent("XK;Mathias;") and findSent("XN;N-"), "synk sender drilleri-data"
 SlashCmdList.WASTEDCOAST("demo")
 ns.ShowTab(13)
 ns.ShowTab(1)
+
+-- Hele vinduet kan tegnes med demo-data: alle faner, fade-in og toast-animation
+ns.frame:Show()
+ns.frame.scripts.OnShow(ns.frame)
+for i = 1, #ns.tabs do ns.ShowTab(i) end
+ns.ShowTab(3)
+check(ns.tabs[3].active and not ns.tabs[1].active, "valgt fane er markeret")
+ns.frame.scripts.OnUpdate(ns.frame, 2.1)
+ns.Toast({ kind = "wipe", title = "Wipe", text = "test", force = true })
+local tf = _G.WastedCoastToast
+for _ = 1, 40 do tf.scripts.OnUpdate(tf, 0.25) end
+ns.ShowTab(1)
 SlashCmdList.WASTEDCOAST("demo slut")
 for _, e in ipairs(db.needShame) do check(not e.demo, "demo fjernet") end
 ns.ShowTab(13)

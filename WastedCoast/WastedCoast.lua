@@ -14,6 +14,7 @@ local addonName, ns = ...
 --   * v0.6: drillerier (dødsannoncer, Skammens hat, Need-politiet, emote-angreb og
 --           held-rangering). De ligger i Drilleri.lua, som bruger ns.core herfra.
 --   * v0.7: virker både på TBC Anniversary og WoW Forever (max level, instanser og API)
+--   * v0.7.1: flottere UI (faner med ikoner, skygge, glans, statusbars og pænere toasts)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -2434,11 +2435,74 @@ local COL_SELECT = { 0.20, 0.38, 0.62, 1 }
 local COL_EPIC   = { 0.64, 0.21, 0.93, 1 }
 local COL_MUTED  = { 0.6, 0.6, 0.66, 1 }
 
+-- (i en blok for sig: Luas grænse på 200 lokale variabler)
+local Gradient, BarFill, SafeIcon, AddShadow
+local WHITE = "Interface\\Buttons\\WHITE8X8"
+do
+    local BAR_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
+
+    -- Farveovergang, der virker med både den gamle (SetGradientAlpha) og nye (SetGradient + CreateColor) API.
+    -- "VERTICAL": første farve er bunden, anden er toppen. "HORIZONTAL": venstre, så højre.
+    function Gradient(tex, orient, r1, g1, b1, a1, r2, g2, b2, a2)
+        tex:SetTexture(WHITE)
+        if tex.SetGradientAlpha then
+            tex:SetGradientAlpha(orient, r1, g1, b1, a1, r2, g2, b2, a2)
+        elseif CreateColor then
+            tex:SetGradient(orient, CreateColor(r1, g1, b1, a1), CreateColor(r2, g2, b2, a2))
+        else
+            tex:SetColorTexture(r2, g2, b2, a2)
+        end
+    end
+
+    -- Statusbar-tekstur (den med lidt glans) i en given farve
+    function BarFill(tex, r, g, b, a)
+        tex:SetTexture(BAR_TEX)
+        tex:SetVertexColor(r, g, b, a or 1)
+    end
+
+    -- Ikoner fra spillets egne filer; findes en sti ikke i denne spilversion, bruges spørgsmålstegnet
+    function SafeIcon(tex, path)
+        if path and GetFileIDFromPath and not GetFileIDFromPath(path) then
+            path = "Interface\\Icons\\INV_Misc_QuestionMark"
+        end
+        tex:SetTexture(path)
+        tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    end
+
+    -- Blød skygge under et vindue (et par lag sort, der bliver svagere udad)
+    function AddShadow(f, size)
+        if (f:GetFrameLevel() or 0) < 2 then f:SetFrameLevel(2) end
+        local sh = CreateFrame("Frame", nil, f)
+        sh:SetFrameLevel(math.max(0, (f:GetFrameLevel() or 1) - 1))
+        for i = 1, (size or 6) do
+            local t = sh:CreateTexture(nil, "BACKGROUND")
+            t:SetColorTexture(0, 0, 0, 0.09)
+            t:SetPoint("TOPLEFT", f, "TOPLEFT", -i, i - 2)
+            t:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", i, -i - 2)
+        end
+        f.shadow = sh
+        return sh
+    end
+end
+
 local function MakeBox(frameType, parent, bg, border, name)
     local f = CreateFrame(frameType, name, parent, "BackdropTemplate")
     f:SetBackdrop(FLAT)
     f:SetBackdropColor(bg[1], bg[2], bg[3], bg[4] or 1)
     f:SetBackdropBorderColor(border[1], border[2], border[3], border[4] or 1)
+    -- Svag glans foroven, så flader ikke ser helt flade ud
+    f.sheen = f:CreateTexture(nil, "BORDER")
+    f.sheen:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+    f.sheen:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+    Gradient(f.sheen, "VERTICAL", 1, 1, 1, 0, 1, 1, 1, 0.05)
+    if frameType == "Button" then
+        -- Lys op, når musen er over (HIGHLIGHT-laget vises kun ved hover)
+        local hl = f:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+        hl:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+        hl:SetColorTexture(1, 0.85, 0.45, 0.06)
+        hl:SetBlendMode("ADD")
+    end
     return f
 end
 
@@ -2467,6 +2531,17 @@ local function MakeButton(parent, w, h, label, onClick)
     b.text:SetText(label)
     b:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1) end)
     b:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1) end)
+    -- Teksten trykkes lidt ned, mens man klikker
+    b:SetScript("OnMouseDown", function(self)
+        local pt, rel, rp, x, y = self.text:GetPoint(1)
+        if not pt then return end
+        self.textPt = { pt, rel, rp, x, y }
+        self.text:SetPoint(pt, rel, rp, x + 1, y - 1)
+    end)
+    b:SetScript("OnMouseUp", function(self)
+        local tp = self.textPt
+        if tp then self.text:SetPoint(tp[1], tp[2], tp[3], tp[4], tp[5]) self.textPt = nil end
+    end)
     b:SetScript("OnClick", onClick)
     return b
 end
@@ -2523,7 +2598,18 @@ local function BuildCard(parent, index, friend)
     card.bar = card:CreateTexture(nil, "ARTWORK")
     card.bar:SetPoint("TOPLEFT", card, "TOPLEFT", 1, -1)
     card.bar:SetPoint("TOPRIGHT", card, "TOPRIGHT", -1, -1)
-    card.bar:SetHeight(4)
+    card.bar:SetHeight(3)
+
+    -- Klassefarvet skær øverst på kortet (farven sættes i RefreshOverview)
+    card.wash = card:CreateTexture(nil, "BORDER", nil, 1)
+    card.wash:SetPoint("TOPLEFT", card, "TOPLEFT", 1, -4)
+    card.wash:SetPoint("TOPRIGHT", card, "TOPRIGHT", -1, -4)
+    card.wash:SetHeight(52)
+
+    card.iconFrame = card:CreateTexture(nil, "ARTWORK", nil, -1)
+    card.iconFrame:SetSize(44, 44)
+    card.iconFrame:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -12)
+    card.iconFrame:SetColorTexture(0, 0, 0, 1)
 
     card.icon = card:CreateTexture(nil, "ARTWORK")
     card.icon:SetSize(40, 40)
@@ -2558,6 +2644,11 @@ local function BuildCard(parent, index, friend)
     card.info2:SetWordWrap(false)
     card.info2:SetTextColor(0.6, 0.6, 0.66)
 
+    card.divider = card:CreateTexture(nil, "ARTWORK")
+    card.divider:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -89)
+    card.divider:SetSize(BAR_W, 1)
+    Gradient(card.divider, "HORIZONTAL", 1, 1, 1, 0.12, 1, 1, 1, 0)
+
     card.deaths = Txt(card, "GameFontNormal")
     card.deaths:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -96)
 
@@ -2566,7 +2657,7 @@ local function BuildCard(parent, index, friend)
     card.lootText:SetJustifyH("RIGHT")
 
     card.barBG = card:CreateTexture(nil, "ARTWORK")
-    card.barBG:SetColorTexture(0.17, 0.17, 0.21, 1)
+    BarFill(card.barBG, 0.22, 0.22, 0.27, 1)
     card.barBG:SetSize(BAR_W, 6)
     card.barBG:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -116)
 
@@ -2663,6 +2754,8 @@ local function RefreshOverview()
         local card = ns.cards[i]
         local r, g, b = ClassColor(s.class)
         card.bar:SetColorTexture(r, g, b, 1)
+        Gradient(card.wash, "VERTICAL", r, g, b, 0, r, g, b, s.online and 0.22 or 0.10)
+        card.iconFrame:SetColorTexture(r * 0.5, g * 0.5, b * 0.5, 1)
         card.name:SetTextColor(r, g, b)
         card.name:SetText(s.name .. ((ns.snailHolder == s.name) and (" " .. ns.SNAIL_ICON) or ""))
         SetClassIcon(card.icon, s.class)
@@ -2684,7 +2777,7 @@ local function RefreshOverview()
         card.deaths:SetText("Døde: " .. s.deaths)
         card.lootText:SetText("|cffa335eeLoot: " .. s.loot .. "|r")
         if s.loot > 0 and maxLoot > 0 then
-            card.barFill:SetColorTexture(COL_EPIC[1], COL_EPIC[2], COL_EPIC[3], 1)
+            BarFill(card.barFill, COL_EPIC[1], COL_EPIC[2], COL_EPIC[3], 1)
             card.barFill:SetWidth(math.max(1, BAR_W * (s.loot / maxLoot)))
             card.barFill:Show()
         else
@@ -3261,10 +3354,24 @@ local function ToastFrame()
     f:SetPoint("TOP", UIParent, "TOP", 0, -130)
     f:SetFrameStrata("FULLSCREEN_DIALOG")
     f:Hide()
+    AddShadow(f, 6)
 
+    -- Farvet stribe i venstre side og et skær, der toner ud mod højre (farven følger toast-typen)
+    f.stripe = f:CreateTexture(nil, "ARTWORK")
+    f.stripe:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+    f.stripe:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+    f.stripe:SetWidth(3)
+    f.wash = f:CreateTexture(nil, "BORDER", nil, 1)
+    f.wash:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -1)
+    f.wash:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 4, 1)
+    f.wash:SetWidth(220)
+
+    f.iconFrame = f:CreateTexture(nil, "ARTWORK", nil, -1)
+    f.iconFrame:SetSize(52, 52)
+    f.iconFrame:SetPoint("LEFT", f, "LEFT", 12, 0)
     f.icon = f:CreateTexture(nil, "ARTWORK")
     f.icon:SetSize(48, 48)
-    f.icon:SetPoint("LEFT", f, "LEFT", 12, 0)
+    f.icon:SetPoint("CENTER", f.iconFrame, "CENTER", 0, 0)
 
     f.head = Txt(f, "GameFontNormalSmall")
     f.head:SetTextColor(1, 0.82, 0.2)
@@ -3286,7 +3393,10 @@ local function ToastFrame()
         self.t = (self.t or 0) + dt
         local dur = self.dur or 5
         if self.t < 0.3 then
-            self:SetAlpha(self.t / 0.3)
+            local k = self.t / 0.3
+            self:SetAlpha(k)
+            -- Glider lidt ned på plads
+            self:SetPoint("TOP", UIParent, "TOP", 0, -130 + 14 * (1 - k) * (1 - k))
         elseif self.t < dur then
             self:SetAlpha(1)
         elseif self.t < dur + 0.6 then
@@ -3310,6 +3420,10 @@ function ns.ToastNext()
 
     f:SetBackdropColor(st.bg[1], st.bg[2], st.bg[3], 0.97)
     f:SetBackdropBorderColor(st.border[1], st.border[2], st.border[3], 1)
+    local br, bgc, bb = st.border[1], st.border[2], st.border[3]
+    f.stripe:SetColorTexture(br, bgc, bb, 1)
+    Gradient(f.wash, "HORIZONTAL", br, bgc, bb, 0.16, br, bgc, bb, 0)
+    f.iconFrame:SetColorTexture(br * 0.6, bgc * 0.6, bb * 0.6, 1)
 
     if opts.icon then
         f.icon:SetTexture(opts.icon)
@@ -3854,9 +3968,9 @@ local function RefreshRace()
         local frac = math.min(1, math.max(0, s.progress / MAX_LEVEL))
         row.fill:SetWidth(math.max(1, math.floor((RACE_TRACK_W - 2) * frac)))
         if s.level >= MAX_LEVEL then
-            row.fill:SetColorTexture(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
+            BarFill(row.fill, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
         else
-            row.fill:SetColorTexture(r, g, b, 0.9)
+            BarFill(row.fill, r, g, b, 0.9)
         end
 
         if s.level > 0 then
@@ -4944,10 +5058,7 @@ end
 function ns.ShowTab(i)
     ns.tab = i
     for idx, page in ipairs(ns.pages) do page:SetShown(idx == i) end
-    for idx, tb in ipairs(ns.tabs) do
-        local c = (idx == i) and COL_SELECT or COL_BTN
-        tb:SetBackdropColor(c[1], c[2], c[3], 1)
-    end
+    for idx, tb in ipairs(ns.tabs) do tb:SetActive(idx == i) end
     ns.RefreshUI()
 end
 
@@ -4997,10 +5108,14 @@ function ns.ShowIdentityPicker()
         p:SetSize(260, 66 + #ROSTER * 30 + 10)
         p:SetPoint("CENTER", 0, 60)
         p:SetFrameStrata("FULLSCREEN_DIALOG")
+        AddShadow(p, 8)
 
         local title = Txt(p, "GameFontNormalLarge")
-        title:SetPoint("TOP", p, "TOP", 0, -14)
+        title:SetPoint("TOP", p, "TOP", 0, -12)
         title:SetJustifyH("CENTER")
+        title:SetFont("Fonts\\MORPHEUS.TTF", 20, "")
+        if not title:GetFont() then title:SetFontObject("GameFontNormalLarge") end
+        title:SetShadowOffset(1, -1)
         title:SetText("Hvem er du?")
 
         local sub = Txt(p, "GameFontHighlightSmall")
@@ -5023,6 +5138,66 @@ function ns.ShowIdentityPicker()
 end
 
 local function BuildUI()
+    -- Faneblade: ikon + tekst; den valgte får guldtekst og en guldstreg forneden
+    local TAB_ICONS = {
+        "INV_Misc_Map_01", "INV_Misc_Note_01", "INV_Misc_Head_Human_01", "INV_Misc_Bag_10", "INV_Misc_Key_03",
+        "INV_Misc_Head_Dragon_01", "Ability_Rogue_Sprint", "INV_Misc_Bone_HumanSkull_01", "INV_Misc_Coin_01",
+        "Trade_BlackSmithing", "INV_Sword_04", "INV_Scroll_03", "Spell_Nature_Polymorph",
+    }
+
+    local function MakeTab(parent, w, h, label, icon, onClick)
+        local tb = MakeBox("Button", parent, COL_BTN, COL_BORDER)
+        tb:SetSize(w, h)
+        tb.icon = tb:CreateTexture(nil, "ARTWORK")
+        tb.icon:SetSize(16, 16)
+        tb.icon:SetPoint("LEFT", tb, "LEFT", 6, 0)
+        SafeIcon(tb.icon, "Interface\\Icons\\" .. icon)
+        tb.text = Field(tb, 27, w - 30, "LEFT", "GameFontHighlight")
+        tb.text:SetText(label)
+        tb.accent = tb:CreateTexture(nil, "OVERLAY")
+        tb.accent:SetPoint("BOTTOMLEFT", tb, "BOTTOMLEFT", 1, 1)
+        tb.accent:SetPoint("BOTTOMRIGHT", tb, "BOTTOMRIGHT", -1, 1)
+        tb.accent:SetHeight(2)
+        tb.accent:SetColorTexture(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
+
+        function tb:SetActive(on)
+            self.active = on
+            self.accent:SetShown(on)
+            self.icon:SetDesaturated(not on)
+            self.icon:SetAlpha(on and 1 or 0.75)
+            if on then
+                self:SetBackdropColor(0.17, 0.15, 0.09, 1)
+                self:SetBackdropBorderColor(0.55, 0.45, 0.18, 1)
+                self.text:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+            else
+                self:SetBackdropColor(COL_BTN[1], COL_BTN[2], COL_BTN[3], 1)
+                self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
+                self.text:SetTextColor(0.78, 0.78, 0.82)
+            end
+        end
+        tb:SetScript("OnEnter", function(self)
+            if not self.active then self.text:SetTextColor(1, 1, 1) self.icon:SetDesaturated(false) self.icon:SetAlpha(1) end
+        end)
+        tb:SetScript("OnLeave", function(self) self:SetActive(self.active) end)
+        tb:SetScript("OnClick", onClick)
+        tb:SetActive(false)
+        return tb
+    end
+
+    -- Vandret streg, der toner ud mod begge ender
+    local function FadeLine(parent, y, r, g, b, a)
+        local left = parent:CreateTexture(nil, "ARTWORK")
+        left:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y)
+        left:SetPoint("TOPRIGHT", parent, "TOP", 0, y)
+        left:SetHeight(1)
+        Gradient(left, "HORIZONTAL", r, g, b, 0, r, g, b, a)
+        local right = parent:CreateTexture(nil, "ARTWORK")
+        right:SetPoint("TOPLEFT", parent, "TOP", 0, y)
+        right:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -14, y)
+        right:SetHeight(1)
+        Gradient(right, "HORIZONTAL", r, g, b, a, r, g, b, 0)
+    end
+
     local f = MakeBox("Frame", UIParent, COL_BG, COL_BORDER, "WastedCoastFrame")
     f:SetSize(760, 552)
     f:SetPoint("CENTER")
@@ -5044,36 +5219,62 @@ local function BuildUI()
     end
     table.insert(UISpecialFrames, "WastedCoastFrame")
 
-    -- Header
+    AddShadow(f, 8)
+
+    -- Header: guldskær fra venstre, ikon og titel i quest-skriften
+    local band = f:CreateTexture(nil, "BORDER", nil, 1)
+    band:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+    band:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+    band:SetHeight(36)
+    Gradient(band, "HORIZONTAL", COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.16, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0)
+
+    local logoFrame = f:CreateTexture(nil, "ARTWORK", nil, -1)
+    logoFrame:SetSize(26, 26)
+    logoFrame:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -6)
+    logoFrame:SetColorTexture(0.55, 0.45, 0.18, 1)
+    local logo = f:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(24, 24)
+    logo:SetPoint("CENTER", logoFrame, "CENTER", 0, 0)
+    SafeIcon(logo, "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01")
+
     local title = Txt(f, "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -14)
-    title:SetText("WASTED COAST")
+    title:SetPoint("LEFT", logoFrame, "RIGHT", 8, 0)
+    title:SetFont("Fonts\\MORPHEUS.TTF", 21, "")
+    if not title:GetFont() then title:SetFontObject("GameFontNormalLarge") end
+    title:SetShadowColor(0, 0, 0, 1)
+    title:SetShadowOffset(1, -1)
+    title:SetText("Wasted Coast")
     title:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
 
     local sub = Txt(f, "GameFontHighlightSmall")
-    sub:SetPoint("LEFT", title, "RIGHT", 10, -1)
+    sub:SetPoint("LEFT", title, "RIGHT", 10, -2)
     sub:SetTextColor(0.6, 0.6, 0.68)
     sub:SetText("WC4L  -  vi dør sammen")
 
+    local ver = Txt(f, "GameFontHighlightSmall")
+    ver:SetPoint("TOPRIGHT", f, "TOPRIGHT", -36, -13)
+    ver:SetJustifyH("RIGHT")
+    ver:SetTextColor(0.45, 0.45, 0.5)
+    local version = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata or function() end)(addonName, "Version")
+    ver:SetText(GAME.label .. (version and ("  -  v" .. version) or ""))
+
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
+
+    FadeLine(f, -37, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.45)
 
     -- Faner i to rækker af syv
     ns.tabs = {}
     local labels = { "Overblik", "Scoreboard", "Karakterer", "Loot", "Instanser", "Trofæer",
                      "Race", "Statistik", "Guld", "Professions", "Gear", "Reputation", "Drilleri" }
     for i, label in ipairs(labels) do
-        local tb = MakeButton(f, 101, 26, label, function() ns.ShowTab(i) end)
+        local tb = MakeTab(f, 101, 26, label, TAB_ICONS[i] or "INV_Misc_QuestionMark", function() ns.ShowTab(i) end)
         local col, row = (i - 1) % 7, math.floor((i - 1) / 7)
         tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + col * 105, -42 - row * 30)
         ns.tabs[i] = tb
     end
 
-    local line = f:CreateTexture(nil, "ARTWORK")
-    line:SetColorTexture(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
-    line:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -104)
-    line:SetPoint("TOPRIGHT", f, "TOPRIGHT", -14, -104)
-    line:SetHeight(1)
+    FadeLine(f, -104, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.35)
 
     -- Sider
     local content = CreateFrame("Frame", nil, f)
@@ -5095,7 +5296,18 @@ local function BuildUI()
     BuildRacePage(ns.pages[7])
     for i, pg in pairs(EXTRA_PAGES) do pg.build(ns.pages[i]) end
 
-    -- Footer
+    -- Footer: lidt mørkere bånd med en streg over
+    local foot = f:CreateTexture(nil, "BORDER", nil, 1)
+    foot:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+    foot:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+    foot:SetHeight(32)
+    Gradient(foot, "VERTICAL", 0, 0, 0, 0.35, 0, 0, 0, 0.1)
+    local footLine = f:CreateTexture(nil, "ARTWORK")
+    footLine:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 33)
+    footLine:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 33)
+    footLine:SetHeight(1)
+    footLine:SetColorTexture(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 0.8)
+
     f.me = Txt(f, "GameFontHighlightSmall")
     f.me:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 16, 14)
 
@@ -5113,15 +5325,24 @@ local function BuildUI()
     hint:SetText("Klik på et kort for at se vennens karakterer")
 
     -- Opdater løbende, mens vinduet er åbent (online-status, "set for x min siden")
-    local elapsed = 0
-    f:SetScript("OnUpdate", function(_, dt)
+    -- og ton blødt ind, når det åbnes
+    local elapsed, fade = 0, 1
+    f:SetScript("OnUpdate", function(self, dt)
+        if fade < 1 then
+            fade = math.min(1, fade + dt / 0.15)
+            self:SetAlpha(fade)
+        end
         elapsed = elapsed + dt
         if elapsed >= 2 then
             elapsed = 0
             ns.RefreshUI()
         end
     end)
-    f:SetScript("OnShow", function() ns.RefreshUI() end)
+    f:SetScript("OnShow", function(self)
+        fade = 0
+        self:SetAlpha(0)
+        ns.RefreshUI()
+    end)
 
     ns.frame = f
     ns.ShowTab(1)
@@ -5689,4 +5910,5 @@ ns.core = {
     FormatToPattern = FormatToPattern, FriendOfChar = FriendOfChar, EventFriend = EventFriend,
     IsOnline = IsOnline, BuildStats = BuildStats, Send = Send,
     MakeBox = MakeBox, Txt = Txt, Field = Field, MakeButton = MakeButton,
+    Gradient = Gradient, BarFill = BarFill, SafeIcon = SafeIcon,
 }
