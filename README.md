@@ -7,7 +7,8 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.6.0 (TBC Classic Anniversary, interface 20506)
+Version 0.7.0. Virker på både TBC Classic Anniversary (interface 20506) og
+WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 ---
 
@@ -17,7 +18,7 @@ Version 0.6.0 (TBC Classic Anniversary, interface 20506)
 
 1. Pak zip-filen ud (hele den, ikke kun én fil).
 2. Dobbeltklik på `install.bat`.
-3. Vælg version (3 = Anniversary) og følg anvisningerne.
+3. Vælg version (3 = Anniversary, 4 = WoW Forever) og følg anvisningerne.
 4. Start WoW, eller skriv `/reload` hvis spillet allerede kører.
 
 ### Manuelt (Windows og Mac)
@@ -29,6 +30,10 @@ Kopiér mappen `WastedCoast` ind i den rigtige AddOns-mappe:
 | Classic Era | `World of Warcraft\_classic_era_\Interface\AddOns\` | `/Applications/World of Warcraft/_classic_era_/Interface/AddOns/` |
 | Classic | `World of Warcraft\_classic_\Interface\AddOns\` | `/Applications/World of Warcraft/_classic_/Interface/AddOns/` |
 | TBC Classic Anniversary | `World of Warcraft\_anniversary_\Interface\AddOns\` | `/Applications/World of Warcraft/_anniversary_/Interface/AddOns/` |
+| WoW Forever (beta) | `World of Warcraft\_classic_beta_\Interface\AddOns\` | `/Applications/World of Warcraft/_classic_beta_/Interface/AddOns/` |
+
+Det endelige mappenavn for WoW Forever kendes først ved launch (4. november 2026).
+Installeren prøver `_forever_` og derefter `_classic_beta_`.
 
 Til sidst skal du have: `...\AddOns\WastedCoast\WastedCoast.toc`
 (altså `.toc`-filen direkte i mappen, ikke i en undermappe).
@@ -129,7 +134,7 @@ dem (hold musen over), og du kan skifte mellem venner. Rul med musehjulet.
 ### Race
 En bar pr. ven, der viser, hvem der er længst fremme (vennens karakter med
 højest level, inkl. XP-procent). Den forreste har guldkant, og barren bliver
-guld ved level 70.
+guld ved max level (70 på TBC, 60 på WoW Forever).
 
 ### Statistik
 **Dødsstatistik:** de fem mobs, der har slået flest af jer ihjel, de tre farligste
@@ -319,7 +324,7 @@ Når du logger ud eller skriver `/reload`, gemmer WoW dem her:
 World of Warcraft\_anniversary_\WTF\Account\<DIT KONTONAVN>\SavedVariables\WastedCoastDB.lua
 ```
 
-(Eller `_classic_` / `_classic_era_` afhængigt af version.) Den fil kan senere
+(Eller `_classic_` / `_classic_era_` / Forever-mappen afhængigt af version.) Den fil kan senere
 bruges til at uploade data til et website.
 
 ---
@@ -365,6 +370,18 @@ have lagt filen der. `/wc4l sound death` fortæller, hvad der gik galt.
 **Bosser eller wipes tæller ikke**
 Skriv `/dump GetInstanceInfo()` inde i instancen og send mig det første navn, så
 kan jeg rette stavningen i addonet. Spillet skal køre på engelsk for bossnavnene.
+
+**WoW Forever: hvad er anderledes?**
+Addonet kan selv se, hvilken version det kører på (det står i chatten, når det
+indlæses). Forever kører på Blizzards nye motor, og det betyder:
+- Max level er 60, så race og trofæer går til 60.
+- Bosser og clears i Forevers dungeons og raids (også de nye, fx Barrow Deeps og
+  Forevers egen Hyjal Summit) hentes fra spillets Encounter Journal.
+- Addons kan ikke læse combat log. Ved et dødsfald gætter addonet på den fjende,
+  du havde i target, så dødsstatistikken er mindre præcis, og faldskade kan ikke ses.
+- Under bosskampe kan spillet blokere addon-beskeder. De bliver sendt, når det er
+  muligt igen.
+- Nøgle-fraktionerne til TBC-heroics vises ikke på reputation-fanen.
 
 **Lua-fejl**
 Skriv `/console scriptErrors 1` og `/reload`, og send fejlteksten videre.

@@ -16,6 +16,7 @@ EMOTES = {}
 function time() return NOW end
 date = os.date
 function GetTime() return CLOCK end
+function GetBuildInfo() return "2.5.5", "1", "", 20506 end
 local real_print = print
 function print(...) local t = {} for i = 1, select("#", ...) do t[#t+1] = tostring((select(i, ...))) end PRINTS[#PRINTS+1] = table.concat(t, " ") end
 PLAYER = "Mathiasx"

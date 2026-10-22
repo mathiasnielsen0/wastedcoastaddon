@@ -15,6 +15,13 @@ local C = ns.core
 local ROSTER, ROSTER_SET = C.ROSTER, C.ROSTER_SET
 local Print = C.Print
 
+-- WoW Forever har kun C_Item-udgaverne af item-funktionerne, og nogle værdier kan være "secret"
+local Plain = C.GAME.Plain
+local GetItemInfo = C.GAME.ItemInfo
+local IsEquippableItem = IsEquippableItem or (C_Item and C_Item.IsEquippableItem)
+local IsEquippedItem = IsEquippedItem or (C_Item and C_Item.IsEquippedItem)
+local GetItemCount = GetItemCount or (C_Item and C_Item.GetItemCount)
+
 ns.HAT_ICON = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01"
 local OBIT_ICON = "Interface\\Icons\\Ability_Rogue_FeignDeath"
 local EMOTE_ICON = "Interface\\Icons\\Ability_Warrior_BattleShout"
@@ -127,6 +134,7 @@ end
 -- /roll 1-100 tæller også med (kun dine egne; vennerne sender deres)
 local ROLL_PATTERN
 local function OnSystemMessage(msg)
+    msg = Plain(msg)
     if type(msg) ~= "string" then return end
     if ROLL_PATTERN == nil then ROLL_PATTERN = C.FormatToPattern(RANDOM_ROLL_RESULT) or false end
     if not ROLL_PATTERN then return end
@@ -370,8 +378,8 @@ function ns.KillerLevel(name)
     for i = 1, 4 do units[#units + 1] = "party" .. i .. "target" end
     for i = 1, 40 do units[#units + 1] = "nameplate" .. i end
     for _, u in ipairs(units) do
-        if UnitExists(u) and UnitName(u) == name then
-            local l = UnitLevel(u)
+        if Plain(UnitExists(u)) and Plain(UnitName(u)) == name then
+            local l = Plain(UnitLevel(u))
             if l and l ~= 0 then return l end
         end
     end

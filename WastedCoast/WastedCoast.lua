@@ -13,6 +13,7 @@ local addonName, ns = ...
 --   * v0.5.1: synk uden fælles guild (skjult kanal og whispers som reserve)
 --   * v0.6: drillerier (dødsannoncer, Skammens hat, Need-politiet, emote-angreb og
 --           held-rangering). De ligger i Drilleri.lua, som bruger ns.core herfra.
+--   * v0.7: virker både på TBC Anniversary og WoW Forever (max level, instanser og API)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -53,7 +54,45 @@ local ENV_NAMES = {
     Slime    = "Slim",
 }
 
-local MAX_LEVEL = 70
+-- =============================================================================
+-- Spilversion: TBC Anniversary (2.5.x), Classic Era (1.15.x) eller WoW Forever (1.60.x).
+-- Forever kører på den moderne (Midnight) motor: ingen combat log for addons,
+-- "secret values" og C_-udgaver af mange gamle API-funktioner.
+-- =============================================================================
+local GAME = {}
+do
+    local toc = select(4, GetBuildInfo()) or 0
+    GAME.toc = toc
+    -- WOW_PROJECT_CAMELOT er Forevers interne navn; Blizzard har sagt, at det kan blive omdøbt,
+    -- så interface-nummeret (16xxx) er reserven.
+    local pid = WOW_PROJECT_ID
+    GAME.isForever = (pid ~= nil and ((WOW_PROJECT_CAMELOT and pid == WOW_PROJECT_CAMELOT)
+        or (WOW_PROJECT_FOREVER and pid == WOW_PROJECT_FOREVER))) or (toc >= 16000 and toc < 20000) or false
+    GAME.isTBC = not GAME.isForever and toc >= 20000 and toc < 30000
+    GAME.isEra = not GAME.isForever and toc < 16000
+    GAME.label = GAME.isForever and "WoW Forever" or GAME.isTBC and "TBC Anniversary" or GAME.isEra and "Classic Era" or "WoW"
+    GAME.maxLevel = (GAME.isForever or GAME.isEra) and 60 or GAME.isTBC and 70
+        or (GetMaxPlayerLevel and GetMaxPlayerLevel()) or 70
+
+    -- Secret values (Forever/Midnight) kan ikke sammenlignes eller testes; dem behandler vi som "ukendt"
+    local isSecret = issecretvalue or function() return false end
+    function GAME.Plain(v)
+        if isSecret(v) then return nil end
+        return v
+    end
+
+    -- Item-info: Forever har kun C_Item-udgaverne
+    function GAME.ItemInfo(item)
+        local fn = GetItemInfo or (C_Item and C_Item.GetItemInfo)
+        if fn then return fn(item) end
+    end
+    function GAME.ItemInfoInstant(item)
+        local fn = GetItemInfoInstant or (C_Item and C_Item.GetItemInfoInstant)
+        if fn then return fn(item) end
+    end
+end
+
+local MAX_LEVEL = GAME.maxLevel
 
 local function Norm(s)
     return (tostring(s or ""):lower():gsub("[^%w]", ""))
@@ -78,31 +117,34 @@ local function Inst(name, final, ...)
     BOSS_BY_NORM[Norm(name)] = info
 end
 
-Inst("Hellfire Ramparts", "Nazan|Vazruden the Herald", "Watchkeeper Gargolmar", "Omor the Unscarred", "Vazruden the Herald", "Nazan")
-Inst("The Blood Furnace", "Keli'dan the Breaker", "The Maker", "Broggok", "Keli'dan the Breaker")
-Inst("The Shattered Halls", "Warchief Kargath Bladefist", "Grand Warlock Nethekurse", "Blood Guard Porung", "Warbringer O'mrogg", "Warchief Kargath Bladefist")
-Inst("The Slave Pens", "Quagmirran", "Mennu the Betrayer", "Rokmar the Crackler", "Quagmirran")
-Inst("The Underbog", "The Black Stalker", "Hungarfen", "Ghaz'an", "Swamplord Musel'ek", "The Black Stalker")
-Inst("The Steamvault", "Warlord Kalithresh", "Hydromancer Thespia", "Mekgineer Steamrigger", "Warlord Kalithresh")
-Inst("Mana-Tombs", "Nexus-Prince Shaffar", "Pandemonius", "Tavarok", "Nexus-Prince Shaffar")
-Inst("Auchenai Crypts", "Exarch Maladaar", "Shirrak the Dead Watcher", "Exarch Maladaar")
-Inst("Sethekk Halls", "Talon King Ikiss", "Darkweaver Syth", "Talon King Ikiss")
-Inst("Shadow Labyrinth", "Murmur", "Ambassador Hellmaw", "Blackheart the Inciter", "Grandmaster Vorpil", "Murmur")
-Inst("Old Hillsbrad Foothills", "Epoch Hunter", "Lieutenant Drake", "Captain Skarloc", "Epoch Hunter")
-Inst("The Black Morass", "Aeonus", "Chrono Lord Deja", "Temporus", "Aeonus")
-Inst("The Mechanar", "Pathaleon the Calculator", "Mechano-Lord Capacitus", "Nethermancer Sepethrea", "Pathaleon the Calculator")
-Inst("The Botanica", "Warp Splinter", "Commander Sarannis", "High Botanist Freywinn", "Thorngrin the Tender", "Laj", "Warp Splinter")
-Inst("The Arcatraz", "Harbinger Skyriss", "Zereketh the Unbound", "Dalliah the Doomsayer", "Wrath-Scryer Soccothrates", "Harbinger Skyriss")
-Inst("Magisters' Terrace", "Kael'thas Sunstrider", "Selin Fireheart", "Vexallus", "Priestess Delrissa", "Kael'thas Sunstrider")
-Inst("Karazhan", "Prince Malchezaar", "Attumen the Huntsman", "Moroes", "Maiden of Virtue", "The Curator", "Terestian Illhoof", "Shade of Aran", "Netherspite", "Nightbane", "Prince Malchezaar")
-Inst("Gruul's Lair", "Gruul the Dragonkiller", "High King Maulgar", "Gruul the Dragonkiller")
-Inst("Magtheridon's Lair", "Magtheridon")
-Inst("Serpentshrine Cavern", "Lady Vashj", "Hydross the Unstable", "The Lurker Below", "Leotheras the Blind", "Fathom-Lord Karathress", "Morogrim Tidewalker", "Lady Vashj")
-Inst("Tempest Keep", "Kael'thas Sunstrider", "Al'ar", "High Astromancer Solarian", "Void Reaver", "Kael'thas Sunstrider")
-Inst("Hyjal Summit", "Archimonde", "Rage Winterchill", "Anetheron", "Kaz'rogal", "Azgalor", "Archimonde")
-Inst("Black Temple", "Illidan Stormrage", "High Warlord Naj'entus", "Supremus", "Shade of Akama", "Teron Gorefiend", "Gurtogg Bloodboil", "Reliquary of Souls", "Mother Shahraz", "The Illidari Council", "Illidan Stormrage")
-Inst("Zul'Aman", "Zul'jin", "Nalorakk", "Akil'zon", "Jan'alai", "Halazzi", "Hex Lord Malacrass", "Zul'jin")
-Inst("Sunwell Plateau", "Kil'jaeden", "Kalecgos", "Brutallus", "Felmyst", "Lady Sacrolash", "Grand Warlock Alythess", "M'uru", "Kil'jaeden")
+-- TBC-instanser. Forever har sin egen "Hyjal Summit" (en anden raid), så de må ikke blandes.
+if not GAME.isForever then
+    Inst("Hellfire Ramparts", "Nazan|Vazruden the Herald", "Watchkeeper Gargolmar", "Omor the Unscarred", "Vazruden the Herald", "Nazan")
+    Inst("The Blood Furnace", "Keli'dan the Breaker", "The Maker", "Broggok", "Keli'dan the Breaker")
+    Inst("The Shattered Halls", "Warchief Kargath Bladefist", "Grand Warlock Nethekurse", "Blood Guard Porung", "Warbringer O'mrogg", "Warchief Kargath Bladefist")
+    Inst("The Slave Pens", "Quagmirran", "Mennu the Betrayer", "Rokmar the Crackler", "Quagmirran")
+    Inst("The Underbog", "The Black Stalker", "Hungarfen", "Ghaz'an", "Swamplord Musel'ek", "The Black Stalker")
+    Inst("The Steamvault", "Warlord Kalithresh", "Hydromancer Thespia", "Mekgineer Steamrigger", "Warlord Kalithresh")
+    Inst("Mana-Tombs", "Nexus-Prince Shaffar", "Pandemonius", "Tavarok", "Nexus-Prince Shaffar")
+    Inst("Auchenai Crypts", "Exarch Maladaar", "Shirrak the Dead Watcher", "Exarch Maladaar")
+    Inst("Sethekk Halls", "Talon King Ikiss", "Darkweaver Syth", "Talon King Ikiss")
+    Inst("Shadow Labyrinth", "Murmur", "Ambassador Hellmaw", "Blackheart the Inciter", "Grandmaster Vorpil", "Murmur")
+    Inst("Old Hillsbrad Foothills", "Epoch Hunter", "Lieutenant Drake", "Captain Skarloc", "Epoch Hunter")
+    Inst("The Black Morass", "Aeonus", "Chrono Lord Deja", "Temporus", "Aeonus")
+    Inst("The Mechanar", "Pathaleon the Calculator", "Mechano-Lord Capacitus", "Nethermancer Sepethrea", "Pathaleon the Calculator")
+    Inst("The Botanica", "Warp Splinter", "Commander Sarannis", "High Botanist Freywinn", "Thorngrin the Tender", "Laj", "Warp Splinter")
+    Inst("The Arcatraz", "Harbinger Skyriss", "Zereketh the Unbound", "Dalliah the Doomsayer", "Wrath-Scryer Soccothrates", "Harbinger Skyriss")
+    Inst("Magisters' Terrace", "Kael'thas Sunstrider", "Selin Fireheart", "Vexallus", "Priestess Delrissa", "Kael'thas Sunstrider")
+    Inst("Karazhan", "Prince Malchezaar", "Attumen the Huntsman", "Moroes", "Maiden of Virtue", "The Curator", "Terestian Illhoof", "Shade of Aran", "Netherspite", "Nightbane", "Prince Malchezaar")
+    Inst("Gruul's Lair", "Gruul the Dragonkiller", "High King Maulgar", "Gruul the Dragonkiller")
+    Inst("Magtheridon's Lair", "Magtheridon")
+    Inst("Serpentshrine Cavern", "Lady Vashj", "Hydross the Unstable", "The Lurker Below", "Leotheras the Blind", "Fathom-Lord Karathress", "Morogrim Tidewalker", "Lady Vashj")
+    Inst("Tempest Keep", "Kael'thas Sunstrider", "Al'ar", "High Astromancer Solarian", "Void Reaver", "Kael'thas Sunstrider")
+    Inst("Hyjal Summit", "Archimonde", "Rage Winterchill", "Anetheron", "Kaz'rogal", "Azgalor", "Archimonde")
+    Inst("Black Temple", "Illidan Stormrage", "High Warlord Naj'entus", "Supremus", "Shade of Akama", "Teron Gorefiend", "Gurtogg Bloodboil", "Reliquary of Souls", "Mother Shahraz", "The Illidari Council", "Illidan Stormrage")
+    Inst("Zul'Aman", "Zul'jin", "Nalorakk", "Akil'zon", "Jan'alai", "Halazzi", "Hex Lord Malacrass", "Zul'jin")
+    Inst("Sunwell Plateau", "Kil'jaeden", "Kalecgos", "Brutallus", "Felmyst", "Lady Sacrolash", "Grand Warlock Alythess", "M'uru", "Kil'jaeden")
+end
 -- Klassiske instanser: kun slutbossen er kendt
 Inst("Ragefire Chasm", "Bazzalan")
 Inst("The Deadmines", "Edwin VanCleef")
@@ -128,8 +170,67 @@ Inst("Ruins of Ahn'Qiraj", "Ossirian the Unscathed")
 Inst("Temple of Ahn'Qiraj", "C'Thun")
 Inst("Naxxramas", "Kel'Thuzad")
 
+-- Forever har nye instanser og ombyggede gamle, så her henter vi bosserne fra spillets eget
+-- Encounter Journal (rækkefølgen dér: den sidste boss er slutbossen). Findes journalen ikke,
+-- bruges listen ovenfor.
+local JournalBosses
+do
+    local index, cache = nil, {}
+    local function Key(s) return (Norm(s):gsub("^the", "")) end
+
+    local function BuildIndex()
+        index = {}
+        if not (EJ_GetNumTiers and EJ_SelectTier and EJ_GetInstanceByIndex) then return end
+        local oldTier = EJ_GetCurrentTier and EJ_GetCurrentTier()
+        for tier = 1, EJ_GetNumTiers() or 0 do
+            EJ_SelectTier(tier)
+            for _, isRaid in ipairs({ false, true }) do
+                local i = 1
+                while i < 200 do
+                    local id, name = EJ_GetInstanceByIndex(i, isRaid)
+                    if not id then break end
+                    if name then index[Key(name)] = id end
+                    i = i + 1
+                end
+            end
+        end
+        if oldTier then EJ_SelectTier(oldTier) end
+    end
+
+    function JournalBosses(inst)
+        local key = Key(inst)
+        if cache[key] ~= nil then return cache[key] or nil end
+        if not index and not pcall(BuildIndex) then index = {} end
+        local id = index[key]
+        local info = false
+        if id and EJ_GetEncounterInfoByIndex then
+            local names = {}
+            pcall(function()
+                local i = 1
+                while i < 40 do
+                    local name = EJ_GetEncounterInfoByIndex(i, id)
+                    if not name then break end
+                    names[#names + 1] = name
+                    i = i + 1
+                end
+            end)
+            if #names > 0 then
+                info = { list = names, last = { [Norm(names[#names])] = true }, byNorm = {} }
+                for _, b in ipairs(names) do info.byNorm[Norm(b)] = b end
+            end
+        end
+        cache[key] = info
+        return info or nil
+    end
+end
+
 local function BossInfo(inst)
-    return inst and BOSS_BY_NORM[Norm(inst)] or nil
+    if not inst then return nil end
+    if GAME.isForever then
+        local info = JournalBosses(inst)
+        if info then return info end
+    end
+    return BOSS_BY_NORM[Norm(inst)]
 end
 
 local SendMsg = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
@@ -262,8 +363,8 @@ local function ParseLink(text)
     local name = text:match("|h%[(.-)%]|h")
     local color = text:match("|c%x%x(%x%x%x%x%x%x)")
     local quality = color and HEX_QUALITY[color:lower()]
-    if not quality and GetItemInfo then
-        local _, _, q = GetItemInfo(itemString)
+    if not quality then
+        local _, _, q = GAME.ItemInfo(itemString)
         quality = q
     end
     if not id or not name or not quality then return nil end
@@ -724,11 +825,12 @@ do
             target = ChannelId()
             if target == 0 then return end
             -- Ældre klienter kender ikke addon-beskeder i kanaler: så klarer whispers det
-            if not pcall(SendMsg, PREFIX, msg, chatType, target) then route.channelOK = false end
-            return
+            local ok, res = pcall(SendMsg, PREFIX, msg, chatType, target)
+            if not ok then route.channelOK = false end
+            return res
         end
         if chatType == "WHISPER" then route.probed[target:lower()] = GetTime() end
-        SendMsg(PREFIX, msg, chatType, target)
+        return SendMsg(PREFIX, msg, chatType, target)
     end
 
     -- Online karakterer på vennelisten i spillet (så I kan finde hinanden første gang)
@@ -837,9 +939,20 @@ local function Send(msg, priority)
 end
 
 local function StartPump()
+    local pauseUntil = 0
     C_Timer.NewTicker(0.3, function()
+        if GetTime() < pauseUntil then return end
         local item = table.remove(queue, 1)
-        if item then route.SendItem(item) end
+        if not item then return end
+        -- På Forever kan addon-beskeder være spærret (fx under en boss). Så venter vi og prøver igen.
+        local ok, res = pcall(route.SendItem, item)
+        local R = Enum and Enum.SendAddonMessageResult
+        if ok and R and res ~= nil and (res == R.AddOnMessageLockdown or res == R.AddonMessageThrottle
+                or res == R.ChannelThrottle) then
+            item.tries = (item.tries or 0) + 1
+            if item.tries < 20 then table.insert(queue, 1, item) end
+            pauseUntil = GetTime() + 5
+        end
     end)
 end
 
@@ -1013,6 +1126,13 @@ local function OnPlayerDead()
     local killer, ability = "Ukendt", ""
     if lastDamage and (GetTime() - lastDamage.t) < 15 then
         killer, ability = lastDamage.source, lastDamage.ability
+    elseif GAME.isForever then
+        -- Uden combat log er vores bedste bud den fjende, vi havde i target
+        local P = GAME.Plain
+        if P(UnitExists("target")) and P(UnitCanAttack("player", "target")) then
+            local t = P(UnitName("target"))
+            if type(t) == "string" and t ~= "" then killer = t end
+        end
     end
 
     local name = UnitName("player")
@@ -1111,9 +1231,9 @@ local recentRoll = {}   -- itemID -> tidspunkt for roll-sejr
 
 local function RecordLoot(it, how, isDrop)
     if it.quality < (db.settings.minQuality or 4) then return end
-    if isDrop and GetItemInfoInstant then
+    if isDrop then
         -- Spring crafting-materialer over (fx Void Crystals fra disenchant)
-        local _, _, _, _, _, classID = GetItemInfoInstant(it.id)
+        local _, _, _, _, _, classID = GAME.ItemInfoInstant(it.id)
         if classID == 7 then return end
     end
 
@@ -1198,6 +1318,7 @@ do
 end
 
 local function OnLootMessage(msg)
+    msg = GAME.Plain(msg)
     if type(msg) ~= "string" then return end
     for _, p in ipairs(LOOT_PATTERNS) do
         if msg:find(p.pattern) then
@@ -1321,9 +1442,10 @@ end
 local function GroupDeadCount()
     local total, dead = 0, 0
     local function count(unit)
-        if UnitExists(unit) and (not UnitIsConnected or UnitIsConnected(unit)) then
+        local P = GAME.Plain
+        if P(UnitExists(unit)) and (not UnitIsConnected or P(UnitIsConnected(unit)) ~= false) then
             total = total + 1
-            if UnitIsDeadOrGhost(unit) then dead = dead + 1 end
+            if P(UnitIsDeadOrGhost(unit)) then dead = dead + 1 end
         end
     end
     if IsInRaid() then
@@ -1370,7 +1492,7 @@ local function CheckWipe()
     if total < 2 then return end
     local need = (kind == "raid" and total >= 10) and math.ceil(total * 0.9) or total
     if dead >= need then
-        local recentFight = (UnitAffectingCombat and UnitAffectingCombat("player")) or (GetTime() - lastCombat) < 90
+        local recentFight = (UnitAffectingCombat and GAME.Plain(UnitAffectingCombat("player"))) or (GetTime() - lastCombat) < 90
         if not wipeLatch and recentFight then
             wipeLatch = true
             OnWipe()
@@ -1505,8 +1627,19 @@ do
     for _, pr in ipairs(PROFS) do PROF_BY_NAME[pr.name] = pr end
 
     local function ScanProfessions()
-        if not GetNumSkillLines or not GetSkillLineInfo then return nil end
         local parts = {}
+        -- Forever (moderne motor) har ikke skill-listen, men GetProfessions()
+        if not (GetNumSkillLines and GetSkillLineInfo) and GetProfessions and GetProfessionInfo then
+            for _, idx in pairs({ GetProfessions() }) do
+                local name, _, rank, maxRank = GetProfessionInfo(idx)
+                if name and PROF_BY_NAME[name] and rank then
+                    parts[#parts + 1] = string.format("%s=%d/%d", name, rank, maxRank or rank)
+                end
+            end
+            table.sort(parts)
+            return table.concat(parts, ",")
+        end
+        if not GetNumSkillLines or not GetSkillLineInfo then return nil end
         for i = 1, GetNumSkillLines() do
             local name, isHeader, _, rank, _, _, maxRank = GetSkillLineInfo(i)
             if name and not isHeader and PROF_BY_NAME[name] and rank then
@@ -1563,16 +1696,14 @@ do
             if GetDetailedItemLevelInfo then return GetDetailedItemLevelInfo(link) end
         end)
         if ok and il and il > 0 then return il end
-        local _, _, _, base = GetItemInfo(link)
+        local _, _, _, base = GAME.ItemInfo(link)
         return base
     end
 
     local function EquipLoc(link)
-        if GetItemInfoInstant then
-            local _, _, _, loc = GetItemInfoInstant(link)
-            if loc then return loc end
-        end
-        return select(9, GetItemInfo(link))
+        local _, _, _, loc = GAME.ItemInfoInstant(link)
+        if loc then return loc end
+        return select(9, GAME.ItemInfo(link))
     end
 
     local function SocketCount(link)
@@ -1653,6 +1784,8 @@ do
         { key = "sha", label = "Sha'tar", names = { "The Sha'tar" }, item = "Warpforged Key", what = "Tempest Keep heroic" },
         { key = "kot", label = "Keepers", names = { "Keepers of Time" }, item = "Key of Time", what = "Caverns of Time heroic" },
     }
+    -- Nøglerne til heroics findes kun i TBC
+    if not GAME.isTBC then KEY_FACTIONS = {} end
     local KEY_FACTION_NAME = {}
     for _, k in ipairs(KEY_FACTIONS) do
         for _, n in ipairs(k.names) do KEY_FACTION_NAME[n] = true end
@@ -1663,34 +1796,48 @@ do
         return (tostring(name or ""):gsub("[,;=:]", " "):sub(1, 40))
     end
 
+    -- Forever har kun C_Reputation; her pakkes det om, så det svarer til den gamle GetFactionInfo
+    local NumFactions, FactionInfo = GetNumFactions, GetFactionInfo
+    local ExpandHeader, CollapseHeader = ExpandFactionHeader, CollapseFactionHeader
+    if not (NumFactions and FactionInfo) and C_Reputation and C_Reputation.GetFactionDataByIndex then
+        NumFactions = C_Reputation.GetNumFactions
+        ExpandHeader, CollapseHeader = C_Reputation.ExpandFactionHeader, C_Reputation.CollapseFactionHeader
+        FactionInfo = function(i)
+            local d = C_Reputation.GetFactionDataByIndex(i)
+            if not d then return nil end
+            return d.name, nil, d.reaction, d.currentReactionThreshold, d.nextReactionThreshold,
+                d.currentStanding, nil, nil, d.isHeader, d.isCollapsed, d.isHeaderWithRep
+        end
+    end
+
     local scanningRep, repScannedAt = false, 0
     local function ScanReputation()
-        if not GetNumFactions or not GetFactionInfo or scanningRep then return nil end
+        if not NumFactions or not FactionInfo or scanningRep then return nil end
         scanningRep = true
         -- Fold lukkede overskrifter ud, så vi ser alt, og fold dem sammen igen bagefter
         local opened = {}
-        if ExpandFactionHeader then
+        if ExpandHeader then
             local i = 1
-            while i <= GetNumFactions() and i < 400 do
-                local name, _, _, _, _, _, _, _, isHeader, isCollapsed = GetFactionInfo(i)
+            while i <= NumFactions() and i < 400 do
+                local name, _, _, _, _, _, _, _, isHeader, isCollapsed = FactionInfo(i)
                 if isHeader and isCollapsed then
                     opened[name or ""] = true
-                    ExpandFactionHeader(i)
+                    ExpandHeader(i)
                 end
                 i = i + 1
             end
         end
         local res = {}
-        for i = 1, GetNumFactions() do
-            local name, _, standing, barMin, barMax, barValue, _, _, isHeader, _, hasRep = GetFactionInfo(i)
+        for i = 1, NumFactions() do
+            local name, _, standing, barMin, barMax, barValue, _, _, isHeader, _, hasRep = FactionInfo(i)
             if name and standing and (not isHeader or hasRep) and (standing >= 5 or KEY_FACTION_NAME[name]) then
                 res[RepName(name)] = string.format("%d:%d:%d", standing, (barValue or 0) - (barMin or 0), (barMax or 0) - (barMin or 0))
             end
         end
-        if CollapseFactionHeader then
-            for i = GetNumFactions(), 1, -1 do
-                local name, _, _, _, _, _, _, _, isHeader, isCollapsed = GetFactionInfo(i)
-                if isHeader and not isCollapsed and opened[name or ""] then CollapseFactionHeader(i) end
+        if CollapseHeader then
+            for i = NumFactions(), 1, -1 do
+                local name, _, _, _, _, _, _, _, isHeader, isCollapsed = FactionInfo(i)
+                if isHeader and not isCollapsed and opened[name or ""] then CollapseHeader(i) end
             end
         end
         scanningRep = false
@@ -1820,9 +1967,10 @@ local ACH = {
     { id = "need5", name = "Need before greed", desc = "Vind 5 items med Need.", icon = IC("INV_Misc_Bag_08"), pts = 10,
       test = function(S) return S.need >= 5 end },
     -- Rejsen
-    { id = "lvl60", name = "Klar til Outland", desc = "Nå level 60.", icon = IC("INV_Misc_Note_01"), pts = 10,
+    { id = "lvl60", name = MAX_LEVEL > 60 and "Klar til Outland" or "Max level", desc = "Nå level 60.",
+      icon = IC("INV_Misc_Note_01"), pts = MAX_LEVEL > 60 and 10 or 25,
       test = function(S) return S.maxLevel >= 60 end },
-    { id = "lvl70", name = "Max level", desc = "Nå level 70.", icon = IC("INV_Misc_Note_01"), pts = 25,
+    { id = "lvl70", name = "Max level", desc = "Nå level 70.", icon = IC("INV_Misc_Note_01"), pts = 25, minMax = 70,
       test = function(S) return S.maxLevel >= 70 end },
     { id = "alts5", name = "Alt-junkie", desc = "Spil med 5 forskellige karakterer.", icon = IC("INV_Misc_Bag_08"), pts = 15,
       test = function(S) return S.chars >= 5 end },
@@ -1830,6 +1978,10 @@ local ACH = {
       test = function(S) return S.gold >= 1000 * 10000 end },
     { id = "night", name = "Nattergalen", desc = "Log ind mellem klokken 02 og 05 om natten.", icon = IC("INV_Misc_PocketWatch_01"), pts = 10 },
 }
+-- Trofæer over max level (fx level 70 på Forever) giver ingen mening i denne spilversion
+for i = #ACH, 1, -1 do
+    if ACH[i].minMax and MAX_LEVEL < ACH[i].minMax then table.remove(ACH, i) end
+end
 local ACH_BY_ID = {}
 for _, a in ipairs(ACH) do ACH_BY_ID[a.id] = a end
 
@@ -2145,7 +2297,8 @@ ns.CheckBossDeath = CheckBossDeath
 local lastSyncReply = {}
 
 local function OnAddonMessage(prefix, message, chatType, sender)
-    if prefix ~= PREFIX or not message then return end
+    prefix, message, sender = GAME.Plain(prefix), GAME.Plain(message), GAME.Plain(sender)
+    if prefix ~= PREFIX or type(message) ~= "string" then return end
     local t = { strsplit(";", message) }
     local kind = t[1]
     route.Note(t, chatType, sender)
@@ -4990,6 +5143,16 @@ do
         bg      = { "Warsong Gulch", "Arathi Basin" },
     }
     local DEMO_INST = { "The Slave Pens", "Shadow Labyrinth", "The Mechanar", "Karazhan", "The Botanica", "Gruul's Lair" }
+    if not GAME.isTBC then
+        DEMO_ZONES = { "Westfall", "Stranglethorn Vale", "Tanaris", "Mount Hyjal", "Eastern Plaguelands" }
+        DEMO_PLACES = {
+            dungeon = { "The Deadmines", "Shadowfang Keep", "Blackrock Depths", "Stratholme" },
+            raid    = { "Onyxia's Lair", "Hyjal Summit" },
+            world   = { "Westfall", "Mount Hyjal", "Stranglethorn Vale" },
+            bg      = { "Warsong Gulch", "Arathi Basin" },
+        }
+        DEMO_INST = { "The Deadmines", "Shadowfang Keep", "Blackrock Depths", "Stratholme", "Onyxia's Lair" }
+    end
     local DEMO_CTX = { "dungeon", "dungeon", "dungeon", "raid", "raid", "world", "bg" }
     local DEMO_HOW = { "need", "need", "greed", "de", "drop", "drop", "roll" }
     local DEMO_ITEMS = {
@@ -5105,7 +5268,7 @@ do
                         class = real.class or class
                     else
                         local c = UpdateChar(name, cname, {
-                            class = class, level = math.random(8, 70),
+                            class = class, level = math.random(8, MAX_LEVEL),
                             gold = math.random(5, 4000) * 10000 + math.random(0, 99) * 100,
                             zone = DEMO_ZONES[math.random(#DEMO_ZONES)], xp = math.random(0, 99),
                         }, seen)
@@ -5122,7 +5285,7 @@ do
                     db.seen[id] = true
                     table.insert(db.events, {
                         id = id, name = ch.name, class = ch.class, killer = k[1], ability = k[2],
-                        level = math.random(8, 70), zone = DEMO_ZONES[math.random(#DEMO_ZONES)],
+                        level = math.random(8, MAX_LEVEL), zone = DEMO_ZONES[math.random(#DEMO_ZONES)],
                         time = now - math.random(60, 90000), friend = name,
                     })
                 end
@@ -5135,7 +5298,7 @@ do
                         e.wipes = math.random(0, 6)
                         e.clears = math.random(0, 5)
                         e.last = now - math.random(600, 400000)
-                        for _, b in ipairs(BOSSES[inst].list) do
+                        for _, b in ipairs((BossInfo(inst) or BOSSES[inst] or { list = {} }).list) do
                             if math.random() < 0.7 then e.boss[b] = math.random(1, 6) end
                         end
                     end
@@ -5266,7 +5429,10 @@ events:RegisterEvent("PLAYER_DEAD")
 events:RegisterEvent("PLAYER_LEVEL_UP")
 events:RegisterEvent("CHAT_MSG_ADDON")
 events:RegisterEvent("CHAT_MSG_LOOT")
-events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+-- Forever (og Midnight) giver ikke addons adgang til combat log; der fejler registreringen
+if not GAME.isForever then
+    pcall(events.RegisterEvent, events, "COMBAT_LOG_EVENT_UNFILTERED")
+end
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -5294,7 +5460,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         ns.BuildOptions()
         ns.InitFallbackFilters()
         StartPump()
-        Print("indlæst. Skriv /wc4l for at åbne vinduet.")
+        Print("indlæst (" .. GAME.label .. "). Skriv /wc4l for at åbne vinduet.")
 
     elseif event == "PLAYER_LOGIN" then
         -- Den skjulte synk-kanal: efter spillets egne kanaler, så de beholder /1 og /2
@@ -5515,7 +5681,7 @@ end
 -- v0.6: det, Drilleri.lua skal bruge herfra (filen indlæses efter denne)
 -- =============================================================================
 ns.core = {
-    ROSTER = ROSTER, ROSTER_SET = ROSTER_SET, ENV_NAMES = ENV_NAMES,
+    ROSTER = ROSTER, ROSTER_SET = ROSTER_SET, ENV_NAMES = ENV_NAMES, GAME = GAME, MAX_LEVEL = MAX_LEVEL,
     QUALITY_HEX = QUALITY_HEX, EXTRA_PAGES = EXTRA_PAGES,
     COL_BG = COL_BG, COL_PANEL = COL_PANEL, COL_BORDER = COL_BORDER, COL_GOLD = COL_GOLD,
     COL_BTN = COL_BTN, COL_SELECT = COL_SELECT,

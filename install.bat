@@ -39,11 +39,16 @@ echo Hvilken version spiller I?
 echo   1 = Classic Era   (_classic_era_)
 echo   2 = Classic       (_classic_, fx Cataclysm/MoP Classic)
 echo   3 = Anniversary   (_anniversary_, TBC Classic Anniversary)
+echo   4 = WoW Forever   (_forever_ eller _classic_beta_ i betaen)
 echo.
-choice /c 123 /n /m "Vaelg 1, 2 eller 3: "
+choice /c 1234 /n /m "Vaelg 1, 2, 3 eller 4: "
 set "FLAVOR=_classic_era_"
 if errorlevel 2 set "FLAVOR=_classic_"
 if errorlevel 3 set "FLAVOR=_anniversary_"
+if errorlevel 4 (
+    set "FLAVOR=_forever_"
+    if not exist "%WOW%\_forever_\" if exist "%WOW%\_classic_beta_\" set "FLAVOR=_classic_beta_"
+)
 
 set "DEST=%WOW%\%FLAVOR%\Interface\AddOns"
 if not exist "%WOW%\%FLAVOR%\" goto noflavor
