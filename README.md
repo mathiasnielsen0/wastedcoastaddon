@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.7.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.7.2. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 ---
@@ -260,6 +260,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4l sound` | Slå lyd til/fra |
 | `/wc4l sound <event>` | Test en lyd: `death`, `loot`, `wipe`, `online`, `levelup`, `achievement`, `bosskill` |
 | `/wc4l toast` | Slå popups (online, level, wipe) til/fra |
+| `/wc4l minimap` | Vis/skjul WC4L-logoet ved minimappet (klik åbner vinduet, træk flytter det) |
 | `/wc4l testtoast` | Vis eksempler på popups (sendes ikke til de andre) |
 | `/wc4l announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
 | `/wc4l angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |

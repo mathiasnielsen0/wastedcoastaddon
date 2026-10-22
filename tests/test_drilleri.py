@@ -108,6 +108,10 @@ function CreateFrame(kind, name, parent)
   return f
 end
 UIParent = newObj()
+Minimap = newObj()
+Minimap.GetCenter = function() return 0, 0 end
+Minimap.GetEffectiveScale = function() return 1 end
+function GetCursorPosition() return 10, 20 end
 GameTooltip = newObj()
 function Fire(event, ...)
   for _, f in ipairs(FRAMES) do
@@ -356,6 +360,22 @@ ns.Toast({ kind = "wipe", title = "Wipe", text = "test", force = true })
 local tf = _G.WastedCoastToast
 for _ = 1, 40 do tf.scripts.OnUpdate(tf, 0.25) end
 ns.ShowTab(1)
+
+-- Minimap-knappen: klik åbner/lukker, træk gemmer vinklen, /wc4l minimap skjuler
+local mb = _G.WastedCoastMinimapButton
+check(mb ~= nil, "minimap-knap findes")
+ns.frame:Hide()
+mb.scripts.OnClick(mb, "LeftButton")
+check(ns.frame:IsShown(), "klik på logoet åbner vinduet")
+mb.scripts.OnEnter(mb)
+mb.scripts.OnDragStart(mb)
+mb.scripts.OnUpdate(mb, 0.1)
+mb.scripts.OnDragStop(mb)
+check(type(db.settings.minimapAngle) == "number", "træk gemmer placering")
+SlashCmdList.WASTEDCOAST("minimap")
+check(db.settings.minimapHide and not mb:IsShown(), "/wc4l minimap skjuler knappen")
+SlashCmdList.WASTEDCOAST("minimap")
+check(not db.settings.minimapHide, "/wc4l minimap viser knappen igen")
 SlashCmdList.WASTEDCOAST("demo slut")
 for _, e in ipairs(db.needShame) do check(not e.demo, "demo fjernet") end
 ns.ShowTab(13)

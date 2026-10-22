@@ -15,6 +15,7 @@ local addonName, ns = ...
 --           held-rangering). De ligger i Drilleri.lua, som bruger ns.core herfra.
 --   * v0.7: virker både på TBC Anniversary og WoW Forever (max level, instanser og API)
 --   * v0.7.1: flottere UI (faner med ikoner, skygge, glans, statusbars og pænere toasts)
+--   * v0.7.2: WC4L-logo ved minimappet (klik åbner vinduet)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -5137,6 +5138,72 @@ function ns.ShowIdentityPicker()
     ns.picker:Show()
 end
 
+ns.LOGO = "Interface\\AddOns\\" .. addonName .. "\\media\\logo"
+
+-- WC4L-logo ved minimappet: venstreklik åbner/lukker, højreklik åbner indstillinger, træk flytter den
+function ns.BuildMinimapButton()
+    if ns.minimapButton or not Minimap then return end
+    local b = CreateFrame("Button", "WastedCoastMinimapButton", Minimap)
+    b:SetSize(31, 31)
+    b:SetFrameStrata("MEDIUM")
+    b:SetFrameLevel(8)
+    b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    b:RegisterForDrag("LeftButton")
+    b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+    local bg = b:CreateTexture(nil, "BACKGROUND")
+    bg:SetSize(20, 20)
+    bg:SetPoint("TOPLEFT", b, "TOPLEFT", 7, -5)
+    bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+    local icon = b:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(21, 21)
+    icon:SetPoint("TOPLEFT", b, "TOPLEFT", 5, -5)
+    icon:SetTexture(ns.LOGO)
+    local ring = b:CreateTexture(nil, "OVERLAY")
+    ring:SetSize(53, 53)
+    ring:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+    ring:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+
+    local function Place()
+        local a = math.rad(db.settings.minimapAngle or 215)
+        local r = (Minimap:GetWidth() or 140) / 2 + 10
+        b:ClearAllPoints()
+        b:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * r, math.sin(a) * r)
+    end
+    local function Follow()
+        local mx, my = Minimap:GetCenter()
+        local cx, cy = GetCursorPosition()
+        local sc = Minimap:GetEffectiveScale()
+        if not (mx and cx and sc) then return end
+        db.settings.minimapAngle = math.deg(math.atan2(cy / sc - my, cx / sc - mx))
+        Place()
+    end
+    b:SetScript("OnDragStart", function(self) self:SetScript("OnUpdate", Follow) GameTooltip:Hide() end)
+    b:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+    b:SetScript("OnClick", function(_, button)
+        if button == "RightButton" then
+            ns.OpenOptions()
+        elseif ns.frame then
+            ns.frame:SetShown(not ns.frame:IsShown())
+        end
+    end)
+    b:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:AddLine("Wasted Coast (WC4L)", COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+        local online = 0
+        for _, name in ipairs(ROSTER) do if IsOnline(name) then online = online + 1 end end
+        GameTooltip:AddLine(string.format("%d af %d venner online", online, #ROSTER), 1, 1, 1)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Venstreklik: åbn/luk vinduet", 0.7, 0.7, 0.76)
+        GameTooltip:AddLine("Højreklik: indstillinger", 0.7, 0.7, 0.76)
+        GameTooltip:AddLine("Træk: flyt knappen  -  skjul med /wc4l minimap", 0.7, 0.7, 0.76)
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    Place()
+    b:SetShown(not db.settings.minimapHide)
+    ns.minimapButton = b
+end
+
 local function BuildUI()
     -- Faneblade: ikon + tekst; den valgte får guldtekst og en guldstreg forneden
     local TAB_ICONS = {
@@ -5228,17 +5295,13 @@ local function BuildUI()
     band:SetHeight(36)
     Gradient(band, "HORIZONTAL", COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.16, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0)
 
-    local logoFrame = f:CreateTexture(nil, "ARTWORK", nil, -1)
-    logoFrame:SetSize(26, 26)
-    logoFrame:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -6)
-    logoFrame:SetColorTexture(0.55, 0.45, 0.18, 1)
     local logo = f:CreateTexture(nil, "ARTWORK")
-    logo:SetSize(24, 24)
-    logo:SetPoint("CENTER", logoFrame, "CENTER", 0, 0)
-    SafeIcon(logo, "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01")
+    logo:SetSize(30, 30)
+    logo:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -4)
+    logo:SetTexture(ns.LOGO)
 
     local title = Txt(f, "GameFontNormalLarge")
-    title:SetPoint("LEFT", logoFrame, "RIGHT", 8, 0)
+    title:SetPoint("LEFT", logo, "RIGHT", 8, 0)
     title:SetFont("Fonts\\MORPHEUS.TTF", 21, "")
     if not title:GetFont() then title:SetFontObject("GameFontNormalLarge") end
     title:SetShadowColor(0, 0, 0, 1)
@@ -5678,6 +5741,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         BuildLootPatterns()
         if RegisterPrefix then RegisterPrefix(PREFIX) end
         BuildUI()
+        ns.BuildMinimapButton()
         ns.BuildOptions()
         ns.InitFallbackFilters()
         StartPump()
@@ -5775,6 +5839,10 @@ SlashCmdList["WASTEDCOAST"] = function(input)
 
     if cmd == "" or cmd == "show" or cmd == "toggle" then
         ns.frame:SetShown(not ns.frame:IsShown())
+    elseif cmd == "minimap" then
+        db.settings.minimapHide = not db.settings.minimapHide
+        if ns.minimapButton then ns.minimapButton:SetShown(not db.settings.minimapHide) end
+        Print("Knappen ved minimappet er " .. (db.settings.minimapHide and "skjult" or "vist igen") .. ".")
     elseif cmd == "jeg" then
         ns.ShowIdentityPicker()
     elseif cmd == "config" or cmd == "indstillinger" or cmd == "options" then
@@ -5886,6 +5954,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print("  /wc4l kanal        - slå synk uden guild til/fra")
         print("  /wc4l sound        - slå lyd til/fra  (|cffffd100sound <event>|r tester en lyd)")
         print("  /wc4l toast        - slå popups (online, wipe, level) til/fra")
+        print("  /wc4l minimap      - vis/skjul WC4L-knappen ved minimappet")
         print("  /wc4l testtoast    - vis eksempler på popups")
         print("  /wc4l announce     - slå chat-beskeder til/fra")
         print("  /wc4l angrib <ven> - send et emote-angreb til en ven")
