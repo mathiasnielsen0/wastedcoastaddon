@@ -183,6 +183,10 @@ Fanen samler alt det, der er lavet for at genere hinanden:
 - **Need-politiet:** når du vinder noget på need, holder addonet øje med det. Tager du
   det på, er du frikendt. Sælger, disenchanter eller giver du det væk uden at have haft
   det på, eller ligger det ubrugt i tasken i 3 dage, bliver du hængt ud hos alle.
+- **Level-snegl:** den, der er længst bagud i level (højeste karakter), får en snegl
+  ved navnet på kortet (det er en skildpadde; WoW har ingen snegle-ikoner) og titlen
+  *Level-snegl*. Hold musen over kortet for at se, hvor længe det er siden sidste
+  level. Står der "mindst", har addonet ikke set selve level-up'et endnu.
 
 ### Dødsannoncer
 Når en ven dør, får alle en popup med en dødsannonce, fx *"Nick blev overlistet af
@@ -230,6 +234,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 - **Uheldsfuglen**: højest andel tabte rolls (mindst 5 rolls)
 - **Fætter Højben**: bedst held i de seneste rolls (over 50%)
 - **Skammens hat**: den, der døde sidst
+- **Level-snegl**: længst bagud i level
 
 ---
 

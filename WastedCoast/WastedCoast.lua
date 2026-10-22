@@ -652,11 +652,18 @@ local function ComputeTitles(list)
         table.insert(titles[hat], 1, "Skammens hat")
         holders["Skammens hat"] = hat
     end
+    -- Level-snegl: den, der er længst bagud i level
+    local snail = ns.Snail and ns.Snail(list)
+    if snail then
+        titles[snail] = titles[snail] or {}
+        table.insert(titles[snail], "Level-snegl")
+        holders["Level-snegl"] = snail
+    end
     return titles, holders
 end
 
 local TITLE_ORDER = { "Klovnen", "Lootgoblin", "Rigmanden", "Højest level", "Alt-junkie", "Wipe-konge",
-                      "Faldskade-konge", "Uheldsfuglen", "Fætter Højben", "Skammens hat" }
+                      "Faldskade-konge", "Uheldsfuglen", "Fætter Højben", "Skammens hat", "Level-snegl" }
 
 -- =============================================================================
 -- Netværk: kø, beskeder og synkronisering
@@ -2452,6 +2459,8 @@ local function BuildCard(parent, index, friend)
         if last then
             GameTooltip:AddLine("Seneste loot: " .. LootLink(last), 1, 1, 1)
         end
+        local snail = ns.SnailText and ns.SnailText(self.friend)
+        if snail then GameTooltip:AddLine(snail, 0.9, 0.8, 0.4) end
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Klik for at se alle karakterer", 0.5, 0.8, 1)
         GameTooltip:Show()
@@ -2502,6 +2511,7 @@ local function RefreshOverview()
         local r, g, b = ClassColor(s.class)
         card.bar:SetColorTexture(r, g, b, 1)
         card.name:SetTextColor(r, g, b)
+        card.name:SetText(s.name .. ((ns.snailHolder == s.name) and (" " .. ns.SNAIL_ICON) or ""))
         SetClassIcon(card.icon, s.class)
         card.char:SetText(s.char or "ukendt karakter")
 

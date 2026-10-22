@@ -271,6 +271,27 @@ ns.ShowTab(2)
 check(ns.scoreInfo:GetText():find("Fætter Højben:|r Mathias"), "Fætter Højben: " .. ns.scoreInfo:GetText())
 check(ns.scoreInfo:GetText():find("Skammens hat:|r Frode"), "Skammens hat-titel")
 
+-- Level-snegl
+ns.ShowTab(1)
+check(ns.snailHolder == "Frode", "Frode (level 20) er sneglen: " .. tostring(ns.snailHolder))
+check(ns.cards[5].name:GetText():find("Turtle"), "snegl ved Frodes navn")
+check(not ns.cards[3].name:GetText():find("Turtle"), "ingen snegl ved Nick")
+check(ns.SnailText("Frode"):find("mindst"), "gættet tid: " .. ns.SnailText("Frode"))
+check(ns.SnailText("Nick") == nil, "kun sneglen har tekst")
+Fire("CHAT_MSG_ADDON", "WCOAST", "XL;Frode;20;" .. (NOW - 2 * 86400) .. ";0", "GUILD", "Frodex")
+check(ns.SnailText("Frode"):find("2 d") and not ns.SnailText("Frode"):find("mindst"), "vennens egen tid: " .. ns.SnailText("Frode"))
+Fire("CHAT_MSG_ADDON", "WCOAST", "XL;Frode;20;" .. (NOW - 100) .. ";1", "GUILD", "Frodex")
+check(ns.SnailText("Frode"):find("2 d"), "et gæt overskriver ikke en rigtig tid")
+ns.ShowTab(2)
+check(ns.scoreInfo:GetText():find("Level%-snegl:|r Frode"), "Level-snegl-titel")
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;Frode;Frodex;ROGUE;45;100;Ogrimmar;3", "GUILD", "Frodex")
+ns.ShowTab(1)
+check(ns.snailHolder == "Nick", "Frode levelede forbi: nu er Nick sneglen: " .. tostring(ns.snailHolder))
+SENT = {}
+Fire("PLAYER_LEVEL_UP", 41)
+check(WastedCoastDB.levelAt.Mathias.l == 41 and not WastedCoastDB.levelAt.Mathias.g, "eget level-up gemmes")
+check(findSent("XL;Mathias;41;"), "eget level-up sendes")
+
 -- Emote-angreb
 SENT = {}
 ns.EmoteAttack("Nick")

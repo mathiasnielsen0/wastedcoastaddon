@@ -7,6 +7,7 @@ local _, ns = ...
 --   * Need-politiet: gear, du har needet uden at bruge, bliver hængt ud
 --   * Emote-angreb: send en tilfældig fornærmelse til en ven
 --   * Held-rangering: hvem har haft de bedste rolls på det seneste
+--   * Level-snegl: den, der er længst bagud i level, med tiden siden sidste level
 -- Indlæses efter WastedCoast.lua og bruger dens hjælpefunktioner via ns.core.
 -- =============================================================================
 
@@ -29,6 +30,7 @@ local function DB()
     db.needWatch = db.needWatch or {}     -- nøgle -> { id, item, name, quality, char, class, t }
     db.needShame = db.needShame or {}     -- liste af { id, friend, char, class, item, name, quality, why, time }
     db.emoteStats = db.emoteStats or { sent = {}, recv = {} }
+    db.levelAt = db.levelAt or {}         -- ven -> { l = højeste level, t = hvornår det blev nået, g = gæt }
     return db
 end
 
@@ -175,6 +177,76 @@ local function Duration(secs)
     if secs < 3600 then return math.max(1, math.floor(secs / 60)) .. " min" end
     if secs < 86400 then return math.floor(secs / 3600) .. " t" end
     return string.format("%d d %d t", math.floor(secs / 86400), math.floor((secs % 86400) / 3600))
+end
+
+-- =============================================================================
+-- Level-snegl: db.levelAt[ven] = { l, t, g }. g = true betyder, at vi ikke så selve
+-- level-up'et (fx første gang med v0.6), så tiden er "mindst".
+-- =============================================================================
+-- Der findes ingen snegl blandt spillets ikoner, så det bliver en skildpadde
+ns.SNAIL_ICON = "|TInterface\\Icons\\Ability_Hunter_Pet_Turtle:14:14|t"
+
+local function UpdateLevels(list)
+    local db = DB()
+    for _, s in ipairs(list) do
+        local lvl = s.maxLevel or 0
+        if lvl > 0 then
+            local e = db.levelAt[s.name]
+            if not e or lvl < e.l then
+                -- Første gang (eller demo-data er fjernet): vi ved ikke, hvornår levelet blev nået
+                db.levelAt[s.name] = { l = lvl, t = time(), g = true }
+            elseif lvl > e.l then
+                e.l, e.t, e.g = lvl, time(), nil
+            end
+        end
+    end
+end
+
+local function SendMyLevel()
+    local db = DB()
+    local e = db.me and db.levelAt[db.me]
+    if e then C.Send(string.format("XL;%s;%d;%d;%d", db.me, e.l, e.t, e.g and 1 or 0)) end
+end
+
+-- Kaldes, når du selv stiger i level
+local function OnMyLevelUp(level)
+    local db = DB()
+    if not db.me or not level then return end
+    local e = db.levelAt[db.me]
+    if not e or level > e.l then
+        db.levelAt[db.me] = { l = level, t = time() }
+        SendMyLevel()
+    end
+end
+
+-- Returnerer sneglen (laveste højeste-level af de venner, vi har set; ved lige level den, der har
+-- ventet længst), eller nil hvis alle er lige langt
+function ns.Snail(list)
+    UpdateLevels(list)
+    local db = DB()
+    local best, top, n = nil, 0, 0
+    for _, s in ipairs(list) do
+        local lvl = s.maxLevel or 0
+        if lvl > 0 then
+            n = n + 1
+            if lvl > top then top = lvl end
+            local e = db.levelAt[s.name]
+            if not best or lvl < best.lvl or (lvl == best.lvl and (e and e.t or 0) < best.t) then
+                best = { name = s.name, lvl = lvl, t = e and e.t or time() }
+            end
+        end
+    end
+    local snail = (best and n >= 2 and best.lvl < top) and best.name or nil
+    ns.snailHolder = snail
+    return snail
+end
+
+-- "Level-snegl: level 34, 3 d 2 t siden sidste level" (eller nil, hvis vennen ikke er sneglen)
+function ns.SnailText(friend)
+    if ns.snailHolder ~= friend then return nil end
+    local e = DB().levelAt[friend]
+    if not e then return nil end
+    return string.format("Level-snegl: level %d, %s%s siden sidste level", e.l, e.g and "mindst " or "", Duration(time() - e.t))
 end
 
 -- =============================================================================
@@ -489,6 +561,18 @@ function ns.HandlePrankMessage(kind, t)
                        why = t[8], time = at, name = (t[10] or "?"):sub(1, 40) })
         end
 
+    elseif kind == "XL" then
+        local friend, l, at = t[2], tonumber(t[3]), tonumber(t[4])
+        if ROSTER_SET[friend] and friend ~= db.me and l and at and l > 0 then
+            local e = db.levelAt[friend]
+            local guess = t[5] == "1"
+            -- Vennens egen tid vinder over vores gæt; to gæt: det tidligste vinder
+            if not e or e.d or l > e.l or (l == e.l and (not guess or (e.g and at < e.t))) then
+                db.levelAt[friend] = { l = l, t = at, g = guess or nil }
+                if ns.RefreshUI then ns.RefreshUI() end
+            end
+        end
+
     elseif kind == "XK" then
         local friend, at = t[2], tonumber(t[3]) or 0
         if ROSTER_SET[friend] and friend ~= db.me and t[4] then
@@ -511,6 +595,7 @@ end
 function ns.SendPrankExtras()
     local db = DB()
     SendRecentRolls()
+    SendMyLevel()
     local sent = 0
     for i = #db.needShame, 1, -1 do
         local e = db.needShame[i]
@@ -789,6 +874,11 @@ function ns.MakePrankDemo()
             r.lastT = now
         end
     end
+    for _, s in ipairs(C.BuildStats()) do
+        if s.name ~= db.me and s.maxLevel > 0 then
+            db.levelAt[s.name] = { l = s.maxLevel, t = now - math.random(3600, 600000), d = true }
+        end
+    end
     for i = 1, 4 do
         local name = ROSTER[math.random(#ROSTER)]
         if name ~= db.me then
@@ -802,6 +892,9 @@ end
 
 function ns.ClearPrankDemo()
     local db = DB()
+    for friend, e in pairs(db.levelAt) do
+        if e.d then db.levelAt[friend] = nil end
+    end
     for i = #db.needShame, 1, -1 do
         if db.needShame[i].demo then table.remove(db.needShame, i) end
     end
@@ -812,6 +905,7 @@ function ns.ResetPranks()
     wipe(db.needWatch)
     wipe(db.needShame)
     db.emoteStats = { sent = {}, recv = {} }
+    wipe(db.levelAt)
 end
 
 -- Eksempler på de nye popups (gemmes og sendes ikke)
@@ -871,6 +965,7 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("CHAT_MSG_SYSTEM")
 frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+frame:RegisterEvent("PLAYER_LEVEL_UP")
 pcall(frame.RegisterEvent, frame, "BAG_UPDATE_DELAYED")
 frame:SetScript("OnEvent", function(_, event, ...)
     if not WastedCoastDB then return end
@@ -878,6 +973,8 @@ frame:SetScript("OnEvent", function(_, event, ...)
         DB()
         C_Timer.After(20, ns.CheckNeeds)
         C_Timer.NewTicker(60, ns.CheckNeeds)
+    elseif event == "PLAYER_LEVEL_UP" then
+        OnMyLevelUp(tonumber((...)))
     elseif event == "CHAT_MSG_SYSTEM" then
         OnSystemMessage((...))
     else
