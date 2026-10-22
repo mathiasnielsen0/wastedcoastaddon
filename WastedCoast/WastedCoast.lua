@@ -21,15 +21,29 @@ local addonName, ns = ...
 --   * v0.9.1: honor points og honorable kills pr. ven
 --   * v0.9.2: nyt navn: Wasted Coast Forever (WC4ever), /wc4ever (/wc4l virker stadig)
 --   * v0.9.3: på Forever bruger vinduet spillets egne rammer, faner og knapper (/wc4ever stil skifter)
+--   * v0.10.0: grupper for alle: opret en gruppe med en kode, egne navne, unikke ID'er, admin (Groups.lua)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
 local SCHEMA = 5          -- version af dataformatet i SavedVariables
 
--- Vennerne. Rækkefølgen bestemmer rækkefølgen på kortene.
-local ROSTER = { "Mikkel", "Mathias", "Nick", "Andreas", "Frode", "Søren", "Rasmus", "Jeppe" }
+-- Vennerne = medlemmerne af din gruppe (se Groups.lua), i kort-rækkefølge. Nøglen er hvert
+-- medlems faste ID. De 8 oprindelige venner har deres navn som ID, så gamle data og ældre
+-- versioner passer sammen. Tabellerne fyldes (og genfyldes) af Groups.lua.
+ns.LEGACY_ROSTER = { "Mikkel", "Mathias", "Nick", "Andreas", "Frode", "Søren", "Rasmus", "Jeppe" }
+ns.MAX_MEMBERS = 8   -- så mange kort, rækker og knapper har vinduet plads til
+local ROSTER = {}
 local ROSTER_SET = {}
-for _, n in ipairs(ROSTER) do ROSTER_SET[n] = true end
+
+-- Viser de første n rækker/knapper og skjuler resten (gruppen kan have færre end MAX_MEMBERS)
+function ns.ShowFirst(list, n)
+    for i, f in ipairs(list) do f:SetShown(i <= n) end
+end
+
+-- Det navn, et medlem selv har valgt (ID'et, hvis vi ikke kender navnet)
+local function Name(id)
+    return (id and ns.MemberName and ns.MemberName(id)) or id
+end
 
 -- Item-kvalitet (farvekoden i item-links afgør kvaliteten)
 local QUALITY_HEX = {
@@ -272,9 +286,10 @@ local function ClassColor(class)
     return 0.62, 0.62, 0.66
 end
 
+-- Et medlems ID bliver til medlemmets navn; karakternavne o.l. vises, som de er
 local function ColorName(name, class)
     local r, g, b = ClassColor(class)
-    return string.format("|cff%02x%02x%02x%s|r", Round255(r), Round255(g), Round255(b), name)
+    return string.format("|cff%02x%02x%02x%s|r", Round255(r), Round255(g), Round255(b), Name(name))
 end
 
 local function ClassName(class)
@@ -328,7 +343,7 @@ local FALLBACK_SOUND = {
 local function PickSound(event, friend)
     local cfg = ns.sounds
     if type(cfg) ~= "table" then return nil end
-    local per = friend and type(cfg.friends) == "table" and cfg.friends[friend]
+    local per = friend and type(cfg.friends) == "table" and (cfg.friends[friend] or cfg.friends[Name(friend)])
     local list
     if type(per) == "table" and type(per[event]) == "table" and #per[event] > 0 then
         list = per[event]
@@ -659,7 +674,7 @@ do
             return a.f < b.f
         end)
         local parts = {}
-        for i = 1, math.min(#list, max or 3) do parts[i] = list[i].f .. " " .. list[i].n end
+        for i = 1, math.min(#list, max or 3) do parts[i] = Name(list[i].f) .. " " .. list[i].n end
         return table.concat(parts, ", ")
     end
 
@@ -715,7 +730,7 @@ local function BuildStats()
         local d, l = deaths[name] or 0, loot[name] or 0
         local rw, rc, rk = RunTotals(name)
         list[#list + 1] = {
-            name = name, class = last and last.class, char = lastName,
+            name = name, disp = Name(name), class = last and last.class, char = lastName,
             level = last and last.level or 0, maxLevel = maxLevel,
             zone = last and last.zone, seen = last and last.seen,
             chars = nChars, deaths = d, loot = l, gold = gold, wipes = rw, clears = rc, kills = rk,
@@ -796,7 +811,7 @@ ns.route = route
 
 do
     local function FallbackOn()
-        return db and db.settings.fallbackSync ~= false
+        return db and db.group and db.settings.fallbackSync ~= false
     end
 
     local function ChannelId()
@@ -1048,6 +1063,7 @@ end
 -- Svar på en sync-forespørgsel: send MINE egne karakterer, dødsfald og loot
 local function RespondToSync()
     if not db.me then return end
+    ns.SendGroupInfo()
     SendHeartbeat()
 
     local info = db.friends[db.me]
@@ -1101,7 +1117,7 @@ local function AddDeath(ev)
             local shown = f or ev.name
             local what = ev.killer
             if ev.ability ~= "" then what = what .. " (" .. ev.ability .. ")" end
-            local extra = (f and ev.name ~= f) and (" (" .. ev.name .. ")") or ""
+            local extra = (f and ev.name ~= Name(f)) and (" (" .. ev.name .. ")") or ""
             Print(string.format("%s%s døde til %s i %s.", ColorName(shown, ev.class), extra, what, ev.zone))
         end
         PlayEventSound("death", f)
@@ -1178,7 +1194,7 @@ local function AddLoot(ev)
 
     if db.settings.announce and (time() - (ev.time or 0)) < 120 then
         local who = ColorName(f or ev.char, ev.class)
-        if f and ev.char ~= f then who = who .. " (" .. ev.char .. ")" end
+        if f and ev.char ~= Name(f) then who = who .. " (" .. ev.char .. ")" end
         Print(string.format("%s vandt %s (%s) - %s.", who, LootLink(ev), HOW_LABEL[ev.how] or ev.how, ev.zone))
     end
     if (time() - (ev.time or 0)) < 120 then PlayEventSound("loot", f) end
@@ -1471,7 +1487,7 @@ local function ShowWipeToast(friend, inst, t)
     wipeToastAt[inst] = t
     ns.Toast({
         kind = "wipe", title = "WIPE",
-        text = string.format("Hvad FAaanden laver healer mand, kraftedme hele %s party er død i %s", friend, inst),
+        text = string.format("Hvad FAaanden laver healer mand, kraftedme hele %s party er død i %s", Name(friend), inst),
         icon = "Interface\\Icons\\Spell_Holy_Heal", sound = "wipe", friend = friend,
     })
 end
@@ -2149,14 +2165,14 @@ function ns.OnFriendHeartbeat(friend, char, class, level, zone, wasOnline, prevL
         if not toastedAt[friend] or now - toastedAt[friend] > 600 then
             toastedAt[friend] = now
             ns.Toast({
-                kind = "online", title = friend .. " er online",
+                kind = "online", title = Name(friend) .. " er online",
                 text = string.format("%s (level %s) - %s", char or "?", tostring(level or "?"), (zone and zone ~= "") and zone or "ukendt sted"),
                 class = class, sound = "online", friend = friend,
             })
         end
     elseif prevLevel and level and level == prevLevel + 1
         and not (ns.LevelToasted and ns.LevelToasted(friend, char, level)) then
-        ns.Toast({ kind = "levelup", title = friend .. " nåede level " .. level, text = char, class = class,
+        ns.Toast({ kind = "levelup", title = Name(friend) .. " nåede level " .. level, text = char, class = class,
                    sound = "levelup", friend = friend })
     end
 end
@@ -2221,7 +2237,7 @@ do
         local e = db.legacy[friend]
         if e and at < (e.t or 0) then return end
         if e and points > (e.p or 0) and db.settings.announce and (time() - at) < 300 then
-            Print(string.format("%s har nu |cffffd100%d legacy points|r.", friend, points))
+            Print(string.format("%s har nu |cffffd100%d legacy points|r.", Name(friend), points))
         end
         db.legacy[friend] = { p = points, c = done, t = at }
         if ns.RefreshUI then ns.RefreshUI() end
@@ -2362,7 +2378,7 @@ local function HandleExtraMessage(kind, t)
                 db.ach[friend][id] = at > 0 and at or time()
                 local a = ACH_BY_ID[id]
                 if at > 0 and (time() - at) < 120 then
-                    ns.Toast({ kind = "trophy", head = friend .. " låste et trofæ op", title = a.name, text = a.desc,
+                    ns.Toast({ kind = "trophy", head = Name(friend) .. " låste et trofæ op", title = a.name, text = a.desc,
                                icon = a.icon, sound = "achievement", friend = friend })
                 end
                 if ns.RefreshUI then ns.RefreshUI() end
@@ -2492,6 +2508,8 @@ local function OnAddonMessage(prefix, message, chatType, sender)
 
     elseif kind == "H" then
         local friend = t[2]
+        if not ROSTER_SET[friend] then ns.UnknownMember(friend) end
+        ns.NoteCharOwner(friend, t[3], sender)
         if ROSTER_SET[friend] and friend ~= db.me then
             local char = t[3]
             local wasOnline = IsOnline(friend)
@@ -2530,8 +2548,13 @@ local function OnAddonMessage(prefix, message, chatType, sender)
         -- v0.6: drillerier (XE emote-angreb, XN need-politi, XK seneste rolls)
         if ns.HandlePrankMessage then ns.HandlePrankMessage(kind, t) end
 
+    elseif kind == "GM" or kind == "GW" or kind == "GK" then
+        -- Gruppe: medlemmer og navne, "hvem er med?" og admin, der fjerner/genoptager et medlem
+        ns.OnGroupMessage(kind, t, sender)
+
     elseif kind == "Q" then
         local friend = t[2]
+        if not ROSTER_SET[friend] then ns.UnknownMember(friend) end
         if db.me and ROSTER_SET[friend] and friend ~= db.me then
             local now = time()
             local wait = (t[3] == "1") and 30 or 600
@@ -2562,7 +2585,7 @@ end
 local lastRefreshNow = -100
 function ns.RefreshNow()
     if not db.me then
-        Print("Vælg først, hvem du er (|cffffd100/wc4ever jeg|r).")
+        Print("Opret eller deltag først i en gruppe (|cffffd100/wc4ever gruppe|r).")
         return
     end
     if GetTime() - lastRefreshNow < 15 then
@@ -2597,9 +2620,10 @@ local function SetMe(friend)
     RequestSync()
     ns.InitAchievements()
     ns.AfterIdentity()
-    Print("Du er nu registreret som |cffffd100" .. friend .. "|r.")
+    Print("Du er nu registreret som |cffffd100" .. Name(friend) .. "|r.")
     if ns.RefreshUI then ns.RefreshUI() end
 end
+ns.SetMe = SetMe
 
 -- =============================================================================
 -- UI: byggeklodser
@@ -2803,7 +2827,6 @@ local function BuildCard(parent, index, friend)
 
     card.name = Txt(card, "GameFontNormalLarge")
     card.name:SetPoint("TOPLEFT", card.icon, "TOPRIGHT", 8, -2)
-    card.name:SetText(friend)
 
     card.char = Txt(card, "GameFontHighlightSmall")
     card.char:SetPoint("TOPLEFT", card.name, "BOTTOMLEFT", 0, -3)
@@ -2866,11 +2889,11 @@ local function BuildCard(parent, index, friend)
     card.titles:SetWordWrap(false)
     card.titles:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
 
-    card:SetScript("OnClick", function(self) ns.SelectTarget(self.friend) end)
+    card:SetScript("OnClick", function(self) if self.friend then ns.SelectTarget(self.friend) end end)
     card:SetScript("OnEnter", function(self)
         self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine(self.friend, 1, 1, 1)
+        GameTooltip:AddLine(Name(self.friend), 1, 1, 1)
 
         local chars = CharList(self.friend)
         if #chars == 0 then
@@ -2918,8 +2941,8 @@ end
 
 local function BuildOverview(page)
     ns.cards = {}
-    for i, name in ipairs(ROSTER) do
-        ns.cards[i] = BuildCard(page, i, name)
+    for i = 1, ns.MAX_MEMBERS do
+        ns.cards[i] = BuildCard(page, i, nil)
     end
     local y = -(2 * (CARD_H + GAP) + 4)
     ns.deathTicker = Txt(page, "GameFontHighlightSmall")
@@ -2954,14 +2977,16 @@ local function RefreshOverview()
     local maxLoot = 0
     for _, s in ipairs(list) do if s.loot > maxLoot then maxLoot = s.loot end end
 
+    ns.ShowFirst(ns.cards, #list)
     for i, s in ipairs(list) do
         local card = ns.cards[i]
+        card.friend = s.name
         local r, g, b = ClassColor(s.class)
         card.bar:SetColorTexture(r, g, b, 1)
         Gradient(card.wash, "VERTICAL", r, g, b, 0, r, g, b, s.online and 0.22 or 0.10)
         card.iconFrame:SetColorTexture(r * 0.5, g * 0.5, b * 0.5, 1)
         card.name:SetTextColor(r, g, b)
-        card.name:SetText(s.name .. ((ns.snailHolder == s.name) and (" " .. ns.SNAIL_ICON) or ""))
+        card.name:SetText(s.disp .. ((ns.snailHolder == s.name) and (" " .. ns.SNAIL_ICON) or ""))
         SetClassIcon(card.icon, s.class)
         card.char:SetText(s.char or "ukendt karakter")
 
@@ -3065,7 +3090,7 @@ local function BuildScoreboard(page)
     end
 
     ns.scoreRows = {}
-    for i = 1, #ROSTER do
+    for i = 1, ns.MAX_MEMBERS do
         local row = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
         row:SetSize(732, 32)
         row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(32 + (i - 1) * 36))
@@ -3087,7 +3112,7 @@ local function BuildScoreboard(page)
     end
 
     ns.scoreInfo = Txt(page, "GameFontHighlightSmall")
-    ns.scoreInfo:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(32 + #ROSTER * 36 + 2))
+    ns.scoreInfo:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(32 + ns.MAX_MEMBERS * 36 + 2))
     ns.scoreInfo:SetWidth(732)
 
     local note = Txt(page, "GameFontHighlightSmall")
@@ -3105,7 +3130,8 @@ local function RefreshScoreboard()
     if desc == nil then desc = true end
     table.sort(list, function(a, b)
         local va, vb = a[key], b[key]
-        if va == vb then return a.name < b.name end
+        if key == "name" then va, vb = a.disp, b.disp end
+        if va == vb then return a.disp < b.disp end
         if desc then return va > vb end
         return va < vb
     end)
@@ -3119,12 +3145,13 @@ local function RefreshScoreboard()
     local maxDeaths = 0
     for _, s in ipairs(list) do if s.deaths > maxDeaths then maxDeaths = s.deaths end end
 
+    ns.ShowFirst(ns.scoreRows, #list)
     for i, s in ipairs(list) do
         local row = ns.scoreRows[i]
         local r, g, b = ClassColor(s.class)
         row.rank:SetText(tostring(i))
         SetClassIcon(row.icon, s.class)
-        row.name:SetText(s.name .. (s.isMe and "  (dig)" or ""))
+        row.name:SetText(s.disp .. (s.isMe and "  (dig)" or ""))
         row.name:SetTextColor(r, g, b)
         row.level:SetText(s.maxLevel > 0 and tostring(s.maxLevel) or "-")
         row.chars:SetText(s.chars > 0 and tostring(s.chars) or "-")
@@ -3159,7 +3186,7 @@ local function RefreshScoreboard()
     local parts = {}
     for _, title in ipairs(TITLE_ORDER) do
         if holders[title] then
-            parts[#parts + 1] = "|cffffd100" .. title .. ":|r " .. holders[title]
+            parts[#parts + 1] = "|cffffd100" .. title .. ":|r " .. Name(holders[title])
         end
     end
     ns.scoreInfo:SetText(#parts > 0 and table.concat(parts, "     ") or "Ingen titler endnu - dø lidt og vind noget loot.")
@@ -3172,8 +3199,8 @@ local CHAR_ROWS = 9
 
 local function BuildCharsPage(page)
     ns.charList = {}
-    for i, name in ipairs(ROSTER) do
-        local b = MakeButton(page, 170, 34, name, function() ns.PickFriend(name) end)
+    for i = 1, ns.MAX_MEMBERS do
+        local b = MakeButton(page, 170, 34, "", function() if ROSTER[i] then ns.PickFriend(ROSTER[i]) end end)
         b:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(i - 1) * 38)
         b.text:ClearAllPoints()
         b.text:SetPoint("LEFT", b, "LEFT", 10, 0)
@@ -3283,13 +3310,14 @@ local function BuildCharsPage(page)
 end
 
 local function RefreshChars()
-    if not ns.target then ns.target = ROSTER[1] end
+    if not ROSTER_SET[ns.target] then ns.target = ROSTER[1] end
     local list = BuildStats()
     local cur
+    ns.ShowFirst(ns.charList, #list)
     for i, s in ipairs(list) do
         local btn = ns.charList[i]
         local r, g, b = ClassColor(s.class)
-        btn.text:SetText(s.name .. (s.isMe and "  (dig)" or ""))
+        btn.text:SetText(s.disp .. (s.isMe and "  (dig)" or ""))
         btn.text:SetTextColor(r, g, b)
         btn.score:SetText(s.chars > 0 and tostring(s.chars) or "-")
         if s.name == ns.target then
@@ -3304,7 +3332,7 @@ local function RefreshChars()
     local panel = ns.charPanel
     local r, g, b = ClassColor(cur.class)
     SetClassIcon(panel.icon, cur.class)
-    panel.name:SetText(cur.name)
+    panel.name:SetText(cur.disp)
     panel.name:SetTextColor(r, g, b)
     local extra = ns.CardExtraText(cur.name)
     panel.sub:SetText(string.format("%s  -  %d dødsfald  -  %d rare+ loot%s",
@@ -3344,7 +3372,7 @@ local function RefreshChars()
     end
 
     if total == 0 then
-        panel.empty:SetText(cur.name .. " er ikke set endnu. Karakterer dukker op, når " .. cur.name ..
+        panel.empty:SetText(cur.disp .. " er ikke set endnu. Karakterer dukker op, når " .. cur.disp ..
             " logger ind med addonet, og du er i samme guild eller gruppe.")
         panel.legend:SetText("")
     else
@@ -3353,7 +3381,7 @@ local function RefreshChars()
             panel.legend:SetText(string.format("Viser %d-%d af %d  -  rul med musehjulet", offset + 1,
                 math.min(offset + CHAR_ROWS, total), total))
         else
-            panel.legend:SetText("Alle karakterer " .. cur.name .. " har været logget ind med")
+            panel.legend:SetText("Alle karakterer " .. cur.disp .. " har været logget ind med")
         end
     end
 end
@@ -3449,7 +3477,7 @@ local function BuildLootPage(page)
             GameTooltip:AddLine(" ")
             local f = LootFriend(ev)
             local r, g, b = ClassColor(ev.class)
-            GameTooltip:AddDoubleLine("Vundet af", (f and (f .. " (" .. ev.char .. ")")) or ev.char, 0.8, 0.8, 0.8, r, g, b)
+            GameTooltip:AddDoubleLine("Vundet af", (f and (Name(f) .. " (" .. ev.char .. ")")) or ev.char, 0.8, 0.8, 0.8, r, g, b)
             GameTooltip:AddDoubleLine("Hvordan", HOW_LABEL[ev.how] or ev.how, 0.8, 0.8, 0.8, 1, 1, 1)
             GameTooltip:AddDoubleLine("Hvor", (CTX_LABEL[ev.ctx] or "") .. " - " .. ev.zone, 0.8, 0.8, 0.8, 1, 1, 1)
             GameTooltip:AddDoubleLine("Hvornår", FormatAgo(ev.time) .. "  (" .. date("%d/%m %H:%M", ev.time) .. ")", 0.8, 0.8, 0.8, 1, 1, 1)
@@ -3492,7 +3520,8 @@ local function RefreshLoot()
         local col = sel and COL_SELECT or COL_BTN
         btn:SetBackdropColor(col[1], col[2], col[3], 1)
     end
-    ns.friendFilter.text:SetText("Ven: " .. (ns.lootFriend or "Alle"))
+    if ns.lootFriend and not ROSTER_SET[ns.lootFriend] then ns.lootFriend = nil end
+    ns.friendFilter.text:SetText("Ven: " .. (Name(ns.lootFriend) or "Alle"))
 
     local list = FilteredLoot()
     local total = #list
@@ -3508,7 +3537,7 @@ local function RefreshLoot()
             row.item:SetText(string.format("|cff%s%s|r", QUALITY_HEX[ev.quality] or "ffffff", ev.name))
             local f = LootFriend(ev)
             local who = ColorName(f or ev.char, ev.class)
-            if f and ev.char ~= f then who = who .. " |cff888888" .. ev.char .. "|r" end
+            if f and ev.char ~= Name(f) then who = who .. " |cff888888" .. ev.char .. "|r" end
             row.winner:SetText(who)
             row.how:SetText(HOW_LABEL[ev.how] or ev.how)
             row.ctx:SetText(string.format("|cff%s%s|r", CTX_COLOR[ev.ctx] or "ffffff", CTX_LABEL[ev.ctx] or ev.ctx))
@@ -3692,8 +3721,8 @@ end
 local RUN_ROWS = 9
 
 local function MakeFriendButtons(page, store, onPick)
-    for i, name in ipairs(ROSTER) do
-        local b = MakeButton(page, 170, 34, name, function() onPick(name) end)
+    for i = 1, ns.MAX_MEMBERS do
+        local b = MakeButton(page, 170, 34, "", function() if ROSTER[i] then onPick(ROSTER[i]) end end)
         b:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(i - 1) * 38)
         b.text:ClearAllPoints()
         b.text:SetPoint("LEFT", b, "LEFT", 10, 0)
@@ -3858,13 +3887,14 @@ local function BuildRunsPage(page)
 end
 
 local function RefreshRuns()
-    if not ns.runTarget then ns.runTarget = db.me or ROSTER[1] end
+    if not ROSTER_SET[ns.runTarget] then ns.runTarget = ROSTER_SET[db.me] and db.me or ROSTER[1] end
     local list = BuildStats()
     local cur
+    ns.ShowFirst(ns.runList, #list)
     for i, s in ipairs(list) do
         local btn = ns.runList[i]
         local r, g, b = ClassColor(s.class)
-        btn.text:SetText(s.name .. (s.isMe and "  (dig)" or ""))
+        btn.text:SetText(s.disp .. (s.isMe and "  (dig)" or ""))
         btn.text:SetTextColor(r, g, b)
         btn.score:SetText(s.clears > 0 and tostring(s.clears) or "-")
         if s.name == ns.runTarget then
@@ -3879,7 +3909,7 @@ local function RefreshRuns()
     local panel = ns.runPanel
     local r, g, b = ClassColor(cur.class)
     SetClassIcon(panel.icon, cur.class)
-    panel.name:SetText(cur.name)
+    panel.name:SetText(cur.disp)
     panel.name:SetTextColor(r, g, b)
     panel.sub:SetText(string.format("%s  -  %s  -  %s", Plural(cur.clears, "clear", "clears"),
         Plural(cur.wipes, "wipe", "wipes"), Plural(cur.kills, "bosskill", "bosskills")))
@@ -3945,7 +3975,7 @@ local function RefreshRuns()
 
     panel.back:SetShown(selected and true or false)
     if total == 0 then
-        panel.empty:SetText(cur.name .. " har ikke været i en dungeon eller raid med addonet endnu. " ..
+        panel.empty:SetText(cur.disp .. " har ikke været i en dungeon eller raid med addonet endnu. " ..
             "Wipes, bosser og clears tæller fra den nye version.")
         panel.legend:SetText("")
     else
@@ -3975,6 +4005,7 @@ local function BuildTrophyPage(page)
         for i, n in ipairs(ROSTER) do
             if n == cur then cur = ROSTER[(i % #ROSTER) + 1]; break end
         end
+        if not ROSTER_SET[cur] then cur = ROSTER[1] end
         ns.trophyFriend = cur
         ns.trophyOffset = 0
         ns.RefreshUI()
@@ -4021,7 +4052,7 @@ local function BuildTrophyPage(page)
             GameTooltip:AddLine(" ")
             local who = {}
             for _, n in ipairs(ROSTER) do
-                if db.ach[n] and db.ach[n][a.id] then who[#who + 1] = n end
+                if db.ach[n] and db.ach[n][a.id] then who[#who + 1] = Name(n) end
             end
             if #who == 0 then
                 GameTooltip:AddLine("Ingen har låst det op endnu", 0.5, 0.5, 0.56)
@@ -4036,13 +4067,15 @@ local function BuildTrophyPage(page)
 end
 
 local function RefreshTrophies()
-    local friend = ns.trophyFriend or db.me or ROSTER[1]
+    local friend = ns.trophyFriend
+    if not ROSTER_SET[friend] then friend = ROSTER_SET[db.me] and db.me or ROSTER[1] end
     ns.trophyFriend = friend
+    if not friend then return end
     local n, pts = AchCount(friend)
     ns.trophyTitle:SetText("Trofæer")
     ns.trophyTitle:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
-    ns.trophySub:SetText(string.format("%s har låst %d af %d op  -  %d trofæpoint", friend, n, #ACH, pts))
-    ns.trophyPick.text:SetText("Se trofæer for: " .. friend)
+    ns.trophySub:SetText(string.format("%s har låst %d af %d op  -  %d trofæpoint", Name(friend), n, #ACH, pts))
+    ns.trophyPick.text:SetText("Se trofæer for: " .. Name(friend))
 
     local rowsTotal = math.ceil(#ACH / 2)
     local offset = math.max(0, math.min(ns.trophyOffset or 0, math.max(0, rowsTotal - ACH_ROWS)))
@@ -4099,7 +4132,7 @@ local function BuildRacePage(page)
     end
 
     ns.raceRows = {}
-    for i = 1, #ROSTER do
+    for i = 1, ns.MAX_MEMBERS do
         local row = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
         row:SetSize(732, 38)
         row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(18 + (i - 1) * 42))
@@ -4130,7 +4163,7 @@ local function BuildRacePage(page)
     end
 
     ns.raceNote = Txt(page, "GameFontHighlightSmall")
-    ns.raceNote:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(18 + #ROSTER * 42 + 2))
+    ns.raceNote:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(18 + ns.MAX_MEMBERS * 42 + 2))
     ns.raceNote:SetWidth(732)
     ns.raceNote:SetTextColor(0.5, 0.5, 0.56)
 end
@@ -4149,7 +4182,7 @@ local function RaceList()
         local lv = best and best.level or 0
         local xp = (best and lv < MAX_LEVEL) and (best.xp or 0) or 0
         list[#list + 1] = {
-            name = name, char = bestName, class = best and best.class, level = lv, xp = xp,
+            name = name, disp = Name(name), char = bestName, class = best and best.class, level = lv, xp = xp,
             progress = lv + xp / 100, online = IsOnline(name), isMe = (name == db.me),
         }
     end
@@ -4163,12 +4196,13 @@ end
 local function RefreshRace()
     local list = RaceList()
     local leader = list[1] and list[1].progress or 0
+    ns.ShowFirst(ns.raceRows, #list)
     for i, s in ipairs(list) do
         local row = ns.raceRows[i]
         local r, g, b = ClassColor(s.class)
         row.rank:SetText(tostring(i))
         SetClassIcon(row.icon, s.class)
-        row.name:SetText(s.name .. (s.isMe and " (dig)" or ""))
+        row.name:SetText(s.disp .. (s.isMe and " (dig)" or ""))
         row.name:SetTextColor(r, g, b)
 
         local frac = math.min(1, math.max(0, s.progress / MAX_LEVEL))
@@ -4258,7 +4292,7 @@ do
         end
 
         ns.rollRows = {}
-        for i = 1, #ROSTER do
+        for i = 1, ns.MAX_MEMBERS do
             local row = MakeBox("Button", right, COL_BTN, COL_BORDER)
             row:SetSize(342, 28)
             row:SetPoint("TOPLEFT", right, "TOPLEFT", 10, -(56 + (i - 1) * 31))
@@ -4271,7 +4305,7 @@ do
                 local d = self.data
                 if not d then return end
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:AddLine(d.name, 1, 1, 1)
+                GameTooltip:AddLine(Name(d.name), 1, 1, 1)
                 local r = d.r
                 if not r or (r.rolls or 0) == 0 then
                     GameTooltip:AddLine("Ingen rolls registreret endnu", 0.6, 0.6, 0.66)
@@ -4328,7 +4362,7 @@ do
         section("Farligste mob", mobs, "Ingen er blevet slået ihjel af et mob endnu.", 5, withWho)
         section("Farligste zone", zones, "Ingen dødsfald endnu.", 3, withWho)
         section("Faldskade-konge", falls, "Ingen er faldet ihjel endnu. Endnu.", 3, function(i, e)
-            return string.format("%d. %s  |cffff8080%s|r%s", i, e.name, Plural(e.n, "fald", "fald"),
+            return string.format("%d. %s  |cffff8080%s|r%s", i, Name(e.name), Plural(e.n, "fald", "fald"),
                 i == 1 and "  |cffffd100(kongen)|r" or "")
         end)
         lines[#lines] = nil
@@ -4348,13 +4382,14 @@ do
         local classOf = {}
         for _, s in ipairs(BuildStats()) do classOf[s.name] = s.class end
 
+        ns.ShowFirst(ns.rollRows, #list)
         for i, d in ipairs(list) do
             local row = ns.rollRows[i]
             row.data = d
             local r = d.r
             local rr, gg, bb = ClassColor(classOf[d.name])
             row.f[1]:SetText(d.loss and tostring(i) or "-")
-            row.f[2]:SetText(d.name .. (d.name == db.me and " (dig)" or ""))
+            row.f[2]:SetText(Name(d.name) .. (d.name == db.me and " (dig)" or ""))
             row.f[2]:SetTextColor(rr, gg, bb)
             row.f[3]:SetText(d.rolls > 0 and tostring(d.rolls) or "-")
             row.f[4]:SetText(r and r.rolls > 0 and tostring(r.wins or 0) or "-")
@@ -4447,19 +4482,20 @@ do
         ns.goldInfo:SetTextColor(0.6, 0.6, 0.66)
 
         ns.goldFriendBtns = {}
-        for i, name in ipairs(ROSTER) do
-            local b = MakeButton(page, 87, 22, name, function()
-                ns.goldHidden[name] = not ns.goldHidden[name] or nil
+        for i = 1, ns.MAX_MEMBERS do
+            local b
+            b = MakeButton(page, 87, 22, "", function()
+                if not b.friend then return end
+                ns.goldHidden[b.friend] = not ns.goldHidden[b.friend] or nil
                 ns.RefreshUI()
             end)
             b:SetPoint("TOPLEFT", page, "TOPLEFT", (i - 1) * 91, -30)
-            b.friend = name
             b:SetScript("OnEnter", function(self)
                 self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
                 local d = self.data
                 if not d then return end
                 GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-                GameTooltip:AddLine(self.friend, 1, 1, 1)
+                GameTooltip:AddLine(Name(self.friend), 1, 1, 1)
                 if #d.pts == 0 then
                     GameTooltip:AddLine("Ingen målinger i perioden", 0.6, 0.6, 0.66)
                 else
@@ -4554,10 +4590,13 @@ do
         end
 
         local series, maxG, any = {}, 0, false
+        ns.ShowFirst(ns.goldFriendBtns, #ROSTER)
         for i, name in ipairs(ROSTER) do
             local pts = GoldSeries(name, from, stats[name])
             local b = ns.goldFriendBtns[i]
             b.data = { pts = pts }
+            b.friend = name
+            b.text:SetText(Name(name))
             local col = FRIEND_COLORS[i]
             if ns.goldHidden[name] then
                 b.text:SetTextColor(0.4, 0.4, 0.45)
@@ -4693,7 +4732,7 @@ do
                 end
                 for _, e in ipairs(list) do
                     local r, g, b = ClassColor(e.class)
-                    GameTooltip:AddDoubleLine(e.friend .. " - " .. e.char, string.format("%d/%d", e.rank, e.max), r, g, b,
+                    GameTooltip:AddDoubleLine(Name(e.friend) .. " - " .. e.char, string.format("%d/%d", e.rank, e.max), r, g, b,
                         e.rank >= PROF_CAP and 1 or 0.9, e.rank >= PROF_CAP and 0.82 or 0.9, e.rank >= PROF_CAP and 0.2 or 0.9)
                 end
                 GameTooltip:Show()
@@ -4814,7 +4853,7 @@ do
                 if not d then return end
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 local r, g, b = ClassColor(d.class)
-                GameTooltip:AddLine(d.char .. " (" .. d.friend .. ")", r, g, b)
+                GameTooltip:AddLine(d.char .. " (" .. Name(d.friend) .. ")", r, g, b)
                 GameTooltip:AddDoubleLine("Snit item level", string.format("%.1f", d.g.il or 0), 0.8, 0.8, 0.8, 1, 1, 1)
                 local miss = MissingSlots(d.g.me)
                 GameTooltip:AddLine(" ")
@@ -4855,7 +4894,8 @@ do
     end
 
     local function RefreshGearPage()
-        ns.gearFriendBtn.text:SetText("Ven: " .. (ns.gearFriend or "Alle"))
+        if ns.gearFriend and not ROSTER_SET[ns.gearFriend] then ns.gearFriend = nil end
+        ns.gearFriendBtn.text:SetText("Ven: " .. (Name(ns.gearFriend) or "Alle"))
         local list = GearList()
         local total = #list
         local offset = math.max(0, math.min(ns.gearOffset or 0, math.max(0, total - GEAR_ROWS)))
@@ -4868,7 +4908,7 @@ do
                 SetClassIcon(row.icon, d.class)
                 row.char:SetText(d.char)
                 row.char:SetTextColor(r, g, b)
-                row.friend:SetText(d.friend)
+                row.friend:SetText(Name(d.friend))
                 row.level:SetText(d.level > 0 and tostring(d.level) or "-")
                 row.ilvl:SetText(string.format("|cffffffff%.1f|r", d.g.il or 0))
                 local miss = MissingSlots(d.g.me)
@@ -4956,7 +4996,7 @@ do
         if not d then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if d.exalted then
-            GameTooltip:AddLine(d.friend .. ": exalted med", 1, 0.82, 0.2)
+            GameTooltip:AddLine(Name(d.friend) .. ": exalted med", 1, 0.82, 0.2)
             local names = {}
             for fname in pairs(d.exalted) do names[#names + 1] = fname end
             table.sort(names)
@@ -4966,7 +5006,7 @@ do
             end
         else
             local k = d.key
-            GameTooltip:AddLine(d.friend .. " - " .. table.concat(k.names, " / "), 1, 0.82, 0.2)
+            GameTooltip:AddLine(Name(d.friend) .. " - " .. table.concat(k.names, " / "), 1, 0.82, 0.2)
             GameTooltip:AddLine(k.item .. " (" .. k.what .. ") kræver Revered", 0.6, 0.6, 0.66, true)
             GameTooltip:AddLine(" ")
             if #d.list == 0 then GameTooltip:AddLine("Ingen karakterer har denne rep endnu", 0.6, 0.6, 0.66) end
@@ -5009,7 +5049,7 @@ do
         head("Exalted", exX, 732 - exX, "Antal fraktioner, vennen er exalted med på mindst én karakter")
 
         ns.repRows = {}
-        for i = 1, #ROSTER do
+        for i = 1, ns.MAX_MEMBERS do
             local row = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
             row:SetSize(732, 34)
             row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(24 + (i - 1) * 38))
@@ -5043,7 +5083,7 @@ do
         end
 
         ns.repNote = Txt(page, "GameFontHighlightSmall")
-        ns.repNote:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(24 + #ROSTER * 38 + 2))
+        ns.repNote:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(24 + ns.MAX_MEMBERS * 38 + 2))
         ns.repNote:SetWidth(732)
         ns.repNote:SetTextColor(0.5, 0.5, 0.56)
         ns.repNote:SetText("Grøn = Revered eller bedre, så heroic-nøglen kan købes. Vennens bedste karakter vises. Hold musen over et felt for detaljer.")
@@ -5052,12 +5092,13 @@ do
     local function RefreshRepPage()
         local stats = {}
         for _, s in ipairs(BuildStats()) do stats[s.name] = s end
+        ns.ShowFirst(ns.repRows, #ROSTER)
         for i, friend in ipairs(ROSTER) do
             local row = ns.repRows[i]
             local s = stats[friend] or {}
             local r, g, b = ClassColor(s.class)
             SetClassIcon(row.icon, s.class)
-            row.name:SetText(friend .. (friend == db.me and " (dig)" or ""))
+            row.name:SetText(Name(friend) .. (friend == db.me and " (dig)" or ""))
             row.name:SetTextColor(r, g, b)
             for k, kf in ipairs(ns.KEY_FACTIONS) do
                 local cell = row.cells[k]
@@ -5125,12 +5166,7 @@ do
             local c = sel and COL_SELECT or COL_BTN
             b:SetBackdropColor(c[1], c[2], c[3], 1)
         end
-        for _, b in ipairs(p.meBtns) do
-            local sel = db.me == b.friend
-            local c = sel and COL_SELECT or COL_BTN
-            b:SetBackdropColor(c[1], c[2], c[3], 1)
-        end
-        p.meText:SetText(db.me and ("Du er registreret som |cffffd100" .. db.me .. "|r.") or "|cffff6060Du har ikke valgt, hvem du er.|r")
+        p.meText:SetText(ns.GroupStatusText and ns.GroupStatusText() or "")
     end
     ns.RefreshOptions = RefreshOptions
 
@@ -5186,21 +5222,14 @@ do
 
         local mh = Txt(p, "GameFontNormal")
         mh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -326)
-        mh:SetText("Hvem er du?")
+        mh:SetText("Din gruppe og dit navn")
         p.meText = Txt(p, "GameFontHighlightSmall")
         p.meText:SetPoint("TOPLEFT", mh, "BOTTOMLEFT", 0, -2)
-        p.meBtns = {}
-        for i, name in ipairs(ROSTER) do
-            local b = MakeButton(p, 110, 24, name, function()
-                if db.me ~= name then SetMe(name) end
-                if ns.picker then ns.picker:Hide() end
-                RefreshOptions()
-            end)
-            b.friend = name
-            local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
-            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + col * 116, -362 - row * 30)
-            p.meBtns[i] = b
-        end
+        p.meText:SetWidth(470)
+        local gb = MakeButton(p, 220, 24, "Gruppe, kode og navn ...", function()
+            if ns.ShowGroupWindow then ns.ShowGroupWindow() end
+        end)
+        gb:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -380)
 
         local open = MakeButton(p, 150, 24, "Åbn WC4ever", function()
             if ns.frame then ns.frame:Show() end
@@ -5309,10 +5338,10 @@ end
 function ns.RefreshUI()
     local f = ns.frame
     if not f or not f:IsShown() or not db then return end
-    if db.me then
-        f.me:SetText("Du er: |cffffd100" .. db.me .. "|r")
+    if db.me and ROSTER_SET[db.me] then
+        f.me:SetText("Du er: |cffffd100" .. Name(db.me) .. "|r")
     else
-        f.me:SetText("|cffff6060Du har ikke valgt, hvem du er|r")
+        f.me:SetText("|cffff6060Du er ikke med i en gruppe endnu|r")
     end
     if ns.tab == 1 then
         RefreshOverview()
@@ -5332,41 +5361,6 @@ function ns.RefreshUI()
         EXTRA_PAGES[ns.tab].refresh()
     end
     if ns.options and ns.options:IsShown() then ns.RefreshOptions() end
-end
-
-function ns.ShowIdentityPicker()
-    if not ns.picker then
-        local p = MakeBox("Frame", UIParent, COL_BG, COL_GOLD, "WastedCoastPicker")
-        p:SetSize(260, 66 + #ROSTER * 30 + 10)
-        p:SetPoint("CENTER", 0, 60)
-        p:SetFrameStrata("FULLSCREEN_DIALOG")
-        AddShadow(p, 8)
-
-        local title = Txt(p, "GameFontNormalLarge")
-        title:SetPoint("TOP", p, "TOP", 0, -12)
-        title:SetJustifyH("CENTER")
-        title:SetFont("Fonts\\MORPHEUS.TTF", 20, "")
-        if not title:GetFont() then title:SetFontObject("GameFontNormalLarge") end
-        title:SetShadowOffset(1, -1)
-        title:SetText("Hvem er du?")
-
-        local sub = Txt(p, "GameFontHighlightSmall")
-        sub:SetPoint("TOP", p, "TOP", 0, -38)
-        sub:SetJustifyH("CENTER")
-        sub:SetTextColor(0.6, 0.6, 0.66)
-        sub:SetText("Så ved addonet, hvem dine karakterer og dit loot er.")
-
-        for i, name in ipairs(ROSTER) do
-            local b = MakeButton(p, 220, 24, name, function()
-                SetMe(name)
-                p:Hide()
-            end)
-            b:SetPoint("TOP", p, "TOP", 0, -(62 + (i - 1) * 30))
-        end
-        table.insert(UISpecialFrames, "WastedCoastPicker")
-        ns.picker = p
-    end
-    ns.picker:Show()
 end
 
 ns.LOGO = "Interface\\AddOns\\" .. addonName .. "\\media\\logo"
@@ -5723,7 +5717,7 @@ local function BuildUI()
         b:SetScript("OnClick", onClick)
         return b
     end
-    local switch = FooterButton(50, "Skift", function() ns.ShowIdentityPicker() end)
+    local switch = FooterButton(60, "Gruppe", function() ns.ShowGroupWindow() end)
     switch:SetPoint("LEFT", f.me, "RIGHT", 10, 0)
     local opts = FooterButton(100, "Indstillinger", function() ns.OpenOptions() end)
     opts:SetPoint("LEFT", switch, "RIGHT", 6, 0)
@@ -5892,7 +5886,7 @@ do
                 local chars = {}
                 local count = math.random(1, 5)
                 for k = 1, count do
-                    local cname = name .. DEMO_SUFFIX[k]
+                    local cname = Name(name):gsub("[%s;]", "") .. DEMO_SUFFIX[k]
                     local class = DEMO_CLASSES[((i + k * 3) % #DEMO_CLASSES) + 1]
                     local seen = (k == 1 and math.random() < 0.5) and now or (now - math.random(600, 400000))
                     local real = db.friends[name] and db.friends[name].chars and db.friends[name].chars[cname]
@@ -6046,7 +6040,7 @@ do
                 if route.Recent(s) then how = "|cff40ff40" .. (VIA_LABEL[s.via] or s.via) .. "|r"
                 elseif route.Recent(w) then how = "|cff40ff40whisper|r (" .. w.char .. ")"
                 else how = "|cff9aa0a6ikke hørt fra de seneste 3 minutter|r" end
-                print("  " .. friend .. ": " .. how)
+                print("  " .. Name(friend) .. ": " .. how)
             end
         end
     end
@@ -6102,16 +6096,18 @@ events:SetScript("OnEvent", function(_, event, ...)
 
     elseif event == "PLAYER_LOGIN" then
         -- Den skjulte synk-kanal: efter spillets egne kanaler, så de beholder /1 og /2
+        ns.InitGroup()   -- gruppen bestemmer vennerne og den skjulte kanal (se Groups.lua)
         C_Timer.After(5, route.Join)
         -- Vent lidt, så guild/party-info er klar
         C_Timer.After(6, function()
             if db.me then
+                ns.SendGroupInfo()
                 SendHeartbeat()
                 RequestSync()
                 ns.InitAchievements()
                 ns.AfterIdentity()
             else
-                ns.ShowIdentityPicker()
+                ns.ShowGroupWindow()
             end
         end)
         C_Timer.NewTicker(60, function()
@@ -6208,8 +6204,8 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         db.settings.minimapHide = not db.settings.minimapHide
         if ns.minimapButton then ns.minimapButton:SetShown(not db.settings.minimapHide) end
         Print("Knappen ved minimappet er " .. (db.settings.minimapHide and "skjult" or "vist igen") .. ".")
-    elseif cmd == "jeg" then
-        ns.ShowIdentityPicker()
+    elseif cmd == "jeg" or cmd == "gruppe" or cmd == "navn" then
+        ns.ShowGroupWindow()
     elseif cmd == "config" or cmd == "indstillinger" or cmd == "options" then
         ns.OpenOptions()
     elseif cmd == "sound" then
@@ -6262,6 +6258,8 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         if arg == "slut" or arg == "clear" then
             ns.ClearDemo()
             Print("Demo-data er fjernet.")
+        elseif #ROSTER == 0 then
+            Print("Demo-data kræver en gruppe. Opret eller deltag i en med |cffffd100/wc4ever gruppe|r.")
         else
             ns.MakeDemo()
             Print("Demo-data lagt ind (kun lokalt). Fjern det igen med |cffffd100/wc4ever demo slut|r.")
@@ -6300,6 +6298,8 @@ SlashCmdList["WASTEDCOAST"] = function(input)
             wipe(db.friends)
             wipe(db.chars)
             db.me = nil
+            db.group, db.myId, db.myName = nil, nil, nil
+            ns.InitGroup()
             ns.RefreshUI()
             Print("Alle data er slettet.")
         else
@@ -6310,7 +6310,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
     else
         Print("Kommandoer:")
         print("  /wc4ever              - vis/skjul vinduet")
-        print("  /wc4ever jeg          - vælg, hvem du er")
+        print("  /wc4ever gruppe       - opret eller deltag i en gruppe, del koden, skift dit navn")
         print("  /wc4ever config       - åbn indstillingerne (også under Options > AddOns)")
         print("  /wc4ever loot         - vis/skift minimumskvalitet for loot (uncommon, rare, epic, legendary)")
         print("  /wc4ever demo         - fyld med demo-data (|cffffd100demo slut|r fjerner det)")
@@ -6346,4 +6346,5 @@ ns.core = {
     IsOnline = IsOnline, BuildStats = BuildStats, Send = Send,
     MakeBox = MakeBox, Txt = Txt, Field = Field, MakeButton = MakeButton,
     Gradient = Gradient, BarFill = BarFill, SafeIcon = SafeIcon,
+    Name = Name, AddShadow = AddShadow, SendHeartbeat = SendHeartbeat, RequestSync = RequestSync,
 }
