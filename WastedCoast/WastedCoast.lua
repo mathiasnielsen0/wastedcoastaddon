@@ -18,6 +18,7 @@ local addonName, ns = ...
 --   * v0.7.2: WC4L-logo ved minimappet (klik åbner vinduet)
 --   * v0.8: kun fire faner (Venner, Rangliste, Loot & død, Sjov) med undersider
 --   * v0.8.1: legacy points pr. ven på WoW Forever
+--   * v0.9.1: honor points og honorable kills pr. ven
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -2233,6 +2234,99 @@ do
     end
 end
 
+-- =============================================================================
+-- Honor: c.honor = { h = honor points nu, k = honorable kills i alt, t } pr. karakter
+-- =============================================================================
+do
+    local P = GAME.Plain
+
+    local function ScanHonor()
+        local h
+        if GetHonorCurrency then
+            h = P(GetHonorCurrency())
+        elseif C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfo then
+            -- Classic-honor og den moderne honor-valuta (Forever kører på den moderne motor)
+            local CC = Constants and Constants.CurrencyConsts
+            for _, id in ipairs({ CC and CC.CLASSIC_HONOR_CURRENCY_ID or 1901, CC and CC.HONOR_CURRENCY_ID or 1792 }) do
+                local info = C_CurrencyInfo.GetCurrencyInfo(id)
+                if info and info.name and info.name ~= "" then
+                    h = P(info.quantity)
+                    break
+                end
+            end
+        end
+        local k = GetPVPLifetimeStats and P((GetPVPLifetimeStats()))
+        h, k = tonumber(h), tonumber(k)
+        if not h and not k then return nil end
+        return h or 0, k or 0
+    end
+
+    local function SendHonor(char, c)
+        if c and c.honor then
+            Send(string.format("HP;%s;%s;%d;%d;%d", db.me, char, c.honor.h or 0, c.honor.k or 0, c.honor.t or 0))
+        end
+    end
+    ns.SendHonor = SendHonor
+
+    local pending = false
+    function ns.UpdateMyHonor()
+        pending = false
+        if not db.me then return end
+        local ok, h, k = pcall(ScanHonor)
+        if not ok or not h then return end
+        local char = UnitName("player")
+        local c = UpdateChar(db.me, char, nil, time())
+        if not c or (c.honor and c.honor.h == h and c.honor.k == k) then return end
+        c.honor = { h = h, k = k, t = time() }
+        SendHonor(char, c)
+        if ns.RefreshUI then ns.RefreshUI() end
+    end
+
+    -- Honor-events kommer i stimer under en BG, så vi venter lidt og måler én gang
+    function ns.ScheduleHonor()
+        if pending or not db or not db.me then return end
+        pending = true
+        C_Timer.After(5, ns.UpdateMyHonor)
+    end
+
+    function ns.OnHonorMessage(t)
+        local friend, char, h, k, at = t[2], t[3], tonumber(t[4]), tonumber(t[5]) or 0, tonumber(t[6]) or 0
+        if not ROSTER_SET[friend] or friend == db.me or not char or char == "" or not h then return end
+        local c = UpdateChar(friend, char, nil, 1)
+        if c and (not c.honor or at >= (c.honor.t or 0)) then
+            c.honor = { h = h, k = k, t = at }
+            if ns.RefreshUI then ns.RefreshUI() end
+        end
+    end
+
+    -- Samlet honor og honorable kills på tværs af vennens karakterer (nil hvis intet kendt)
+    function ns.HonorTotals(friend)
+        local info = db.friends[friend]
+        local h, k, any = 0, 0, false
+        for _, c in pairs((info and info.chars) or {}) do
+            if c.honor and not c.demo then
+                h, k, any = h + (c.honor.h or 0), k + (c.honor.k or 0), true
+            end
+        end
+        if not any then return nil end
+        return h, k
+    end
+end
+
+-- Honor og (på Forever) legacy points. Kort form til vennekortet, hvor der er trangt.
+function ns.CardExtraText(friend, short)
+    local parts = {}
+    local h = ns.HonorTotals(friend)
+    if h then
+        local n = (short and h >= 10000) and string.format("%dk", math.floor(h / 1000)) or tostring(h)
+        parts[#parts + 1] = n .. " honor"
+    end
+    local legacy, le = ns.LegacyText(friend)
+    if legacy then parts[#parts + 1] = short and ((le.p or 0) .. " LP") or legacy end
+    if #parts == 0 then return nil end
+    return table.concat(parts, short and "  " or "  -  ")
+end
+
 local function HandleExtraMessage(kind, t)
     if kind == "S" then
         local friend, inst = t[2], t[3]
@@ -2365,6 +2459,7 @@ function ns.SendMyExtras()
         if not c.demo then
             ns.SendProf(char, c)
             ns.SendGear(char, c)
+            ns.SendHonor(char, c)
             if c.rep and next(c.rep) then ns.SendRep(char, c.rep) end
         end
     end
@@ -2422,6 +2517,9 @@ local function OnAddonMessage(prefix, message, chatType, sender)
     elseif kind == "LP" then
         ns.OnLegacyMessage(t)
 
+    elseif kind == "HP" then
+        ns.OnHonorMessage(t)
+
     elseif kind == "S" or kind == "B" or kind == "W" or kind == "A"
         or kind == "R" or kind == "G" or kind == "P" or kind == "E" or kind == "F" then
         HandleExtraMessage(kind, t)
@@ -2455,6 +2553,7 @@ function ns.AfterIdentity()
     ns.ScheduleScan("gear", 4)
     ns.ScheduleScan("rep", 6)
     C_Timer.After(8, ns.UpdateMyLegacy)
+    C_Timer.After(10, ns.UpdateMyHonor)
 end
 
 -- Knappen "Opdater": mål og send dine egne data, og bed vennerne sende deres med det samme
@@ -2795,6 +2894,10 @@ local function BuildCard(parent, index, friend)
         end
         local snail = ns.SnailText and ns.SnailText(self.friend)
         if snail then GameTooltip:AddLine(snail, 0.9, 0.8, 0.4) end
+        local honor, hk = ns.HonorTotals(self.friend)
+        if honor then
+            GameTooltip:AddLine(string.format("Honor: %d (%d honorable kills)", honor, hk), 0.85, 0.75, 0.45)
+        end
         local legacy, le = ns.LegacyText(self.friend)
         if legacy then
             GameTooltip:AddLine(string.format("Legacy: %s (%s)", legacy, Plural(le.c or 0, "challenge", "challenges")),
@@ -2883,7 +2986,7 @@ local function RefreshOverview()
             card.barFill:Hide()
         end
         card.charsText:SetText(s.chars > 0 and Plural(s.chars, "karakter", "karakterer") or "Ingen karakterer endnu")
-        card.legacy:SetText(ns.LegacyText(s.name) or "")
+        card.legacy:SetText(ns.CardExtraText(s.name, true) or "")
         card.titles:SetText(TitleText(titles[s.name]))
         card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == "Skammens hat")
     end
@@ -3201,9 +3304,9 @@ local function RefreshChars()
     SetClassIcon(panel.icon, cur.class)
     panel.name:SetText(cur.name)
     panel.name:SetTextColor(r, g, b)
-    local legacy = ns.LegacyText(cur.name)
+    local extra = ns.CardExtraText(cur.name)
     panel.sub:SetText(string.format("%s  -  %d dødsfald  -  %d rare+ loot%s",
-        Plural(cur.chars, "karakter", "karakterer"), cur.deaths, cur.loot, legacy and ("  -  " .. legacy) or ""))
+        Plural(cur.chars, "karakter", "karakterer"), cur.deaths, cur.loot, extra and ("  -  " .. extra) or ""))
     panel.big:SetText(tostring(cur.chars))
     panel.big:SetTextColor(1, 1, 1)
 
@@ -5864,6 +5967,9 @@ pcall(events.RegisterEvent, events, "SKILL_LINES_CHANGED")
 pcall(events.RegisterEvent, events, "PLAYER_EQUIPMENT_CHANGED")
 pcall(events.RegisterEvent, events, "UPDATE_FACTION")
 if GAME.isForever then pcall(events.RegisterEvent, events, "ACHIEVEMENT_EARNED") end
+pcall(events.RegisterEvent, events, "PLAYER_PVP_KILLS_CHANGED")
+pcall(events.RegisterEvent, events, "HONOR_CURRENCY_UPDATE")
+pcall(events.RegisterEvent, events, "CURRENCY_DISPLAY_UPDATE")
 
 events:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
@@ -5919,6 +6025,9 @@ events:SetScript("OnEvent", function(_, event, ...)
 
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
         if db and db.me then ns.ScheduleScan("gear", 3) end
+
+    elseif event == "PLAYER_PVP_KILLS_CHANGED" or event == "HONOR_CURRENCY_UPDATE" or event == "CURRENCY_DISPLAY_UPDATE" then
+        ns.ScheduleHonor()
 
     elseif event == "ACHIEVEMENT_EARNED" then
         if db and db.me then C_Timer.After(3, ns.UpdateMyLegacy) end

@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.9.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.9.1. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 ---
@@ -410,6 +410,10 @@ indlæses). Forever kører på Blizzards nye motor, og det betyder:
 - Hver vens **legacy points** (fra Legacy Challenges) vises på vennekortet, i
   kortets tooltip og på vennens side. De gælder hele Battle.net-kontoen, så det er
   ét tal pr. ven, og det opdateres, når nogen klarer en challenge.
+
+**Honor**
+Vennekortet viser hver vens honor points (lagt sammen på tværs af karakterer), og
+tooltippet viser også honorable kills. Det virker på både TBC og WoW Forever.
 
 **Lua-fejl**
 Skriv `/console scriptErrors 1` og `/reload`, og send fejlteksten videre.
