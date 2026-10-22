@@ -32,7 +32,8 @@ ns.sounds = {
     -- bosskill    = { "boss.ogg" },
 
     -- Egen lyd til bestemte venner. Den vinder over lydene ovenfor.
-    -- Navnet skal være det samme som i vennelisten (Mikkel, Mathias, Nick osv.).
+    -- Brug vennens navn, som det står i addonet (fx Mikkel, Mathias, Nick).
+    -- Navne med mellemrum eller æ/ø/å skrives sådan: ["Søren"] = { ... }.
     friends = {
         -- Mikkel = { death = { "mikkel_dod.ogg" } },
         -- Nick   = { death = { "nick_av.ogg" }, loot = { "nick_yes.ogg" } },

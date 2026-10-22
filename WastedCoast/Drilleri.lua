@@ -14,6 +14,7 @@ local _, ns = ...
 local C = ns.core
 local ROSTER, ROSTER_SET = C.ROSTER, C.ROSTER_SET
 local Print = C.Print
+local Name = C.Name   -- medlemmets valgte navn (nøglerne er medlems-ID'er)
 
 -- WoW Forever har kun C_Item-udgaverne af item-funktionerne, og nogle værdier kan være "secret"
 local Plain = C.GAME.Plain
@@ -241,7 +242,7 @@ end
 
 local function ShowLevelToast(friend, char, class, level, secs, isMe)
     levelToasted[friend .. "-" .. char] = level
-    ns.Toast({ kind = "levelup", title = (isMe and "Du" or friend) .. " nåede level " .. level,
+    ns.Toast({ kind = "levelup", title = (isMe and "Du" or Name(friend)) .. " nåede level " .. level,
                text = LevelToastText(char, level, secs), class = class,
                sound = (not isMe) and "levelup" or nil, friend = friend })
 end
@@ -374,7 +375,7 @@ function ns.Obituary(ev, friend)
     local text = list[(Hash(ev.id) % #list) + 1]
     local kl = tonumber(ev.klvl)
     local vars = {
-        N = friend or ev.name or "?",
+        N = (friend and Name(friend)) or ev.name or "?",
         K = ev.killer or "?",
         AB = (ev.ability and ev.ability ~= "" and ev.ability ~= "Nærkamp") and (" (" .. ev.ability .. ")") or "",
         Z = (ev.zone and ev.zone ~= "") and ev.zone or "et ukendt sted",
@@ -389,8 +390,8 @@ function ns.OnFreshDeath(ev, friend)
     local db = WastedCoastDB
     if not friend then return end
     if db.settings.obits ~= false then
-        local title = friend
-        if ev.name and ev.name ~= friend then
+        local title = Name(friend)
+        if ev.name and ev.name ~= title then
             title = title .. " (" .. ev.name .. ", level " .. tostring(ev.level or "?") .. ")"
         else
             title = title .. " (level " .. tostring(ev.level or "?") .. ")"
@@ -401,11 +402,11 @@ function ns.OnFreshDeath(ev, friend)
     if db.settings.announce then
         local prev = LatestDeath(ev)
         if prev == friend then
-            Print(friend .. " beholder |cffffd100Skammens hat|r. Den sidder godt fast nu.")
+            Print(Name(friend) .. " beholder |cffffd100Skammens hat|r. Den sidder godt fast nu.")
         elseif prev then
-            Print("|cffffd100Skammens hat|r går videre fra " .. prev .. " til " .. friend .. ".")
+            Print("|cffffd100Skammens hat|r går videre fra " .. Name(prev) .. " til " .. Name(friend) .. ".")
         else
-            Print(friend .. " får |cffffd100Skammens hat|r som den første.")
+            Print(Name(friend) .. " får |cffffd100Skammens hat|r som den første.")
         end
     end
 end
@@ -442,11 +443,11 @@ local function AddShame(e, fromNet)
     table.insert(db.needShame, e)
     while #db.needShame > 200 do table.remove(db.needShame, 1) end
     if not e.demo and (time() - (e.time or 0)) < 300 then
-        ns.Toast({ kind = "police", head = "NEED-POLITIET", title = e.friend .. " needede " .. ItemLink(e),
+        ns.Toast({ kind = "police", head = "NEED-POLITIET", title = Name(e.friend) .. " needede " .. ItemLink(e),
                    text = SHAME_TEXT[e.why] or "", icon = ItemIcon(tonumber(e.item:match("^item:(%d+)"))),
                    dur = 7, friend = e.friend })
         if db.settings.announce then
-            Print(string.format("|cff4080ffNeed-politiet:|r %s needede %s %s", e.friend, ItemLink(e), SHAME_TEXT[e.why] or ""))
+            Print(string.format("|cff4080ffNeed-politiet:|r %s needede %s %s", Name(e.friend), ItemLink(e), SHAME_TEXT[e.why] or ""))
         end
     end
     if ns.RefreshUI then ns.RefreshUI() end
@@ -532,6 +533,8 @@ local ATTACKS = {
 
 local function AttackText(idx, from, to)
     local a = ATTACKS[idx]
+    -- Navnene kan indeholde %, som gsub ellers læser som et mønster
+    from, to = Name(from):gsub("%%", "%%%%"), Name(to):gsub("%%", "%%%%")
     return a and (a[1]:gsub("{F}", from):gsub("{T}", to)) or nil
 end
 
@@ -557,7 +560,7 @@ local function OnAttack(from, to, idx, nonce)
     db.emoteStats.recv[to] = (db.emoteStats.recv[to] or 0) + 1
     if to == db.me and from ~= db.me then
         if db.settings.emotes ~= false then
-            ns.Toast({ kind = "emote", head = "EMOTE-ANGREB", title = from .. " angriber dig!",
+            ns.Toast({ kind = "emote", head = "EMOTE-ANGREB", title = Name(from) .. " angriber dig!",
                        text = AttackText(idx, from, "dig"), icon = EMOTE_ICON, class = (ClassOf(from)), friend = from })
         end
         Print("|cffff70c0" .. AttackText(idx, from, "dig") .. "|r")
@@ -571,7 +574,7 @@ local lastAttack = -100
 function ns.EmoteAttack(target)
     local db = DB()
     if not db.me then
-        Print("Vælg først, hvem du er (|cffffd100/wc4ever jeg|r).")
+        Print("Opret eller deltag først i en gruppe (|cffffd100/wc4ever gruppe|r).")
         return
     end
     if not ROSTER_SET[target] or target == db.me then return end
@@ -695,7 +698,7 @@ local function BuildPage(page)
     luck:SetSize(362, 252)
     SubText(luck, Header(luck, "Held-rangering"), "seneste " .. LUCK_KEEP .. " rolls")
     ui.luckRows = {}
-    for i = 1, #ROSTER do
+    for i = 1, ns.MAX_MEMBERS do
         local row = MakeBox("Button", luck, COL_BTN, COL_BORDER)
         row:SetSize(342, 22)
         row:SetPoint("TOPLEFT", luck, "TOPLEFT", 10, -(40 + (i - 1) * 26))
@@ -716,7 +719,7 @@ local function BuildPage(page)
             local d = self.data
             if not d then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:AddLine(d.name, 1, 1, 1)
+            GameTooltip:AddLine(Name(d.name), 1, 1, 1)
             local st = d.st
             if not st then
                 GameTooltip:AddLine(string.format("Mindst %d rolls før der er en rating (har %d)", LUCK_MIN, d.n), 0.6, 0.6, 0.66)
@@ -763,9 +766,8 @@ local function BuildPage(page)
     emo:SetSize(362, 174)
     SubText(emo, Header(emo, "Emote-angreb"), "en tilfældig fornærmelse")
     ui.emoteBtns = {}
-    for i, name in ipairs(ROSTER) do
-        local b = MakeButton(emo, 166, 24, name, function(self) ns.EmoteAttack(self.friend) end)
-        b.friend = name
+    for i = 1, ns.MAX_MEMBERS do
+        local b = MakeButton(emo, 166, 24, "", function(self) if self.friend then ns.EmoteAttack(self.friend) end end)
         local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
         b:SetPoint("TOPLEFT", emo, "TOPLEFT", 10 + col * 176, -40 - row * 28)
         ui.emoteBtns[i] = b
@@ -812,12 +814,13 @@ local function RefreshPage()
     end)
     local rated = 0
     for _, d in ipairs(list) do if d.st then rated = rated + 1 end end
+    ns.ShowFirst(ui.luckRows, #list)
     for i, d in ipairs(list) do
         local row = ui.luckRows[i]
         row.data = d
         local rr, gg, bb = C.ClassColor(classOf[d.name])
         row.rank:SetText(d.st and tostring(i) or "-")
-        row.name:SetText(d.name .. (d.name == db.me and " (dig)" or ""))
+        row.name:SetText(Name(d.name) .. (d.name == db.me and " (dig)" or ""))
         row.name:SetTextColor(rr, gg, bb)
         row.n:SetText(d.n > 0 and (d.n .. " r") or "")
         if d.st then
@@ -832,7 +835,7 @@ local function RefreshPage()
         end
         if i == 1 and d.st and rated >= 2 then
             row:SetBackdropColor(0.08, 0.20, 0.10, 1)
-            row.name:SetText(d.name .. "  |cffffd100Fætter Højben|r")
+            row.name:SetText(Name(d.name) .. "  |cffffd100Fætter Højben|r")
         elseif d.st and i == rated and rated >= 2 then
             row:SetBackdropColor(0.20, 0.08, 0.08, 1)
         elseif d.name == db.me then
@@ -856,7 +859,7 @@ local function RefreshPage()
         lines[3] = "|cffbbbbbb\"" .. ns.Obituary(ev, holder) .. "\"|r"
         local times = HatTimes()
         local parts = {}
-        for i = 1, math.min(3, #times) do parts[i] = times[i].name .. " " .. Duration(times[i].secs) end
+        for i = 1, math.min(3, #times) do parts[i] = Name(times[i].name) .. " " .. Duration(times[i].secs) end
         lines[4] = " "
         lines[5] = "|cffffd100Mest tid med hatten:|r " .. table.concat(parts, ", ")
     end
@@ -864,14 +867,20 @@ local function RefreshPage()
 
     -- Emote-knapper og statistik
     local now = GetTime()
+    ns.ShowFirst(ui.emoteBtns, #ROSTER)
+    for i, b in ipairs(ui.emoteBtns) do
+        b.friend = ROSTER[i] or false
+    end
     for _, b in ipairs(ui.emoteBtns) do
         local rr, gg, bb = C.ClassColor(classOf[b.friend])
-        if b.friend == db.me then
-            b.text:SetText("|cff666666" .. b.friend .. " (dig)|r")
+        if not b.friend then
+            -- tom plads
+        elseif b.friend == db.me then
+            b.text:SetText("|cff666666" .. Name(b.friend) .. " (dig)|r")
             b:Disable()
         else
             b:Enable()
-            b.text:SetText(string.format("|cff%02x%02x%02x%s|r", math.floor(rr * 255), math.floor(gg * 255), math.floor(bb * 255), b.friend))
+            b.text:SetText(string.format("|cff%02x%02x%02x%s|r", math.floor(rr * 255), math.floor(gg * 255), math.floor(bb * 255), Name(b.friend)))
         end
         b:SetAlpha((now - lastAttack < EMOTE_COOLDOWN and b.friend ~= db.me) and 0.6 or 1)
     end
@@ -885,7 +894,7 @@ local function RefreshPage()
     local bully, bn = top(db.emoteStats.sent)
     local victim, vn = top(db.emoteStats.recv)
     if bully then
-        ui.emoteStats:SetText(string.format("Største bølle: %s (%d)   Mest mobbet: %s (%d)", bully, bn, victim, vn))
+        ui.emoteStats:SetText(string.format("Største bølle: %s (%d)   Mest mobbet: %s (%d)", Name(bully), bn, Name(victim), vn))
     else
         ui.emoteStats:SetText("Ingen angreb endnu. Vær den første.")
     end
@@ -976,10 +985,10 @@ function ns.TestPrankToasts()
     local class = select(2, UnitClass("player"))
     local fake = { id = "test-" .. math.random(1, 99999), name = UnitName("player"), class = class,
                    killer = "Murloc Forager", ability = "Nærkamp", klvl = 12, level = 31, zone = "Westfall", time = time() }
-    ns.Toast({ kind = "obit", head = "DØDSANNONCE", title = me .. " (level 31)", text = ns.Obituary(fake, me),
+    ns.Toast({ kind = "obit", head = "DØDSANNONCE", title = Name(me) .. " (level 31)", text = ns.Obituary(fake, me),
                icon = OBIT_ICON, class = class, dur = 7, force = true })
     local e = { friend = me, item = "item:28830", name = "Dragonspine Trophy", quality = 4 }
-    ns.Toast({ kind = "police", head = "NEED-POLITIET", title = me .. " needede " .. ItemLink(e), text = SHAME_TEXT.gone,
+    ns.Toast({ kind = "police", head = "NEED-POLITIET", title = Name(me) .. " needede " .. ItemLink(e), text = SHAME_TEXT.gone,
                icon = ItemIcon(28830), dur = 7, force = true })
     local idx = math.random(#ATTACKS)
     ns.Toast({ kind = "emote", head = "EMOTE-ANGREB", title = "Nick angriber dig!", text = AttackText(idx, "Nick", "dig"),
@@ -990,10 +999,10 @@ local function FindFriend(arg)
     arg = (arg or ""):lower()
     if arg == "" then return nil end
     for _, name in ipairs(ROSTER) do
-        if name:lower() == arg then return name end
+        if Name(name):lower() == arg then return name end
     end
     for _, name in ipairs(ROSTER) do
-        if name:lower():sub(1, #arg) == arg then return name end
+        if Name(name):lower():sub(1, #arg) == arg then return name end
     end
 end
 

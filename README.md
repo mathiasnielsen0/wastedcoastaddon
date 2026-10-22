@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.9.3. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.10.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media` og (fra 0.9) `Dueller.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua` og (fra 0.10) `Groups.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -77,13 +77,38 @@ knapper forneden. På TBC Anniversary bruger det addonets egen mørke stil. Skif
 
 ---
 
-## Første gang
+## Første gang: dit navn og din gruppe
 
-Når du logger ind, spørger addonet: **"Hvem er du?"** Vælg dit navn på listen.
-Det gælder hele din konto, så alle dine karakterer bliver koblet til dig.
-Du kan skifte senere med knappen "Skift" nederst i vinduet eller `/wc4ever jeg`.
-I behøver ikke være i samme guild: addonet finder hinanden via en skjult kanal
-(se "Sådan virker synkroniseringen").
+Første gang du logger ind, åbner addonet vinduet **"Kom i gang"**:
+
+1. **Skriv dit navn.** Det er det navn, vennerne ser. Du kan altid ændre det
+   (knappen "Gruppe" nederst i vinduet eller `/wc4ever gruppe`). Bag navnet får du
+   et fast, unikt ID, så dine data følger dig, selvom du skifter navn.
+2. **Deltag i en vens gruppe:** indsæt koden, du har fået (den ligner
+   `WC-ABCD-EFGH-JKLM-NPQR`), og tryk "Deltag".
+   **Eller opret en ny gruppe:** du bliver admin og får en kode, som du sender til
+   dine venner. Koden står altid i gruppevinduet, klar til Ctrl+C.
+
+Navnet og gruppen gælder hele din konto, så alle dine karakterer bliver koblet til dig.
+Der er plads til 8 venner i vinduet. Man er med i én gruppe ad gangen; indsætter du en
+ny kode, skifter du gruppe.
+
+**Admin** (den, der oprettede gruppen) kan fjerne medlemmer i gruppevinduet og tage
+dem ind igen. En fjernet spiller forsvinder hos alle og kan ikke melde sig ind igen
+med koden. WoW har ingen kryptografi, så det holder blandt venner, men er ikke
+skudsikkert mod en, der virkelig vil snyde.
+
+**De oprindelige 8 venner** (Mikkel, Mathias, Nick, Andreas, Frode, Søren, Rasmus og
+Jeppe) behøver ikke gøre noget: ved opdateringen bliver I automatisk til gruppen
+"Wasted Coast" med Mathias som admin, og al jeres historik er der stadig. Gruppen
+bruger den samme skjulte kanal som før, så venner på en ældre version stadig ses.
+Installerer en af jer forfra, så skriv dit navn præcis som før (fx Nick) og indsæt
+gruppens kode (`WC-WASTED-COAST`, står også i Mathias' gruppevindue), så får du dit
+gamle ID og din historik tilbage.
+
+I behøver ikke være i samme guild: hver gruppe har sin egen skjulte kanal
+(se "Sådan virker synkroniseringen"). Beskeder fra spillere uden for gruppen
+ignoreres, også i guild og party.
 
 Skriv `/wc4ever` for at åbne vinduet. Indstillingerne finder du under **Options >
 AddOns > Wasted Coast Forever**, med knappen "Indstillinger" nederst i vinduet eller med
@@ -281,7 +306,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | Kommando | Hvad den gør |
 |---|---|
 | `/wc4ever` | Vis/skjul vinduet (`/wc4l` virker også) |
-| `/wc4ever jeg` | Vælg, hvem du er |
+| `/wc4ever gruppe` | Dit navn, opret eller deltag i en gruppe, del koden, fjern medlemmer (admin) |
 | `/wc4ever config` | Åbn indstillingerne |
 | `/wc4ever loot` | Vis, hvilken kvalitet loot registreres fra |
 | `/wc4ever loot epic` | Registrér kun epic og bedre (også `uncommon`, `rare`, `legendary`) |
@@ -312,8 +337,9 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 ## Sådan virker synkroniseringen
 
 - Alt sendes via usynlige addon-beskeder i **party, raid og guild**, og fra 0.5.1
-  også i en **skjult kanal** (`WC4Lsync`), som addonet melder dig ind i, når du
-  logger ind. Så kan I følge hinanden **uden at være i samme guild eller gruppe**.
+  også i en **skjult kanal**, som addonet melder dig ind i, når du logger ind. Fra 0.10
+  har hver gruppe sin egen kanal, afledt af koden (gruppen "Wasted Coast" bruger
+  stadig `WC4Lsync`). Så kan I følge hinanden **uden at være i samme guild eller gruppe**.
   Kanalen vises ikke i dine chatvinduer, og dens beskeder bliver skjult.
 - **Whisper som reserve:** Kan en ven ikke nås i guild, gruppe eller kanal (fx hvis
   klienten ikke kan sende addon-beskeder i kanaler), sender addonet usynlige

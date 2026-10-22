@@ -134,7 +134,7 @@ function PanelTemplates_SetNumTabs() end
 function PanelTemplates_TabResize() end
 ''')
 ns = lua.table()
-for f in ["Sounds.lua", "WastedCoast.lua", "Drilleri.lua", "Dueller.lua"]:
+for f in ["Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua"]:
     code = open(f"{ADDON}/{f}", encoding="utf-8").read()
     fn = lua.eval("function(code, name) local f, err = loadstring(code, name) if not f then error(err) end return f end")(code, "@" + f)
     fn("WastedCoast", ns)
@@ -159,6 +159,8 @@ local db = WastedCoastDB
 db.me = "Mathias"
 Fire("PLAYER_LOGIN")
 RunTimers()
+check(db.group and db.group.legacy and db.group.admin == "Mathias" and db.myId == "Mathias", "de 8 venner flyttes ind i Wasted Coast-gruppen")
+check(#ns.core.ROSTER == 8 and ns.core.ROSTER[2] == "Mathias", "samme rækkefølge som før")
 local realToast = ns.Toast
 ns.Toast = function(o) ns.toastsSeen[#ns.toastsSeen+1] = o return realToast(o) end
 
@@ -474,6 +476,120 @@ check(#db.needShame == 0, "reset sletter need-synder")
 check(next(db.duels) == nil, "reset sletter dueller")
 ns.ShowTab(13)
 ns.ShowTab(14)
+
+-- =============================================================================
+-- Grupper: navn, kode, nye medlemmer, omdøbning, admin fjerner, snyd afvises
+-- =============================================================================
+check(db.group == nil and db.me == nil and #ns.core.ROSTER == 0, "efter reset: ingen gruppe")
+check(ns.CleanMemberName("  Sø;ren|x  ") == "Sørenx", "navn renses for ; og |")
+local long = ns.CleanMemberName(string.rep("ø", 20))
+check(#long <= 24 and #long % 2 == 0, "langt navn klippes uden at dele et ø")
+check(ns.ParseGroupCode("wc-wasted-coast").legacy, "den gamle gruppes kode")
+check(ns.ParseGroupCode("nonsens") == nil, "ugyldig kode afvises")
+check(not ns.CreateGroup(), "kan ikke oprette uden navn")
+check(ns.SetMyName("Mads"), "navn gemt")
+SENT = {}
+check(ns.CreateGroup(), "gruppe oprettet")
+local g = db.group
+local me = db.me
+check(me:match("^u%w+$") and #me == 9, "unikt ID: " .. tostring(me))
+check(g.admin == me and ns.IsGroupAdmin(), "opretteren er admin")
+check(g.code:match("^WC%-%w%w%w%w%-%w%w%w%w%-%w%w%w%w%-%w%w%w%w$"), "kode-format: " .. g.code)
+local parsed = ns.ParseGroupCode(" " .. g.code:lower() .. " ")
+check(parsed and parsed.id == g.id and parsed.admin == me, "koden indeholder gruppe og admin")
+check(ns.route.CHANNEL == "WCg" .. g.id, "egen skjult kanal")
+check(#ns.core.ROSTER == 1 and ns.core.ROSTER[1] == me, "kun mig i gruppen")
+check(findSent("GM;" .. me .. ";" .. g.id .. ";" .. me .. ";Mads;"), "melder mig selv")
+check(ns.core.Name(me) == "Mads", "mit navn vises")
+
+-- En ven melder sig ind
+local bob = "uBBBBBBBB"
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", bob, g.id, bob, "Bob", NOW, NOW }, ";"), "CHANNEL", "Bobchar")
+check(ns.core.ROSTER_SET[bob] and #ns.core.ROSTER == 2, "Bob er med")
+check(lastPrint():find("Bob") and lastPrint():find("kommet med"), "besked om nyt medlem: " .. lastPrint())
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;" .. bob .. ";Bobchar;MAGE;12;100;Goldshire;10", "CHANNEL", "Bobchar")
+check(db.friends[bob] and db.friends[bob].chars.Bobchar, "Bobs livstegn gemmes")
+check(g.owners.Bobchar == bob, "Bobchar hører til Bob")
+ns.frame:Show()
+ns.ShowTab(1)
+local bobCard
+for _, c in ipairs(ns.cards) do if c.friend == bob then bobCard = c end end
+check(bobCard and bobCard.name.text_:find("Bob") and not bobCard.name.text_:find(bob), "kortet viser navnet, ikke ID'et")
+check(ns.cards[3].shown == false, "tomme kort skjules")
+for i = 1, 14 do ns.ShowTab(i) end
+
+-- Fremmede kan ikke melde andre ind, og andre gruppers beskeder ignoreres
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", "uCCCCCCCC", g.id, "uDDDDDDDD", "Snyder", NOW, NOW }, ";"), "GUILD", "Snyder")
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", "uEEEEEEEE", "ANDENGRP", "uEEEEEEEE", "Fremmed", NOW, NOW }, ";"), "GUILD", "Fremmed")
+check(#ns.core.ROSTER == 2, "snyd og andre grupper ignoreres")
+SENT = {}
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;uFFFFFFFF;Ukendt;MAGE;12;100;Goldshire;10", "GUILD", "Ukendt")
+check(findSent("GW;" .. me .. ";" .. g.id), "ukendt medlem: spørg hvem der er med")
+check(not db.friends.uFFFFFFFF, "ukendte gemmes ikke")
+
+-- Omdøbning
+NOW = NOW + 5
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", bob, g.id, bob, "Bobby", NOW, NOW - 5 }, ";"), "CHANNEL", "Bobchar")
+check(ns.core.Name(bob) == "Bobby", "Bob hedder nu Bobby")
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", bob, g.id, bob, "Gammel", NOW - 100, NOW - 5 }, ";"), "CHANNEL", "Bobchar")
+check(ns.core.Name(bob) == "Bobby", "ældre navn vinder ikke")
+SENT = {}
+ns.SetMyName("Mads Mikkelsen")
+check(ns.core.Name(me) == "Mads Mikkelsen" and findSent("GM;" .. me .. ";" .. g.id .. ";" .. me .. ";Mads Mikkelsen;"), "mit nye navn sendes")
+
+-- Admin fjerner Bob
+SENT = {}
+ns.ShowGroupWindow()
+ns.KickMember(bob, true)
+check(not ns.core.ROSTER_SET[bob] and #ns.core.ROSTER == 1, "Bob er fjernet")
+check(findSent("GK;" .. me .. ";" .. g.id .. ";" .. bob .. ";"), "fjernelsen sendes")
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;" .. bob .. ";Bobchar;MAGE;13;100;Goldshire;10", "CHANNEL", "Bobchar")
+check(db.friends[bob].chars.Bobchar.level == 12, "fjernede medlemmer ignoreres")
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", bob, g.id, bob, "Bob", NOW + 50, NOW }, ";"), "CHANNEL", "Bobchar")
+check(not ns.core.ROSTER_SET[bob], "fjernet medlem kan ikke melde sig ind igen")
+SENT = {}
+ns.SendGroupInfo(true)
+check(findSent("GK;" .. me .. ";" .. g.id .. ";" .. bob .. ";"), "admin gentager fjernelser ved synk")
+NOW = NOW + 5
+ns.KickMember(bob, false)
+check(ns.core.ROSTER_SET[bob], "Bob er taget ind igen")
+ns.RefreshGroupWindow()
+
+-- Som almindeligt medlem i en andens gruppe
+ns.LeaveGroup()
+check(db.group == nil and db.me == nil and #ns.core.ROSTER == 0, "har forladt gruppen")
+local admin = "uAAAAAAAA"
+local code = "WC-GRPK-EY23-AAAA-AAAA"
+check(ns.JoinGroup(code), "deltager med kode")
+g = db.group
+check(db.me == me and g.admin == admin and g.id == "GRPKEY23", "samme ID, admin fra koden")
+check(ns.route.CHANNEL == "WCgGRPKEY23", "gruppens kanal")
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", admin, g.id, admin, "Anne", NOW, NOW - 100 }, ";"), "CHANNEL", "Annechar")
+check(ns.core.ROSTER[1] == admin and ns.core.Name(admin) == "Anne", "admin dukker op først")
+check(ns.GroupName() == "Annes gruppe", "gruppens navn")
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", bob, g.id, bob, "Bob", NOW, NOW }, ";"), "CHANNEL", "Bobchar")
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;" .. bob .. ";Bobchar;MAGE;12;100;Goldshire;10", "CHANNEL", "Bobchar")
+-- Bob udgiver sig for at være admin og fjerner mig: afvises
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GK", admin, g.id, me, NOW, 1 }, ";"), "CHANNEL", "Bobchar")
+check(db.group and db.me == me, "falsk admin afvises")
+-- Et livstegn fra admins karakter, der påstår at være en anden, giver ikke admin-rettigheder
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;" .. admin .. ";Annechar;PRIEST;20;100;Goldshire;10", "CHANNEL", "Bobchar")
+check(g.owners.Annechar == nil, "karakter bindes kun, når den selv sender")
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;" .. admin .. ";Annechar;PRIEST;20;100;Goldshire;10", "CHANNEL", "Annechar")
+check(g.owners.Annechar == admin, "admins karakter genkendt")
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GK", admin, g.id, bob, NOW, 1 }, ";"), "CHANNEL", "Annechar")
+check(not ns.core.ROSTER_SET[bob], "admin fjerner Bob")
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GK", admin, g.id, me, NOW, 1 }, ";"), "CHANNEL", "Annechar")
+check(db.group == nil and db.me == nil, "admin fjerner mig: jeg er ude")
+check(lastPrint():find("fjernet"), "besked om at være fjernet: " .. lastPrint())
+
+-- En af de oprindelige venner, der installerer forfra, får sit gamle ID igen
+ns.SetMyName("nick")
+check(ns.JoinGroup("WC-WASTED-COAST"), "deltager i Wasted Coast")
+check(db.me == "Nick" and #ns.core.ROSTER == 8 and db.group.admin == "Mathias", "Nick med de 8 venner")
+check(ns.route.CHANNEL == "WC4Lsync", "gamle kanal, så ældre versioner er med")
+check(ns.GroupName() == "Wasted Coast", "gruppens navn")
+for i = 1, 14 do ns.ShowTab(i) end
 return PASSES
 '''
 passes = lua.execute(TESTS, ns)

@@ -10,6 +10,7 @@ local _, ns = ...
 
 local C = ns.core
 local ROSTER, ROSTER_SET = C.ROSTER, C.ROSTER_SET
+local Name = C.Name   -- medlemmets valgte navn (nøglerne er medlems-ID'er)
 local Print = C.Print
 local Plain = C.GAME.Plain
 
@@ -154,7 +155,7 @@ local function OnSystemMessage(msg)
         if db.settings.announce then
             local w, l = 0, 0
             if of then w, l = HeadToHead(db.me, of) end
-            local score = of and string.format(" Stillingen mod %s: |cffffd100%d-%d|r.", of, w, l) or ""
+            local score = of and string.format(" Stillingen mod %s: |cffffd100%d-%d|r.", Name(of), w, l) or ""
             if won then
                 Print(string.format("Du vandt en duel mod %s%s.%s", opp, fled and " (vedkommende flygtede)" or "", score))
             else
@@ -179,10 +180,10 @@ function ns.HandleDuelMessage(t)
         local loser = d.won and (of or d.opp) or friend
         if of then
             local w, l = HeadToHead(friend, of)
-            ns.Toast({ kind = "duel", head = "DUEL", title = winner .. " slog " .. loser .. (d.fled and " (flygtede)" or ""),
-                       text = string.format("Stillingen: %s %d - %d %s", friend, w, l, of), icon = DUEL_ICON, friend = winner })
+            ns.Toast({ kind = "duel", head = "DUEL", title = Name(winner) .. " slog " .. Name(loser) .. (d.fled and " (flygtede)" or ""),
+                       text = string.format("Stillingen: %s %d - %d %s", Name(friend), w, l, Name(of)), icon = DUEL_ICON, friend = winner })
         elseif db.settings.announce then
-            Print(string.format("%s %s en duel %s %s.", friend, d.won and "vandt" or "tabte", d.won and "mod" or "til", d.opp))
+            Print(string.format("%s %s en duel %s %s.", Name(friend), d.won and "vandt" or "tabte", d.won and "mod" or "til", d.opp))
         end
     end
 end
@@ -245,7 +246,7 @@ local function BuildPage(page)
         fs:SetText(c.label)
     end
     ui.rows = {}
-    for i = 1, #ROSTER do
+    for i = 1, ns.MAX_MEMBERS do
         local row = MakeBox("Button", left, COL_BTN, COL_BORDER)
         row:SetSize(342, 24)
         row:SetPoint("TOPLEFT", left, "TOPLEFT", 10, -(54 + (i - 1) * 27))
@@ -258,7 +259,7 @@ local function BuildPage(page)
             local d = self.data
             if not d then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:AddLine(d.name, 1, 1, 1)
+            GameTooltip:AddLine(Name(d.name), 1, 1, 1)
             local st = d.st
             if st.w + st.l == 0 then
                 GameTooltip:AddLine("Ingen dueller endnu", 0.6, 0.6, 0.66)
@@ -278,7 +279,7 @@ local function BuildPage(page)
                     local o = opps[k]
                     local r, g, b = 0.8, 0.8, 0.8
                     if o.w > o.l then r, g, b = 0.4, 0.9, 0.5 elseif o.l > o.w then r, g, b = 1, 0.45, 0.45 end
-                    GameTooltip:AddDoubleLine(o.name .. (o.friend and "" or "  |cff888888(ikke ven)|r"), string.format("%d-%d", o.w, o.l), 0.9, 0.9, 0.9, r, g, b)
+                    GameTooltip:AddDoubleLine(Name(o.name) .. (o.friend and "" or "  |cff888888(ikke ven)|r"), string.format("%d-%d", o.w, o.l), 0.9, 0.9, 0.9, r, g, b)
                 end
             end
             GameTooltip:Show()
@@ -303,22 +304,21 @@ local function BuildPage(page)
     Header(right, "Indbyrdes", "rækken mod kolonnen")
     ui.colHead, ui.rowHead, ui.cells = {}, {}, {}
     local x0, y0 = 84, -40
-    for j, name in ipairs(ROSTER) do
+    for j = 1, ns.MAX_MEMBERS do
         local fs = Txt(right, "GameFontHighlightSmall")
         fs:SetPoint("TOPLEFT", right, "TOPLEFT", x0 + (j - 1) * CELL, y0)
         fs:SetWidth(CELL)
         fs:SetJustifyH("CENTER")
-        fs:SetText(name:sub(1, 3))
         ui.colHead[j] = fs
     end
-    for i, name in ipairs(ROSTER) do
+    for i = 1, ns.MAX_MEMBERS do
         local fs = Txt(right, "GameFontHighlightSmall")
         fs:SetPoint("TOPLEFT", right, "TOPLEFT", 12, y0 - 16 - (i - 1) * 22)
         fs:SetWidth(70)
-        fs:SetText(name)
+        fs:SetWordWrap(false)
         ui.rowHead[i] = fs
         ui.cells[i] = {}
-        for j = 1, #ROSTER do
+        for j = 1, ns.MAX_MEMBERS do
             local cell = MakeBox("Frame", right, COL_BTN, COL_BORDER)
             cell:SetSize(CELL - 2, 20)
             cell:SetPoint("TOPLEFT", right, "TOPLEFT", x0 + (j - 1) * CELL + 1, y0 - 12 - (i - 1) * 22)
@@ -329,7 +329,7 @@ local function BuildPage(page)
         end
     end
     local lh = Txt(right, "GameFontNormal")
-    lh:SetPoint("TOPLEFT", right, "TOPLEFT", 12, y0 - 16 - #ROSTER * 22 - 4)
+    lh:SetPoint("TOPLEFT", right, "TOPLEFT", 12, y0 - 16 - ns.MAX_MEMBERS * 22 - 4)
     lh:SetText("Seneste dueller")
     lh:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
     ui.recent = Txt(right, "GameFontHighlightSmall")
@@ -355,13 +355,14 @@ local function RefreshPage()
         if (a.rate or 0) ~= (b.rate or 0) then return (a.rate or 0) > (b.rate or 0) end
         return a.name < b.name
     end)
+    ns.ShowFirst(ui.rows, #list)
     for i, d in ipairs(list) do
         local row = ui.rows[i]
         row.data = d
         local st = d.st
         local r, g, b = C.ClassColor(classOf[d.name])
         row.f[1]:SetText(d.n > 0 and tostring(i) or "-")
-        row.f[2]:SetText(d.name .. (d.name == db.me and " (dig)" or ""))
+        row.f[2]:SetText(Name(d.name) .. (d.name == db.me and " (dig)" or ""))
         row.f[2]:SetTextColor(r, g, b)
         row.f[3]:SetText(d.n > 0 and ("|cff66e080" .. st.w .. "|r") or "-")
         row.f[4]:SetText(d.n > 0 and ("|cffff7070" .. st.l .. "|r") or "-")
@@ -383,8 +384,14 @@ local function RefreshPage()
         end
     end
 
+    local n = #ROSTER
+    ns.ShowFirst(ui.colHead, n)
+    ns.ShowFirst(ui.rowHead, n)
+    for i, list in ipairs(ui.cells) do ns.ShowFirst(list, i <= n and n or 0) end
     for i, a in ipairs(ROSTER) do
         local r, g, b = C.ClassColor(classOf[a])
+        ui.colHead[i]:SetText(Name(a):sub(1, 3))
+        ui.rowHead[i]:SetText(Name(a))
         ui.rowHead[i]:SetTextColor(r, g, b)
         ui.colHead[i]:SetTextColor(r, g, b)
         for j, bName in ipairs(ROSTER) do
@@ -419,7 +426,9 @@ local function RefreshPage()
     -- Seneste dueller (en duel mellem to venner vises kun én gang)
     local all, shown = {}, {}
     for friend, dl in pairs(db.duels) do
-        for _, d in ipairs(dl) do all[#all + 1] = { friend = friend, d = d } end
+        if ROSTER_SET[friend] then
+            for _, d in ipairs(dl) do all[#all + 1] = { friend = friend, d = d } end
+        end
     end
     table.sort(all, function(x, y) return (x.d.t or 0) > (y.d.t or 0) end)
     local lines = {}
