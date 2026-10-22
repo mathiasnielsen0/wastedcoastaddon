@@ -17,6 +17,7 @@ local addonName, ns = ...
 --   * v0.7.1: flottere UI (faner med ikoner, skygge, glans, statusbars og pænere toasts)
 --   * v0.7.2: WC4L-logo ved minimappet (klik åbner vinduet)
 --   * v0.8: kun fire faner (Venner, Rangliste, Loot & død, Sjov) med undersider
+--   * v0.8.1: legacy points pr. ven på WoW Forever
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -400,6 +401,7 @@ local function InitDB()
     db.demoAch = db.demoAch or {}    -- demo-trofæer (fjernes af /wc4l demo slut)
     db.rolls = db.rolls or {}        -- ven -> { rolls, wins, sum, cnt, low, high }
     db.goldHist = db.goldHist or {}  -- ven -> { { tid, kobber }, ... } sorteret efter tid
+    db.legacy = db.legacy or {}      -- ven -> { p = legacy points, c = klarede challenges, t } (kun WoW Forever)
     if db.settings.toasts == nil then db.settings.toasts = true end
     if db.settings.sound == nil then db.settings.sound = true end
     if db.settings.announce == nil then db.settings.announce = true end
@@ -2155,6 +2157,81 @@ function ns.OnFriendHeartbeat(friend, char, class, level, zone, wasOnline, prevL
     end
 end
 
+-- =============================================================================
+-- Legacy points (kun WoW Forever): hver Legacy Challenge er et achievement, der giver
+-- points i trait-valutaen 4225. Points tjenes på hele Battle.net-kontoen, så de hører til
+-- vennen og ikke til en karakter.
+-- =============================================================================
+do
+    local LEGACY_CURRENCY = 4225
+
+    local function ScanLegacy()
+        if not GAME.isForever or not (GetCategoryList and GetCategoryNumAchievements and GetAchievementInfo) then
+            return nil
+        end
+        local forAch = C_Traits and C_Traits.GetTraitCurrencyForAchievement
+        local points, done, seen = 0, 0, {}
+        if forAch then
+            for _, cat in ipairs(GetCategoryList() or {}) do
+                for i = 1, GetCategoryNumAchievements(cat, true) or 0 do
+                    local id, _, _, completed = GetAchievementInfo(cat, i)
+                    if id and completed and not seen[id] then
+                        seen[id] = true
+                        local p = tonumber(forAch(LEGACY_CURRENCY, id)) or 0
+                        if p > 0 then
+                            points = points + p
+                            done = done + 1
+                        end
+                    end
+                end
+            end
+        end
+        -- Reserve: selve valutaen, hvis achievements ikke siger noget
+        if points == 0 and C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfo then
+            local info = C_CurrencyInfo.GetCurrencyInfo(LEGACY_CURRENCY)
+            if info then points = tonumber(info.totalEarned) or tonumber(info.quantity) or 0 end
+        end
+        return points, done
+    end
+
+    local function SendLegacy()
+        local e = db.me and db.legacy[db.me]
+        if e then Send(string.format("LP;%s;%d;%d;%d", db.me, e.p or 0, e.c or 0, e.t or 0)) end
+    end
+    ns.SendLegacy = SendLegacy
+
+    function ns.UpdateMyLegacy()
+        if not db.me then return end
+        local ok, points, done = pcall(ScanLegacy)
+        if not ok or not points then return end
+        local e = db.legacy[db.me]
+        if e and e.p == points and e.c == done then return end
+        db.legacy[db.me] = { p = points, c = done, t = time() }
+        SendLegacy()
+        if ns.RefreshUI then ns.RefreshUI() end
+    end
+
+    function ns.OnLegacyMessage(t)
+        local friend, points, done, at = t[2], tonumber(t[3]), tonumber(t[4]) or 0, tonumber(t[5]) or 0
+        if not ROSTER_SET[friend] or friend == db.me or not points then return end
+        local e = db.legacy[friend]
+        if e and at < (e.t or 0) then return end
+        if e and points > (e.p or 0) and db.settings.announce and (time() - at) < 300 then
+            Print(string.format("%s har nu |cffffd100%d legacy points|r.", friend, points))
+        end
+        db.legacy[friend] = { p = points, c = done, t = at }
+        if ns.RefreshUI then ns.RefreshUI() end
+    end
+
+    -- Teksten til kort og venneside, eller nil når den ikke skal vises (TBC, eller intet kendt)
+    function ns.LegacyText(friend)
+        if not GAME.isForever then return nil end
+        local e = db.legacy[friend]
+        if not e then return nil end
+        return string.format("%d legacy points", e.p or 0), e
+    end
+end
+
 local function HandleExtraMessage(kind, t)
     if kind == "S" then
         local friend, inst = t[2], t[3]
@@ -2282,6 +2359,7 @@ function ns.SendMyExtras()
     -- v0.5: rolls, guld, professions, gear og reputation
     ns.SendRollSummary()
     ns.SendGoldHistory(30)
+    ns.SendLegacy()
     for char, c in pairs((db.friends[db.me] and db.friends[db.me].chars) or {}) do
         if not c.demo then
             ns.SendProf(char, c)
@@ -2340,6 +2418,9 @@ local function OnAddonMessage(prefix, message, chatType, sender)
             if ns.RefreshUI then ns.RefreshUI() end
         end
 
+    elseif kind == "LP" then
+        ns.OnLegacyMessage(t)
+
     elseif kind == "S" or kind == "B" or kind == "W" or kind == "A"
         or kind == "R" or kind == "G" or kind == "P" or kind == "E" or kind == "F" then
         HandleExtraMessage(kind, t)
@@ -2372,6 +2453,7 @@ function ns.AfterIdentity()
     ns.ScheduleScan("prof", 2)
     ns.ScheduleScan("gear", 4)
     ns.ScheduleScan("rep", 6)
+    C_Timer.After(8, ns.UpdateMyLegacy)
 end
 
 -- Knappen "Opdater": mål og send dine egne data, og bed vennerne sende deres med det samme
@@ -2671,6 +2753,11 @@ local function BuildCard(parent, index, friend)
     card.charsText:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -128)
     card.charsText:SetTextColor(0.7, 0.7, 0.76)
 
+    card.legacy = Txt(card, "GameFontHighlightSmall")
+    card.legacy:SetPoint("TOPRIGHT", card, "TOPRIGHT", -10, -128)
+    card.legacy:SetJustifyH("RIGHT")
+    card.legacy:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+
     card.titles = Txt(card, "GameFontNormalSmall")
     card.titles:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -142)
     card.titles:SetWidth(BAR_W)
@@ -2707,6 +2794,11 @@ local function BuildCard(parent, index, friend)
         end
         local snail = ns.SnailText and ns.SnailText(self.friend)
         if snail then GameTooltip:AddLine(snail, 0.9, 0.8, 0.4) end
+        local legacy, le = ns.LegacyText(self.friend)
+        if legacy then
+            GameTooltip:AddLine(string.format("Legacy: %s (%s)", legacy, Plural(le.c or 0, "challenge", "challenges")),
+                COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+        end
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Klik for at se alle karakterer", 0.5, 0.8, 1)
         GameTooltip:Show()
@@ -2790,6 +2882,7 @@ local function RefreshOverview()
             card.barFill:Hide()
         end
         card.charsText:SetText(s.chars > 0 and Plural(s.chars, "karakter", "karakterer") or "Ingen karakterer endnu")
+        card.legacy:SetText(ns.LegacyText(s.name) or "")
         card.titles:SetText(TitleText(titles[s.name]))
         card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == "Skammens hat")
     end
@@ -3107,8 +3200,9 @@ local function RefreshChars()
     SetClassIcon(panel.icon, cur.class)
     panel.name:SetText(cur.name)
     panel.name:SetTextColor(r, g, b)
-    panel.sub:SetText(string.format("%s  -  %d dødsfald  -  %d rare+ loot",
-        Plural(cur.chars, "karakter", "karakterer"), cur.deaths, cur.loot))
+    local legacy = ns.LegacyText(cur.name)
+    panel.sub:SetText(string.format("%s  -  %d dødsfald  -  %d rare+ loot%s",
+        Plural(cur.chars, "karakter", "karakterer"), cur.deaths, cur.loot, legacy and ("  -  " .. legacy) or ""))
     panel.big:SetText(tostring(cur.chars))
     panel.big:SetTextColor(1, 1, 1)
 
@@ -5768,6 +5862,7 @@ pcall(events.RegisterEvent, events, "PLAYER_LOGOUT")
 pcall(events.RegisterEvent, events, "SKILL_LINES_CHANGED")
 pcall(events.RegisterEvent, events, "PLAYER_EQUIPMENT_CHANGED")
 pcall(events.RegisterEvent, events, "UPDATE_FACTION")
+if GAME.isForever then pcall(events.RegisterEvent, events, "ACHIEVEMENT_EARNED") end
 
 events:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
@@ -5823,6 +5918,9 @@ events:SetScript("OnEvent", function(_, event, ...)
 
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
         if db and db.me then ns.ScheduleScan("gear", 3) end
+
+    elseif event == "ACHIEVEMENT_EARNED" then
+        if db and db.me then C_Timer.After(3, ns.UpdateMyLegacy) end
 
     elseif event == "UPDATE_FACTION" then
         if db and db.me and not ns.IsScanningRep() then ns.ScheduleScan("rep", 10) end

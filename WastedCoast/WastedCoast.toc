@@ -2,7 +2,7 @@
 ## Title: Wasted Coast (WC4L)
 ## Notes: Venne-overblik, scoreboard, loot, dødsstatistik, rolls, guldgraf, professions, gear, reputation og drillerier. Synkroniserer i party, raid, guild og en skjult kanal, så I ikke behøver samme guild.
 ## Author: Dig
-## Version: 0.8.0
+## Version: 0.8.1
 ## SavedVariables: WastedCoastDB
 
 Sounds.lua
