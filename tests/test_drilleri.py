@@ -150,8 +150,8 @@ RunTimers()
 local realToast = ns.Toast
 ns.Toast = function(o) ns.toastsSeen[#ns.toastsSeen+1] = o return realToast(o) end
 
--- Faner: 13 og Drilleri-siden findes
-check(#ns.tabs == 13, "13 faner")
+-- Sider: 13 (fordelt på 4 faner), og Drilleri-siden findes
+check(#ns.pages == 13 and #ns.tabs == 4, "13 sider på 4 faner")
 ns.frame:Show()
 for i = 1, 13 do ns.ShowTab(i) end
 
@@ -352,9 +352,16 @@ ns.ShowTab(1)
 -- Hele vinduet kan tegnes med demo-data: alle faner, fade-in og toast-animation
 ns.frame:Show()
 ns.frame.scripts.OnShow(ns.frame)
-for i = 1, #ns.tabs do ns.ShowTab(i) end
+check(#ns.tabs == 4, "fire faner")
+for i = 1, #ns.pages do ns.ShowTab(i) end
 ns.ShowTab(3)
-check(ns.tabs[3].active and not ns.tabs[1].active, "valgt fane er markeret")
+check(ns.tabs[1].active and not ns.tabs[2].active, "karakterer hører under Venner")
+check(ns.subTabs[1][2].active and ns.subTabs[1][2]:IsShown() and not ns.subTabs[3][1]:IsShown(), "undersider følger fanen")
+ns.ShowTab(13)
+check(ns.tabs[4].active and ns.subTabs[4][2].active, "drilleri hører under Sjov")
+local seen = {}
+for _, g in ipairs(ns.GROUPS) do for _, pg in ipairs(g.pages) do seen[pg] = true end end
+for i = 1, 13 do check(seen[i], "side " .. i .. " kan nås fra en fane") end
 ns.frame.scripts.OnUpdate(ns.frame, 2.1)
 ns.Toast({ kind = "wipe", title = "Wipe", text = "test", force = true })
 local tf = _G.WastedCoastToast

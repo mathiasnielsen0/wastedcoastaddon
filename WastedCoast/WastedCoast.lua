@@ -16,6 +16,7 @@ local addonName, ns = ...
 --   * v0.7: virker både på TBC Anniversary og WoW Forever (max level, instanser og API)
 --   * v0.7.1: flottere UI (faner med ikoner, skygge, glans, statusbars og pænere toasts)
 --   * v0.7.2: WC4L-logo ved minimappet (klik åbner vinduet)
+--   * v0.8: kun fire faner (Venner, Rangliste, Loot & død, Sjov) med undersider
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -2726,13 +2727,17 @@ local function BuildOverview(page)
     ns.deathTicker = Txt(page, "GameFontHighlightSmall")
     ns.deathTicker:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
     ns.deathTicker:SetWidth(360)
-    ns.deathTicker:SetWordWrap(false)
+    -- Flere linjer: med SetWordWrap(false) viser spillet kun den første
+    ns.deathTicker:SetHeight(58)
+    ns.deathTicker:SetJustifyV("TOP")
     ns.deathTicker:SetSpacing(3)
 
     ns.lootTicker = Txt(page, "GameFontHighlightSmall")
     ns.lootTicker:SetPoint("TOPLEFT", page, "TOPLEFT", 372, y)
     ns.lootTicker:SetWidth(360)
-    ns.lootTicker:SetWordWrap(false)
+    -- Flere linjer: med SetWordWrap(false) viser spillet kun den første
+    ns.lootTicker:SetHeight(58)
+    ns.lootTicker:SetJustifyV("TOP")
     ns.lootTicker:SetSpacing(3)
 end
 
@@ -5056,10 +5061,36 @@ end
 -- =============================================================================
 -- UI: hovedvindue, faner og identitetsvalg
 -- =============================================================================
+-- Fire faner, hver med sine undersider. Sidenumrene er de gamle (ns.ShowTab(3) viser stadig karaktererne).
+local GROUPS = {
+    { label = "Venner",     icon = "INV_Misc_Head_Human_01",
+      pages = { 1, 3, 11, 10, 12, 9 }, names = { "Kort", "Karakterer", "Gear", "Professions", "Reputation", "Guld" } },
+    { label = "Rangliste",  icon = "Ability_Rogue_Sprint",
+      pages = { 2, 7 },                names = { "Scoreboard", "Race" } },
+    { label = "Loot & død", icon = "INV_Misc_Bone_HumanSkull_01",
+      pages = { 4, 5, 8 },             names = { "Loot", "Instanser", "Statistik" } },
+    { label = "Sjov",       icon = "Spell_Nature_Polymorph",
+      pages = { 6, 13 },               names = { "Trofæer", "Drilleri" } },
+}
+ns.GROUPS = GROUPS
+
 function ns.ShowTab(i)
     ns.tab = i
     for idx, page in ipairs(ns.pages) do page:SetShown(idx == i) end
-    for idx, tb in ipairs(ns.tabs) do tb:SetActive(idx == i) end
+    for gi, grp in ipairs(GROUPS) do
+        local active = false
+        for si, pg in ipairs(grp.pages) do
+            local on = (pg == i)
+            if on then active = true end
+            local sb = ns.subTabs[gi] and ns.subTabs[gi][si]
+            if sb then sb:SetActive(on) end
+        end
+        if active then ns.group = gi end
+        if ns.tabs[gi] then ns.tabs[gi]:SetActive(active) end
+    end
+    for gi, list in pairs(ns.subTabs) do
+        for _, sb in ipairs(list) do sb:SetShown(gi == ns.group) end
+    end
     ns.RefreshUI()
 end
 
@@ -5205,22 +5236,24 @@ function ns.BuildMinimapButton()
 end
 
 local function BuildUI()
-    -- Faneblade: ikon + tekst; den valgte får guldtekst og en guldstreg forneden
-    local TAB_ICONS = {
-        "INV_Misc_Map_01", "INV_Misc_Note_01", "INV_Misc_Head_Human_01", "INV_Misc_Bag_10", "INV_Misc_Key_03",
-        "INV_Misc_Head_Dragon_01", "Ability_Rogue_Sprint", "INV_Misc_Bone_HumanSkull_01", "INV_Misc_Coin_01",
-        "Trade_BlackSmithing", "INV_Sword_04", "INV_Scroll_03", "Spell_Nature_Polymorph",
-    }
-
-    local function MakeTab(parent, w, h, label, icon, onClick)
+    -- Faneblade: (ikon +) tekst; den valgte får guldtekst og en guldstreg forneden
+    local function MakeTab(parent, w, h, label, icon, onClick, font)
         local tb = MakeBox("Button", parent, COL_BTN, COL_BORDER)
         tb:SetSize(w, h)
-        tb.icon = tb:CreateTexture(nil, "ARTWORK")
-        tb.icon:SetSize(16, 16)
-        tb.icon:SetPoint("LEFT", tb, "LEFT", 6, 0)
-        SafeIcon(tb.icon, "Interface\\Icons\\" .. icon)
-        tb.text = Field(tb, 27, w - 30, "LEFT", "GameFontHighlight")
+        tb.text = Txt(tb, font or "GameFontHighlight")
         tb.text:SetText(label)
+        tb.icon = tb:CreateTexture(nil, "ARTWORK")
+        if icon then
+            -- Ikon og tekst centreret sammen
+            local size = h - 10
+            tb.icon:SetSize(size, size)
+            tb.text:SetPoint("CENTER", tb, "CENTER", (size + 6) / 2, 0)
+            tb.icon:SetPoint("RIGHT", tb.text, "LEFT", -6, 0)
+            SafeIcon(tb.icon, "Interface\\Icons\\" .. icon)
+        else
+            tb.text:SetPoint("CENTER", tb, "CENTER", 0, 0)
+            tb.icon:Hide()
+        end
         tb.accent = tb:CreateTexture(nil, "OVERLAY")
         tb.accent:SetPoint("BOTTOMLEFT", tb, "BOTTOMLEFT", 1, 1)
         tb.accent:SetPoint("BOTTOMRIGHT", tb, "BOTTOMRIGHT", -1, 1)
@@ -5326,15 +5359,18 @@ local function BuildUI()
 
     FadeLine(f, -37, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.45)
 
-    -- Faner i to rækker af syv
-    ns.tabs = {}
-    local labels = { "Overblik", "Scoreboard", "Karakterer", "Loot", "Instanser", "Trofæer",
-                     "Race", "Statistik", "Guld", "Professions", "Gear", "Reputation", "Drilleri" }
-    for i, label in ipairs(labels) do
-        local tb = MakeTab(f, 101, 26, label, TAB_ICONS[i] or "INV_Misc_QuestionMark", function() ns.ShowTab(i) end)
-        local col, row = (i - 1) % 7, math.floor((i - 1) / 7)
-        tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + col * 105, -42 - row * 30)
-        ns.tabs[i] = tb
+    -- Fire store faner og en række små undersider under den valgte
+    ns.tabs, ns.subTabs = {}, {}
+    for gi, grp in ipairs(GROUPS) do
+        local tb = MakeTab(f, 178, 30, grp.label, grp.icon, function() ns.ShowTab(grp.pages[1]) end, "GameFontNormalLarge")
+        tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + (gi - 1) * 184.6, -42)
+        ns.tabs[gi] = tb
+        ns.subTabs[gi] = {}
+        for si, pg in ipairs(grp.pages) do
+            local sb = MakeTab(f, 112, 20, grp.names[si], nil, function() ns.ShowTab(pg) end, "GameFontHighlightSmall")
+            sb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + (si - 1) * 116, -79)
+            ns.subTabs[gi][si] = sb
+        end
     end
 
     FadeLine(f, -104, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.35)
@@ -5345,7 +5381,7 @@ local function BuildUI()
     content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 36)
 
     ns.pages = {}
-    for i = 1, #labels do
+    for i = 1, 13 do
         local p = CreateFrame("Frame", nil, content)
         p:SetAllPoints(content)
         ns.pages[i] = p

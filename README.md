@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.7.2. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.8.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 ---
@@ -47,8 +47,24 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds` og (fra 0.6) `Drilleri.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua` og (fra 0.7.2) mappen `media`. Kopiér hele
 `WastedCoast`-mappen.
+
+---
+
+## Vinduet
+
+Åbn med WC4L-logoet ved minimappet eller `/wc4l`. Der er fire faner, og hver har
+nogle små undersider lige under fanerne:
+
+| Fane | Undersider |
+|---|---|
+| **Venner** | Kort (forsiden), Karakterer, Gear, Professions, Reputation, Guld |
+| **Rangliste** | Scoreboard, Race |
+| **Loot & død** | Loot, Instanser, Statistik |
+| **Sjov** | Trofæer, Drilleri |
+
+Klik på en vens kort for at se vennens karakterer.
 
 ---
 
