@@ -8,10 +8,12 @@ local addonName, ns = ...
 --   * Loot: alle rare+ loot wins (Need/Greed/Drop, dungeon/raid/verden)
 --   * Dødstæller, titler og presence (hvem er online)
 --   * v0.4: egne lyde, toasts, wipe- og bosstæller, trofæer og levelling-race
+--   * v0.5: dødsstatistik, uheldsrating for rolls, guldgraf, professions, gear,
+--           reputation og et indstillingsvindue i spillets Options
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
-local SCHEMA = 4          -- version af dataformatet i SavedVariables
+local SCHEMA = 5          -- version af dataformatet i SavedVariables
 
 -- Vennerne. Rækkefølgen bestemmer rækkefølgen på kortene.
 local ROSTER = { "Mikkel", "Mathias", "Nick", "Andreas", "Frode", "Søren", "Rasmus", "Jeppe" }
@@ -289,6 +291,8 @@ local function InitDB()
     db.runs = db.runs or {}          -- ven -> instans -> { wipes, clears, boss = { navn = antal }, last }
     db.ach = db.ach or {}            -- ven -> trofæ-id -> tidspunkt
     db.demoAch = db.demoAch or {}    -- demo-trofæer (fjernes af /wc4l demo slut)
+    db.rolls = db.rolls or {}        -- ven -> { rolls, wins, sum, cnt, low, high }
+    db.goldHist = db.goldHist or {}  -- ven -> { { tid, kobber }, ... } sorteret efter tid
     if db.settings.toasts == nil then db.settings.toasts = true end
     if db.settings.sound == nil then db.settings.sound = true end
     if db.settings.announce == nil then db.settings.announce = true end
@@ -479,10 +483,112 @@ local function RunTotals(friend)
     return w, c, k
 end
 
+-- v0.5: dødsstatistik og roll-tal (i en blok pga. Luas grænse på 200 lokale variabler)
+do
+    -- =============================================================================
+    -- Dødsstatistik: farligste mob, farligste zone og faldskade-kongen
+    -- =============================================================================
+    local function IsFall(ev)
+        return (ev.killer == "Omgivelserne" and ev.ability == ENV_NAMES.Falling) or ev.killer == ENV_NAMES.Falling
+    end
+
+    local function IsEnvironment(ev)
+        if ev.killer == "Omgivelserne" then return true end
+        for _, n in pairs(ENV_NAMES) do
+            if ev.killer == n then return true end
+        end
+        return false
+    end
+
+    -- Sorteret liste af { name, n, who = { ven = antal } }, flest først
+    local function RankCounts(map)
+        local list = {}
+        for name, e in pairs(map) do list[#list + 1] = { name = name, n = e.n, who = e.who } end
+        table.sort(list, function(a, b)
+            if a.n ~= b.n then return a.n > b.n end
+            return a.name < b.name
+        end)
+        return list
+    end
+
+    local function DeathStats()
+        local mobs, zones, falls = {}, {}, {}
+        local function bump(map, key, friend)
+            local e = map[key]
+            if not e then e = { n = 0, who = {} }; map[key] = e end
+            e.n = e.n + 1
+            e.who[friend] = (e.who[friend] or 0) + 1
+        end
+        for _, ev in ipairs(db.events) do
+            local f = EventFriend(ev)
+            if f then
+                if ev.killer and ev.killer ~= "" and ev.killer ~= "Ukendt" and not IsEnvironment(ev) then
+                    bump(mobs, ev.killer, f)
+                end
+                if ev.zone and ev.zone ~= "" then bump(zones, ev.zone, f) end
+                if IsFall(ev) then falls[f] = (falls[f] or 0) + 1 end
+            end
+        end
+        local fallList = {}
+        for f, n in pairs(falls) do fallList[#fallList + 1] = { name = f, n = n } end
+        table.sort(fallList, function(a, b)
+            if a.n ~= b.n then return a.n > b.n end
+            return a.name < b.name
+        end)
+        return RankCounts(mobs), RankCounts(zones), fallList, falls
+    end
+
+    -- "Nick 4, Mathias 3"
+    local function WhoText(who, max)
+        local list = {}
+        for f, n in pairs(who or {}) do list[#list + 1] = { f = f, n = n } end
+        table.sort(list, function(a, b)
+            if a.n ~= b.n then return a.n > b.n end
+            return a.f < b.f
+        end)
+        local parts = {}
+        for i = 1, math.min(#list, max or 3) do parts[i] = list[i].f .. " " .. list[i].n end
+        return table.concat(parts, ", ")
+    end
+
+    -- =============================================================================
+    -- Rolls: db.rolls[ven] = { rolls = deltaget, wins = vundet, sum/cnt = roll-tal, low, high }
+    -- =============================================================================
+    local ROLL_MIN = 5   -- færre rolls end dette giver ingen uheldsrating
+
+    local function RollEntry(friend, create)
+        local r = db.rolls[friend]
+        if not r and create then
+            r = { rolls = 0, wins = 0, sum = 0, cnt = 0 }
+            db.rolls[friend] = r
+        end
+        return r
+    end
+
+    -- Andel tabte rolls (0-1), eller nil hvis der er for få rolls
+    local function LossRate(r)
+        if not r or (r.rolls or 0) < ROLL_MIN then return nil end
+        return math.max(0, (r.rolls - (r.wins or 0))) / r.rolls
+    end
+
+    local function AvgRoll(r)
+        if not r or (r.cnt or 0) == 0 then return nil end
+        return r.sum / r.cnt
+    end
+
+    ns.DeathStats = DeathStats
+    ns.WhoText = WhoText
+    ns.ROLL_MIN = ROLL_MIN
+    ns.RollEntry = RollEntry
+    ns.LossRate = LossRate
+    ns.AvgRoll = AvgRoll
+end
+
 -- Liste over alle venner i roster-rækkefølge
 local function BuildStats()
     local deaths = DeathsByFriend()
     local loot = LootByFriend()
+    local _, _, _, falls = ns.DeathStats()
     local list = {}
     for _, name in ipairs(ROSTER) do
         local info = db.friends[name] or {}
@@ -501,6 +607,8 @@ local function BuildStats()
             level = last and last.level or 0, maxLevel = maxLevel,
             zone = last and last.zone, seen = last and last.seen,
             chars = nChars, deaths = d, loot = l, gold = gold, wipes = rw, clears = rc, kills = rk,
+            falls = falls[name] or 0,
+            unluck = math.floor((ns.LossRate(db.rolls[name]) or 0) * 100 + 0.5),
             online = IsOnline(name), isMe = (name == db.me),
             -- Wasted Coast-point: loot x 5 + højeste level - døde x 3
             points = l * 5 + maxLevel - d * 3,
@@ -530,10 +638,13 @@ local function ComputeTitles(list)
     award("maxLevel", "Højest level")
     award("chars", "Alt-junkie", 2)
     award("wipes", "Wipe-konge")
+    award("falls", "Faldskade-konge")
+    award("unluck", "Uheldsfuglen")
     return titles, holders
 end
 
-local TITLE_ORDER = { "Klovnen", "Lootgoblin", "Rigmanden", "Højest level", "Alt-junkie", "Wipe-konge" }
+local TITLE_ORDER = { "Klovnen", "Lootgoblin", "Rigmanden", "Højest level", "Alt-junkie", "Wipe-konge",
+                      "Faldskade-konge", "Uheldsfuglen" }
 
 -- =============================================================================
 -- Netværk: kø, beskeder og synkronisering
@@ -775,6 +886,8 @@ end
 
 local function FormatToPattern(fmt)
     if type(fmt) ~= "string" then return nil end
+    -- Tekster med nummererede felter (%1$s) bliver til ugyldige mønstre, så dem springer vi over
+    if fmt:find("%%%d") then return nil end
     local p = fmt:gsub("([%^%$%(%)%.%[%]%*%+%-%?])", "%%%1")
     p = p:gsub("%%s", "(.+)")
     p = p:gsub("%%d", "(%%d+)")
@@ -795,6 +908,9 @@ local function BuildLootPatterns()
     add("choice", "need", "LOOT_ROLL_NEED_SELF")
     add("choice", "greed", "LOOT_ROLL_GREED_SELF")
     add("choice", "de", "LOOT_ROLL_DISENCHANT_SELF")
+    add("rolled", "need", "LOOT_ROLL_ROLLED_NEED")
+    add("rolled", "greed", "LOOT_ROLL_ROLLED_GREED")
+    add("rolled", "de", "LOOT_ROLL_ROLLED_DE")
     add("drop", "drop", "LOOT_ITEM_SELF_MULTIPLE")
     add("drop", "drop", "LOOT_ITEM_SELF")
 end
@@ -845,14 +961,80 @@ local function RecordLoot(it, how, isDrop)
     if AddLoot(ev) and db.me then Send(SerializeLoot(ev), true) end
 end
 
+do
+    -- Roll-tal: deltagelse, sejre og selve tallene. Sendes samlet lidt efter, så en
+    -- hel bunke rolls fra én boss kun giver én besked.
+    local rollSendPending = false
+    local function SendRollSummary()
+        local r = db.me and ns.RollEntry(db.me)
+        if r then
+            Send(string.format("R;%s;%d;%d;%d;%d;%d;%d", db.me, r.rolls, r.wins, r.sum, r.cnt, r.low or 0, r.high or 0))
+        end
+    end
+
+    local function RollChanged()
+        if ns.AfterEvent then ns.AfterEvent() end
+        if ns.RefreshUI then ns.RefreshUI() end
+        if rollSendPending then return end
+        rollSendPending = true
+        C_Timer.After(15, function()
+            rollSendPending = false
+            SendRollSummary()
+        end)
+    end
+
+    local lastRollWin = {}   -- itemID -> tidspunkt, så samme sejr ikke tælles to gange
+    local function CountRollWin(it)
+        if not db.me then return end
+        local now = GetTime()
+        if lastRollWin[it.id] and now - lastRollWin[it.id] < 3 then return end
+        lastRollWin[it.id] = now
+        local r = ns.RollEntry(db.me, true)
+        r.wins = r.wins + 1
+        if r.rolls < r.wins then r.rolls = r.wins end
+        RollChanged()
+    end
+
+    local function CountRollChoice()
+        if not db.me then return end
+        local r = ns.RollEntry(db.me, true)
+        r.rolls = r.rolls + 1
+        RollChanged()
+    end
+
+    local function CountRollValue(value, who)
+        if not db.me or not value then return end
+        if who ~= UnitName("player") and who ~= YOU and who ~= "You" then return end
+        if value < 1 or value > 100 then return end
+        local r = ns.RollEntry(db.me, true)
+        r.sum = r.sum + value
+        r.cnt = r.cnt + 1
+        if not r.low or value < r.low then r.low = value end
+        if not r.high or value > r.high then r.high = value end
+        RollChanged()
+    end
+
+    ns.SendRollSummary = SendRollSummary
+    ns.CountRollWin = CountRollWin
+    ns.CountRollChoice = CountRollChoice
+    ns.CountRollValue = CountRollValue
+end
+
 local function OnLootMessage(msg)
     if type(msg) ~= "string" then return end
     for _, p in ipairs(LOOT_PATTERNS) do
         if msg:find(p.pattern) then
+            if p.kind == "rolled" then
+                -- "Need Roll - 54 for [item] by Navn"
+                local value, _, who = msg:match(p.pattern)
+                ns.CountRollValue(tonumber(value), who)
+                return
+            end
             local it = ParseLink(msg)
             if not it then return end
             if p.kind == "choice" then
                 rollChoice[it.id] = { how = p.how, t = GetTime() }
+                ns.CountRollChoice()
             elseif p.kind == "won" then
                 local how = p.how
                 if not how then
@@ -860,6 +1042,7 @@ local function OnLootMessage(msg)
                     how = (ch and (GetTime() - ch.t) < 180) and ch.how or "roll"
                 end
                 recentRoll[it.id] = GetTime()
+                ns.CountRollWin(it)
                 RecordLoot(it, how, false)
             else
                 -- "You receive loot" kommer også lige efter en roll-sejr: vent lidt og tjek
@@ -1039,6 +1222,359 @@ end
 
 local function OnBossKillEvent(_, name)
     RecordBossKill(name)
+end
+
+-- v0.5: guld, professions, gear og reputation. Ligger i en blok, så hovedfilen holder sig
+-- under Luas grænse på 200 lokale variabler. Det, der bruges udefra, ligger på ns.
+do
+    -- =============================================================================
+    -- Guld over tid: db.goldHist[ven] = { { tid, kobber }, ... }
+    -- =============================================================================
+    local GOLD_KEEP = 300   -- så mange målinger gemmes pr. ven
+
+    -- Tilføjer en måling. Returnerer true, hvis den var ny.
+    local function AddGoldSample(friend, t, copper, demo)
+        if not ROSTER_SET[friend] or not t or t <= 0 or not copper or copper < 0 then return false end
+        local h = db.goldHist[friend]
+        if not h then h = {}; db.goldHist[friend] = h end
+        for _, smp in ipairs(h) do
+            if smp[1] == t then return false end
+        end
+        h[#h + 1] = { t, copper, d = demo or nil }
+        table.sort(h, function(a, b) return a[1] < b[1] end)
+        while #h > GOLD_KEEP do table.remove(h, 1) end
+        return true
+    end
+
+    -- Summen af guld på alle dine karakterer, med den aktuelle karakter opdateret
+    local function MyTotalGold()
+        if not db.me then return nil end
+        UpdateChar(db.me, UnitName("player"), { gold = GetMoney() }, time())
+        local total = 0
+        for _, c in pairs((db.friends[db.me] and db.friends[db.me].chars) or {}) do
+            if not c.demo then total = total + (c.gold or 0) end
+        end
+        return total
+    end
+
+    -- Måles når du logger ud (og første gang, så grafen ikke er tom)
+    local function SampleMyGold()
+        local total = MyTotalGold()
+        if not total then return end
+        local h = db.goldHist[db.me]
+        local last = h and h[#h]
+        if last and not last.d and last[2] == total and (time() - last[1]) < 6 * 3600 then return end
+        AddGoldSample(db.me, time(), total)
+    end
+
+    -- Sender dine seneste målinger, pakket ~10 pr. besked
+    local function SendGoldHistory(max)
+        local h = db.me and db.goldHist[db.me]
+        if not h then return end
+        local list = {}
+        for i = #h, 1, -1 do
+            if not h[i].d then list[#list + 1] = h[i] end
+            if #list >= (max or 30) then break end
+        end
+        local parts = {}
+        local function flush()
+            if #parts > 0 then Send("G;" .. db.me .. ";" .. table.concat(parts, ",")) end
+            parts = {}
+        end
+        for _, smp in ipairs(list) do
+            parts[#parts + 1] = smp[1] .. ":" .. smp[2]
+            if #parts >= 10 then flush() end
+        end
+        flush()
+    end
+
+    -- =============================================================================
+    -- Professions: c.prof = "Alchemy=375/375,Herbalism=300/375"
+    -- =============================================================================
+    local PROFS = {
+        { name = "Alchemy",        icon = "Trade_Alchemy" },
+        { name = "Blacksmithing",  icon = "Trade_BlackSmithing" },
+        { name = "Enchanting",     icon = "Trade_Engraving" },
+        { name = "Engineering",    icon = "Trade_Engineering" },
+        { name = "Jewelcrafting",  icon = "INV_Misc_Gem_01" },
+        { name = "Leatherworking", icon = "Trade_LeatherWorking" },
+        { name = "Tailoring",      icon = "Trade_Tailoring" },
+        { name = "Herbalism",      icon = "Trade_Herbalism" },
+        { name = "Mining",         icon = "Trade_Mining" },
+        { name = "Skinning",       icon = "INV_Misc_Pelt_Wolf_01" },
+        { name = "Cooking",        icon = "INV_Misc_Food_15" },
+        { name = "First Aid",      icon = "Spell_Holy_SealOfSacrifice" },
+        { name = "Fishing",        icon = "Trade_Fishing" },
+    }
+    local PROF_BY_NAME = {}
+    for _, pr in ipairs(PROFS) do PROF_BY_NAME[pr.name] = pr end
+
+    local function ScanProfessions()
+        if not GetNumSkillLines or not GetSkillLineInfo then return nil end
+        local parts = {}
+        for i = 1, GetNumSkillLines() do
+            local name, isHeader, _, rank, _, _, maxRank = GetSkillLineInfo(i)
+            if name and not isHeader and PROF_BY_NAME[name] and rank then
+                parts[#parts + 1] = string.format("%s=%d/%d", name, rank, maxRank or rank)
+            end
+        end
+        table.sort(parts)
+        return table.concat(parts, ",")
+    end
+
+    -- "Alchemy=375/375,..." -> { Alchemy = { 375, 375 }, ... }
+    local function ParseProf(str)
+        local res = {}
+        for name, rank, max in tostring(str or ""):gmatch("([^,=]+)=(%d+)/(%d+)") do
+            res[name] = { tonumber(rank), tonumber(max) }
+        end
+        return res
+    end
+
+    local function SendProf(char, c)
+        if c and c.prof then Send(string.format("P;%s;%s;%s", db.me, char, c.prof)) end
+    end
+
+    local function UpdateMyProfessions()
+        if not db.me then return end
+        local str = ScanProfessions()
+        if not str then return end
+        local char = UnitName("player")
+        local c = UpdateChar(db.me, char, nil, time())
+        if c and c.prof ~= str then
+            c.prof = str
+            SendProf(char, c)
+            if ns.RefreshUI then ns.RefreshUI() end
+        end
+    end
+
+    -- =============================================================================
+    -- Gear: c.gear = { il = snit item level, me = "1,7" (slots uden enchant), mg = manglende gems, t }
+    -- =============================================================================
+    local SLOT_NAME = {
+        [1] = "Hoved", [2] = "Hals", [3] = "Skuldre", [5] = "Bryst", [6] = "Bælte", [7] = "Ben", [8] = "Fødder",
+        [9] = "Håndled", [10] = "Hænder", [11] = "Ring", [12] = "Ring", [13] = "Trinket", [14] = "Trinket",
+        [15] = "Kappe", [16] = "Våben", [17] = "Off-hand", [18] = "Ranged",
+    }
+    local GEAR_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 }
+    -- Slots der kan enchantes for alle (ringe kun for enchantere, så dem tæller vi ikke)
+    local ENCHANT_SLOTS = { [1] = true, [3] = true, [5] = true, [7] = true, [8] = true, [9] = true,
+                            [10] = true, [15] = true, [16] = true, [17] = true }
+    local OFFHAND_ENCHANTABLE = { INVTYPE_WEAPON = true, INVTYPE_WEAPONOFFHAND = true, INVTYPE_SHIELD = true }
+
+    local function ItemLevel(link)
+        local ok, il = pcall(function()
+            if C_Item and C_Item.GetDetailedItemLevelInfo then return C_Item.GetDetailedItemLevelInfo(link) end
+            if GetDetailedItemLevelInfo then return GetDetailedItemLevelInfo(link) end
+        end)
+        if ok and il and il > 0 then return il end
+        local _, _, _, base = GetItemInfo(link)
+        return base
+    end
+
+    local function EquipLoc(link)
+        if GetItemInfoInstant then
+            local _, _, _, loc = GetItemInfoInstant(link)
+            if loc then return loc end
+        end
+        return select(9, GetItemInfo(link))
+    end
+
+    local function SocketCount(link)
+        local fn = (C_Item and C_Item.GetItemStats) or GetItemStats
+        if not fn then return 0 end
+        local ok, stats = pcall(fn, link)
+        if not ok or type(stats) ~= "table" then return 0 end
+        local n = 0
+        for k, v in pairs(stats) do
+            if type(k) == "string" and k:find("^EMPTY_SOCKET_") then n = n + (tonumber(v) or 0) end
+        end
+        return n
+    end
+
+    -- Returnerer gear-tabellen, eller nil hvis spillet ikke har item-info klar endnu
+    local function ScanGear()
+        if not GetInventoryItemLink then return nil end
+        local sum, n, missE, missG = 0, 0, {}, 0
+        for _, slot in ipairs(GEAR_SLOTS) do
+            local link = GetInventoryItemLink("player", slot)
+            if link then
+                local il = ItemLevel(link)
+                if not il then return nil end
+                sum, n = sum + il, n + 1
+                local fields = {}
+                for v in ((link:match("item:([%-%d:]*)") or "") .. ":"):gmatch("([^:]*):") do fields[#fields + 1] = tonumber(v) or 0 end
+                local enchant = fields[2] or 0
+                if ENCHANT_SLOTS[slot] and enchant == 0 then
+                    if slot ~= 17 or OFFHAND_ENCHANTABLE[EquipLoc(link) or ""] then missE[#missE + 1] = slot end
+                end
+                local gems = 0
+                for i = 3, 6 do if (fields[i] or 0) > 0 then gems = gems + 1 end end
+                missG = missG + math.max(0, SocketCount(link) - gems)
+            end
+        end
+        if n == 0 then return nil end
+        return { il = math.floor(sum / n * 10 + 0.5) / 10, me = table.concat(missE, ","), mg = missG, t = time() }
+    end
+
+    local function SendGear(char, c)
+        local g = c and c.gear
+        if g then
+            Send(string.format("E;%s;%s;%d;%s;%d;%d", db.me, char, math.floor((g.il or 0) * 10 + 0.5), g.me or "", g.mg or 0, g.t or 0))
+        end
+    end
+
+    local gearRetry = 0
+    local function UpdateMyGear()
+        if not db.me then return end
+        local g = ScanGear()
+        if not g then
+            -- Item-info er ikke hentet endnu: prøv igen om lidt
+            if gearRetry < 5 then
+                gearRetry = gearRetry + 1
+                C_Timer.After(5, UpdateMyGear)
+            end
+            return
+        end
+        gearRetry = 0
+        local char = UnitName("player")
+        local c = UpdateChar(db.me, char, nil, time())
+        local old = c.gear
+        c.gear = g
+        if not old or old.il ~= g.il or old.me ~= g.me or old.mg ~= g.mg then
+            SendGear(char, c)
+            if ns.RefreshUI then ns.RefreshUI() end
+        end
+    end
+
+    -- =============================================================================
+    -- Reputation: c.rep = { [fraktion] = "standing:fremskridt:max" }
+    -- Vi gemmer kun Friendly og bedre, plus nøgle-fraktionerne.
+    -- =============================================================================
+    local KEY_FACTIONS = {
+        { key = "hfp", label = "Hellfire", names = { "Honor Hold", "Thrallmar" }, item = "Flamewrought Key", what = "Hellfire Citadel heroic" },
+        { key = "ce",  label = "Cenarion", names = { "Cenarion Expedition" }, item = "Reservoir Key", what = "Coilfang Reservoir heroic" },
+        { key = "lc",  label = "Lower City", names = { "Lower City" }, item = "Auchenai Key", what = "Auchindoun heroic" },
+        { key = "sha", label = "Sha'tar", names = { "The Sha'tar" }, item = "Warpforged Key", what = "Tempest Keep heroic" },
+        { key = "kot", label = "Keepers", names = { "Keepers of Time" }, item = "Key of Time", what = "Caverns of Time heroic" },
+    }
+    local KEY_FACTION_NAME = {}
+    for _, k in ipairs(KEY_FACTIONS) do
+        for _, n in ipairs(k.names) do KEY_FACTION_NAME[n] = true end
+    end
+    local KEY_STANDING = 7   -- Revered
+
+    local function RepName(name)
+        return (tostring(name or ""):gsub("[,;=:]", " "):sub(1, 40))
+    end
+
+    local scanningRep, repScannedAt = false, 0
+    local function ScanReputation()
+        if not GetNumFactions or not GetFactionInfo or scanningRep then return nil end
+        scanningRep = true
+        -- Fold lukkede overskrifter ud, så vi ser alt, og fold dem sammen igen bagefter
+        local opened = {}
+        if ExpandFactionHeader then
+            local i = 1
+            while i <= GetNumFactions() and i < 400 do
+                local name, _, _, _, _, _, _, _, isHeader, isCollapsed = GetFactionInfo(i)
+                if isHeader and isCollapsed then
+                    opened[name or ""] = true
+                    ExpandFactionHeader(i)
+                end
+                i = i + 1
+            end
+        end
+        local res = {}
+        for i = 1, GetNumFactions() do
+            local name, _, standing, barMin, barMax, barValue, _, _, isHeader, _, hasRep = GetFactionInfo(i)
+            if name and standing and (not isHeader or hasRep) and (standing >= 5 or KEY_FACTION_NAME[name]) then
+                res[RepName(name)] = string.format("%d:%d:%d", standing, (barValue or 0) - (barMin or 0), (barMax or 0) - (barMin or 0))
+            end
+        end
+        if CollapseFactionHeader then
+            for i = GetNumFactions(), 1, -1 do
+                local name, _, _, _, _, _, _, _, isHeader, isCollapsed = GetFactionInfo(i)
+                if isHeader and not isCollapsed and opened[name or ""] then CollapseFactionHeader(i) end
+            end
+        end
+        scanningRep = false
+        repScannedAt = GetTime()
+        return res
+    end
+
+    -- "7:1200:21000" -> 7, 1200, 21000
+    local function ParseRep(v)
+        local s, p, m = tostring(v or ""):match("^(%d+):(%-?%d+):(%d+)$")
+        return tonumber(s) or 0, tonumber(p) or 0, tonumber(m) or 0
+    end
+
+    -- Sender fraktioner, pakket så hver besked holder sig under 250 tegn
+    local function SendRep(char, entries)
+        local head = string.format("F;%s;%s;", db.me, char)
+        local parts, len = {}, #head
+        local function flush()
+            if #parts > 0 then Send(head .. table.concat(parts, ",")) end
+            parts, len = {}, #head
+        end
+        local names = {}
+        for name in pairs(entries) do names[#names + 1] = name end
+        table.sort(names)
+        for _, name in ipairs(names) do
+            local item = name .. "=" .. entries[name]
+            if len + #item + 1 > 245 then flush() end
+            parts[#parts + 1] = item
+            len = len + #item + 1
+        end
+        flush()
+    end
+
+    local function UpdateMyRep()
+        if not db.me then return end
+        local res = ScanReputation()
+        if not res then return end
+        local char = UnitName("player")
+        local c = UpdateChar(db.me, char, nil, time())
+        c.rep = c.rep or {}
+        local changed = {}
+        for name, v in pairs(res) do
+            if c.rep[name] ~= v then changed[name] = v end
+        end
+        c.rep = res
+        if next(changed) then
+            SendRep(char, changed)
+            if ns.RefreshUI then ns.RefreshUI() end
+        end
+    end
+
+    -- Samler hyppige events (rep, skills, gear) til ét tjek lidt efter
+    local scanPending = {}
+    local function ScheduleScan(kind, delay)
+        if scanPending[kind] then return end
+        scanPending[kind] = true
+        C_Timer.After(delay or 5, function()
+            scanPending[kind] = nil
+            if kind == "prof" then UpdateMyProfessions()
+            elseif kind == "gear" then UpdateMyGear()
+            elseif kind == "rep" then UpdateMyRep() end
+        end)
+    end
+    -- At folde overskrifter ud og ind udløser selv UPDATE_FACTION, så dem lytter vi ikke på
+    ns.IsScanningRep = function() return scanningRep or (GetTime() - repScannedAt) < 3 end
+
+    ns.AddGoldSample = AddGoldSample
+    ns.SampleMyGold = SampleMyGold
+    ns.SendGoldHistory = SendGoldHistory
+    ns.ScheduleScan = ScheduleScan
+    ns.PROFS = PROFS
+    ns.ParseProf = ParseProf
+    ns.SendProf = SendProf
+    ns.SLOT_NAME = SLOT_NAME
+    ns.SendGear = SendGear
+    ns.KEY_FACTIONS = KEY_FACTIONS
+    ns.KEY_STANDING = KEY_STANDING
+    ns.ParseRep = ParseRep
+    ns.SendRep = SendRep
 end
 
 -- =============================================================================
@@ -1243,7 +1779,7 @@ function ns.OnFlags(unit)
 end
 
 -- =============================================================================
--- Indkommende ekstra-beskeder (S, B, W, A) og toasts for venner
+-- Indkommende ekstra-beskeder (S, B, W, A, R, G, P, E, F) og toasts for venner
 -- =============================================================================
 local startedAt = GetTime()
 local toastedAt = {}
@@ -1308,6 +1844,65 @@ local function HandleExtraMessage(kind, t)
                 if ns.RefreshUI then ns.RefreshUI() end
             end
         end
+
+    elseif kind == "R" then
+        -- Roll-tal: tallene vokser kun, så den største version vinder
+        local friend, rolls = t[2], tonumber(t[3])
+        if ROSTER_SET[friend] and friend ~= db.me and rolls then
+            local r = ns.RollEntry(friend, true)
+            if r.demo or rolls >= (r.rolls or 0) then
+                r.rolls, r.wins = rolls, tonumber(t[4]) or 0
+                r.sum, r.cnt = tonumber(t[5]) or 0, tonumber(t[6]) or 0
+                local low, high = tonumber(t[7]) or 0, tonumber(t[8]) or 0
+                r.low = low > 0 and low or nil
+                r.high = high > 0 and high or nil
+                r.demo = nil
+                if ns.RefreshUI then ns.RefreshUI() end
+            end
+        end
+
+    elseif kind == "G" then
+        local friend = t[2]
+        if ROSTER_SET[friend] and friend ~= db.me and t[3] then
+            local h = db.goldHist[friend]
+            if h then
+                for i = #h, 1, -1 do if h[i].d then table.remove(h, i) end end
+            end
+            for ts, copper in t[3]:gmatch("(%d+):(%d+)") do
+                ns.AddGoldSample(friend, tonumber(ts), tonumber(copper))
+            end
+            if ns.RefreshUI then ns.RefreshUI() end
+        end
+
+    elseif kind == "P" then
+        local friend, char = t[2], t[3]
+        if ROSTER_SET[friend] and friend ~= db.me and char and char ~= "" then
+            local c = UpdateChar(friend, char, nil, 1)
+            if c then c.prof = t[4] or "" end
+            if ns.RefreshUI then ns.RefreshUI() end
+        end
+
+    elseif kind == "E" then
+        local friend, char, il = t[2], t[3], tonumber(t[4])
+        if ROSTER_SET[friend] and friend ~= db.me and char and char ~= "" and il then
+            local c = UpdateChar(friend, char, nil, 1)
+            local at = tonumber(t[7]) or 0
+            if c and (not c.gear or at >= (c.gear.t or 0)) then
+                c.gear = { il = il / 10, me = t[5] or "", mg = tonumber(t[6]) or 0, t = at }
+            end
+            if ns.RefreshUI then ns.RefreshUI() end
+        end
+
+    elseif kind == "F" then
+        local friend, char = t[2], t[3]
+        if ROSTER_SET[friend] and friend ~= db.me and char and char ~= "" and t[4] then
+            local c = UpdateChar(friend, char, nil, 1)
+            if c then
+                c.rep = c.rep or {}
+                for name, v in t[4]:gmatch("([^,=]+)=([%d:%-]+)") do c.rep[name] = v end
+            end
+            if ns.RefreshUI then ns.RefreshUI() end
+        end
     end
 end
 
@@ -1331,6 +1926,17 @@ function ns.SendMyExtras()
     for id, at in pairs(db.ach[db.me] or {}) do
         if ACH_BY_ID[id] and not (db.demoAch[db.me] and db.demoAch[db.me][id]) then
             Send(string.format("A;%s;%s;%d", db.me, id, at))
+        end
+    end
+
+    -- v0.5: rolls, guld, professions, gear og reputation
+    ns.SendRollSummary()
+    ns.SendGoldHistory(30)
+    for char, c in pairs((db.friends[db.me] and db.friends[db.me].chars) or {}) do
+        if not c.demo then
+            ns.SendProf(char, c)
+            ns.SendGear(char, c)
+            if c.rep and next(c.rep) then ns.SendRep(char, c.rep) end
         end
     end
 end
@@ -1381,7 +1987,8 @@ local function OnAddonMessage(prefix, message)
             if ns.RefreshUI then ns.RefreshUI() end
         end
 
-    elseif kind == "S" or kind == "B" or kind == "W" or kind == "A" then
+    elseif kind == "S" or kind == "B" or kind == "W" or kind == "A"
+        or kind == "R" or kind == "G" or kind == "P" or kind == "E" or kind == "F" then
         HandleExtraMessage(kind, t)
 
     elseif kind == "Q" then
@@ -1399,6 +2006,16 @@ end
 -- =============================================================================
 -- Identitet: hvilken ven er du?
 -- =============================================================================
+-- Når vi ved, hvem du er: mål guld, professions, gear og rep, og send dine seneste guldtal
+function ns.AfterIdentity()
+    if not db.me then return end
+    if not db.goldHist[db.me] or #db.goldHist[db.me] == 0 then ns.SampleMyGold() end
+    ns.SendGoldHistory(10)
+    ns.ScheduleScan("prof", 2)
+    ns.ScheduleScan("gear", 4)
+    ns.ScheduleScan("rep", 6)
+end
+
 local function SetMe(friend)
     db.me = friend
     local cname = UnitName("player")
@@ -1416,6 +2033,7 @@ local function SetMe(friend)
     SendHeartbeat()
     RequestSync()
     ns.InitAchievements()
+    ns.AfterIdentity()
     Print("Du er nu registreret som |cffffd100" .. friend .. "|r.")
     if ns.RefreshUI then ns.RefreshUI() end
 end
@@ -2880,6 +3498,1051 @@ local function RefreshRace()
     ns.raceNote:SetText("Hver vens karakter med højest level tæller. XP-procenten opdateres, mens vennen er online.")
 end
 
+-- v0.5-sider og indstillinger ligger i en blok for sig, så hovedfilen holder sig under
+-- Luas grænse på 200 lokale variabler. Hver side er sin egen blok og bruges udefra via
+-- EXTRA_PAGES (og indstillingerne via ns.BuildOptions).
+local EXTRA_PAGES = {}   -- fane-nummer -> { build, refresh }
+do
+    -- =============================================================================
+    -- UI: side 8 - statistik (dødsfald og uheldsrating for rolls)
+    -- =============================================================================
+    local ROLL_COLS = {
+        { x = 6,   w = 22,  j = "CENTER", label = "#" },
+        { x = 30,  w = 104, j = "LEFT",   label = "Ven" },
+        { x = 136, w = 46,  j = "CENTER", label = "Rolls" },
+        { x = 184, w = 46,  j = "CENTER", label = "Vundet" },
+        { x = 232, w = 52,  j = "CENTER", label = "Tabt" },
+        { x = 286, w = 50,  j = "CENTER", label = "Snit" },
+    }
+
+    local function BuildStatsPage(page)
+        local left = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
+        left:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
+        left:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
+        left:SetWidth(362)
+        local lt = Txt(left, "GameFontNormalLarge")
+        lt:SetPoint("TOPLEFT", left, "TOPLEFT", 12, -10)
+        lt:SetText("Dødsstatistik")
+        lt:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+        ns.deathStatText = Txt(left, "GameFontHighlightSmall")
+        ns.deathStatText:SetPoint("TOPLEFT", lt, "BOTTOMLEFT", 0, -10)
+        ns.deathStatText:SetWidth(338)
+        ns.deathStatText:SetWordWrap(false)
+        ns.deathStatText:SetSpacing(4)
+
+        local right = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
+        right:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
+        right:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 0)
+        right:SetWidth(362)
+        local rt = Txt(right, "GameFontNormalLarge")
+        rt:SetPoint("TOPLEFT", right, "TOPLEFT", 12, -10)
+        rt:SetText("Uheldsrating for rolls")
+        rt:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+
+        for _, c in ipairs(ROLL_COLS) do
+            local fs = Txt(right, "GameFontHighlightSmall")
+            fs:SetPoint("TOPLEFT", right, "TOPLEFT", 10 + c.x, -40)
+            fs:SetWidth(c.w)
+            fs:SetJustifyH(c.j)
+            fs:SetTextColor(0.5, 0.5, 0.56)
+            fs:SetText(c.label)
+        end
+
+        ns.rollRows = {}
+        for i = 1, #ROSTER do
+            local row = MakeBox("Button", right, COL_BTN, COL_BORDER)
+            row:SetSize(342, 28)
+            row:SetPoint("TOPLEFT", right, "TOPLEFT", 10, -(56 + (i - 1) * 31))
+            row.f = {}
+            for k, c in ipairs(ROLL_COLS) do
+                row.f[k] = Field(row, c.x, c.w, c.j, k == 2 and "GameFontNormal" or "GameFontHighlight")
+            end
+            row:SetScript("OnEnter", function(self)
+                self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
+                local d = self.data
+                if not d then return end
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:AddLine(d.name, 1, 1, 1)
+                local r = d.r
+                if not r or (r.rolls or 0) == 0 then
+                    GameTooltip:AddLine("Ingen rolls registreret endnu", 0.6, 0.6, 0.66)
+                else
+                    GameTooltip:AddDoubleLine("Deltaget i", Plural(r.rolls, "roll", "rolls"), 0.8, 0.8, 0.8, 1, 1, 1)
+                    GameTooltip:AddDoubleLine("Vundet", tostring(r.wins or 0), 0.8, 0.8, 0.8, 0.4, 0.9, 0.5)
+                    GameTooltip:AddDoubleLine("Tabt", tostring(math.max(0, r.rolls - (r.wins or 0))), 0.8, 0.8, 0.8, 1, 0.45, 0.45)
+                    local avg = ns.AvgRoll(r)
+                    if avg then
+                        GameTooltip:AddLine(" ")
+                        GameTooltip:AddDoubleLine("Snit-roll", string.format("%.1f (forventet 50,5)", avg), 0.8, 0.8, 0.8, 1, 1, 1)
+                        GameTooltip:AddDoubleLine("Laveste / højeste", string.format("%d / %d", r.low or 0, r.high or 0), 0.8, 0.8, 0.8, 1, 1, 1)
+                    end
+                    if (r.rolls or 0) < ns.ROLL_MIN then
+                        GameTooltip:AddLine(" ")
+                        GameTooltip:AddLine("Rating fra " .. ns.ROLL_MIN .. " rolls", 0.5, 0.5, 0.56)
+                    end
+                end
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", function(self)
+                self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
+                GameTooltip:Hide()
+            end)
+            ns.rollRows[i] = row
+        end
+
+        ns.rollNote = Txt(right, "GameFontHighlightSmall")
+        ns.rollNote:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 12, 10)
+        ns.rollNote:SetWidth(338)
+        ns.rollNote:SetTextColor(0.5, 0.5, 0.56)
+        ns.rollNote:SetText("Tabt = andel af dine need/greed-rolls, du ikke vandt. Snit = dit gennemsnitlige roll (held er 50,5).")
+    end
+
+    local function RefreshStatsPage()
+        local mobs, zones, falls = ns.DeathStats()
+        local lines = {}
+        local function section(title, list, empty, max, fmt)
+            lines[#lines + 1] = "|cffffd100" .. title .. "|r"
+            if #list == 0 then
+                lines[#lines + 1] = "|cff888888" .. empty .. "|r"
+            else
+                for i = 1, math.min(max, #list) do lines[#lines + 1] = fmt(i, list[i]) end
+            end
+            lines[#lines + 1] = " "
+        end
+        local function withWho(i, e)
+            return string.format("%d. %s  |cffff8080%d|r  |cff888888(%s)|r", i, e.name, e.n, ns.WhoText(e.who, 3))
+        end
+        section("Farligste mob", mobs, "Ingen er blevet slået ihjel af et mob endnu.", 5, withWho)
+        section("Farligste zone", zones, "Ingen dødsfald endnu.", 3, withWho)
+        section("Faldskade-konge", falls, "Ingen er faldet ihjel endnu. Endnu.", 3, function(i, e)
+            return string.format("%d. %s  |cffff8080%s|r%s", i, e.name, Plural(e.n, "fald", "fald"),
+                i == 1 and "  |cffffd100(kongen)|r" or "")
+        end)
+        lines[#lines] = nil
+        ns.deathStatText:SetText(table.concat(lines, "\n"))
+
+        local list = {}
+        for _, name in ipairs(ROSTER) do
+            local r = db.rolls[name]
+            list[#list + 1] = { name = name, r = r, loss = ns.LossRate(r), avg = ns.AvgRoll(r), rolls = r and r.rolls or 0 }
+        end
+        table.sort(list, function(a, b)
+            if (a.loss ~= nil) ~= (b.loss ~= nil) then return a.loss ~= nil end
+            if a.loss and a.loss ~= b.loss then return a.loss > b.loss end
+            if a.rolls ~= b.rolls then return a.rolls > b.rolls end
+            return a.name < b.name
+        end)
+        local classOf = {}
+        for _, s in ipairs(BuildStats()) do classOf[s.name] = s.class end
+
+        for i, d in ipairs(list) do
+            local row = ns.rollRows[i]
+            row.data = d
+            local r = d.r
+            local rr, gg, bb = ClassColor(classOf[d.name])
+            row.f[1]:SetText(d.loss and tostring(i) or "-")
+            row.f[2]:SetText(d.name .. (d.name == db.me and " (dig)" or ""))
+            row.f[2]:SetTextColor(rr, gg, bb)
+            row.f[3]:SetText(d.rolls > 0 and tostring(d.rolls) or "-")
+            row.f[4]:SetText(r and r.rolls > 0 and tostring(r.wins or 0) or "-")
+            if d.loss then
+                row.f[5]:SetText(string.format("%d%%", math.floor(d.loss * 100 + 0.5)))
+                if i == 1 then row.f[5]:SetTextColor(1, 0.35, 0.35) else row.f[5]:SetTextColor(1, 1, 1) end
+            else
+                row.f[5]:SetText("|cff666666-|r")
+            end
+            row.f[6]:SetText(d.avg and string.format("%.1f", d.avg) or "-")
+            if d.avg and d.avg < 45 then
+                row.f[6]:SetTextColor(1, 0.5, 0.5)
+            elseif d.avg and d.avg > 56 then
+                row.f[6]:SetTextColor(0.4, 0.9, 0.5)
+            else
+                row.f[6]:SetTextColor(1, 1, 1)
+            end
+            if i == 1 and d.loss then
+                row:SetBackdropColor(0.20, 0.08, 0.08, 1)
+            elseif d.name == db.me then
+                row:SetBackdropColor(0.13, 0.17, 0.26, 1)
+            else
+                row:SetBackdropColor(COL_BTN[1], COL_BTN[2], COL_BTN[3], 1)
+            end
+        end
+    end
+
+    EXTRA_PAGES[8] = { build = BuildStatsPage, refresh = RefreshStatsPage }
+end
+
+do
+    -- =============================================================================
+    -- UI: side 9 - guldgraf over tid
+    -- =============================================================================
+    local GOLD_RANGES = { { label = "7 dage", days = 7 }, { label = "30 dage", days = 30 },
+                          { label = "90 dage", days = 90 }, { label = "Alt", days = 0 } }
+    local FRIEND_COLORS = {
+        { 1.00, 0.82, 0.20 }, { 0.35, 0.70, 1.00 }, { 1.00, 0.40, 0.40 }, { 0.40, 0.90, 0.50 },
+        { 0.75, 0.45, 1.00 }, { 1.00, 0.60, 0.25 }, { 0.30, 0.90, 0.90 }, { 0.95, 0.50, 0.80 },
+    }
+    local GRAPH_L, GRAPH_R, GRAPH_T, GRAPH_B = 58, 12, 12, 24
+
+    local function GoldShort(copper)
+        local g = (copper or 0) / 10000
+        if g >= 10000 then return string.format("%.0fk g", g / 1000) end
+        if g >= 1000 then return string.format("%.1fk g", g / 1000) end
+        return string.format("%d g", math.floor(g + 0.5))
+    end
+
+    -- Rundt tal over max (i kobber), så akserne får pæne trin
+    local function NiceMax(copper)
+        local g = math.max(1, copper / 10000)
+        local step = 1
+        while step * 10 <= g do step = step * 10 end
+        for _, m in ipairs({ 1, 2, 2.5, 5, 10 }) do
+            if step * m >= g then return step * m * 10000 end
+        end
+        return step * 10 * 10000
+    end
+
+    -- Målinger for en ven inden for perioden, plus "nu" ud fra vennens karakterer
+    local function GoldSeries(friend, from, stat)
+        local pts = {}
+        for _, smp in ipairs(db.goldHist[friend] or {}) do
+            if smp[1] >= from then pts[#pts + 1] = { smp[1], smp[2] } end
+        end
+        if stat and stat.chars > 0 and stat.seen and stat.seen >= from then
+            local last = pts[#pts]
+            if not last or stat.seen > last[1] then pts[#pts + 1] = { stat.seen, stat.gold } end
+        end
+        return pts
+    end
+
+    local function BuildGoldPage(page)
+        ns.goldRange = ns.goldRange or 2
+        ns.goldHidden = ns.goldHidden or {}
+        ns.goldRangeBtns = {}
+        for i, rg in ipairs(GOLD_RANGES) do
+            local b = MakeButton(page, 76, 24, rg.label, function()
+                ns.goldRange = i
+                ns.RefreshUI()
+            end)
+            b:SetPoint("TOPLEFT", page, "TOPLEFT", (i - 1) * 80, 0)
+            ns.goldRangeBtns[i] = b
+        end
+        ns.goldInfo = Txt(page, "GameFontHighlightSmall")
+        ns.goldInfo:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, -6)
+        ns.goldInfo:SetJustifyH("RIGHT")
+        ns.goldInfo:SetWidth(400)
+        ns.goldInfo:SetTextColor(0.6, 0.6, 0.66)
+
+        ns.goldFriendBtns = {}
+        for i, name in ipairs(ROSTER) do
+            local b = MakeButton(page, 87, 22, name, function()
+                ns.goldHidden[name] = not ns.goldHidden[name] or nil
+                ns.RefreshUI()
+            end)
+            b:SetPoint("TOPLEFT", page, "TOPLEFT", (i - 1) * 91, -30)
+            b.friend = name
+            b:SetScript("OnEnter", function(self)
+                self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
+                local d = self.data
+                if not d then return end
+                GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                GameTooltip:AddLine(self.friend, 1, 1, 1)
+                if #d.pts == 0 then
+                    GameTooltip:AddLine("Ingen målinger i perioden", 0.6, 0.6, 0.66)
+                else
+                    local first, last = d.pts[1][2], d.pts[#d.pts][2]
+                    local diff = last - first
+                    GameTooltip:AddDoubleLine("Nu", FormatGold(last), 0.8, 0.8, 0.8, 1, 1, 1)
+                    GameTooltip:AddDoubleLine("I perioden", (diff >= 0 and "+" or "-") .. FormatGold(math.abs(diff)),
+                        0.8, 0.8, 0.8, diff >= 0 and 0.4 or 1, diff >= 0 and 0.9 or 0.45, diff >= 0 and 0.5 or 0.45)
+                    GameTooltip:AddDoubleLine("Målinger", tostring(#d.pts), 0.8, 0.8, 0.8, 1, 1, 1)
+                end
+                GameTooltip:AddLine("Klik for at skjule/vise", 0.5, 0.8, 1)
+                GameTooltip:Show()
+            end)
+            b:SetScript("OnLeave", function(self)
+                self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
+                GameTooltip:Hide()
+            end)
+            ns.goldFriendBtns[i] = b
+        end
+
+        local g = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
+        g:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -60)
+        g:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 0)
+        g.lines, g.dots, g.grid, g.ylab, g.xlab = {}, {}, {}, {}, {}
+        for i = 1, 5 do
+            local t = g:CreateTexture(nil, "BACKGROUND", nil, 1)
+            t:SetColorTexture(1, 1, 1, i == 1 and 0.18 or 0.06)
+            t:SetHeight(1)
+            g.grid[i] = t
+            local fs = Txt(g, "GameFontHighlightSmall")
+            fs:SetJustifyH("RIGHT")
+            fs:SetWidth(GRAPH_L - 8)
+            fs:SetTextColor(0.55, 0.55, 0.6)
+            g.ylab[i] = fs
+        end
+        for i = 1, 5 do
+            local fs = Txt(g, "GameFontHighlightSmall")
+            fs:SetJustifyH("CENTER")
+            fs:SetWidth(60)
+            fs:SetTextColor(0.55, 0.55, 0.6)
+            g.xlab[i] = fs
+        end
+        g.empty = Txt(g, "GameFontHighlight")
+        g.empty:SetPoint("CENTER", g, "CENTER", 0, 0)
+        g.empty:SetJustifyH("CENTER")
+        g.empty:SetWidth(600)
+        g.empty:SetTextColor(0.6, 0.6, 0.66)
+        ns.goldGraph = g
+    end
+
+    local function GraphLine(g, i)
+        local l = g.lines[i]
+        if l == nil then
+            l = g.CreateLine and g:CreateLine(nil, "ARTWORK") or false
+            if l then
+                l:SetThickness(2)
+            end   -- ellers en ældre klient uden linjer: så tegnes kun prikker
+            g.lines[i] = l
+        end
+        return l
+    end
+
+    local function GraphDot(g, i)
+        local d = g.dots[i]
+        if not d then
+            d = g:CreateTexture(nil, "OVERLAY")
+            d:SetSize(5, 5)
+            g.dots[i] = d
+        end
+        return d
+    end
+
+    local function RefreshGoldPage()
+        for i, b in ipairs(ns.goldRangeBtns) do
+            local c = (i == ns.goldRange) and COL_SELECT or COL_BTN
+            b:SetBackdropColor(c[1], c[2], c[3], 1)
+        end
+        local g = ns.goldGraph
+        local now = time()
+        local days = GOLD_RANGES[ns.goldRange].days
+        local from = days > 0 and (now - days * 86400) or nil
+
+        local stats = {}
+        for _, s in ipairs(BuildStats()) do stats[s.name] = s end
+        if not from then
+            from = now
+            for _, name in ipairs(ROSTER) do
+                local h = db.goldHist[name]
+                if h and h[1] and h[1][1] < from then from = h[1][1] end
+            end
+            if now - from < 86400 then from = now - 86400 end
+        end
+
+        local series, maxG, any = {}, 0, false
+        for i, name in ipairs(ROSTER) do
+            local pts = GoldSeries(name, from, stats[name])
+            local b = ns.goldFriendBtns[i]
+            b.data = { pts = pts }
+            local col = FRIEND_COLORS[i]
+            if ns.goldHidden[name] then
+                b.text:SetTextColor(0.4, 0.4, 0.45)
+                b:SetBackdropColor(COL_BTN[1], COL_BTN[2], COL_BTN[3], 1)
+            else
+                b.text:SetTextColor(col[1], col[2], col[3])
+                b:SetBackdropColor(col[1] * 0.18, col[2] * 0.18, col[3] * 0.18, 1)
+                series[#series + 1] = { name = name, pts = pts, col = col }
+                for _, p in ipairs(pts) do
+                    if p[2] > maxG then maxG = p[2] end
+                    any = true
+                end
+            end
+        end
+
+        local w = (g:GetWidth() or 732) - GRAPH_L - GRAPH_R
+        local h = (g:GetHeight() or 340) - GRAPH_T - GRAPH_B
+        if w <= 0 then w = 732 - GRAPH_L - GRAPH_R end
+        if h <= 0 then h = 340 - GRAPH_T - GRAPH_B end
+        local top = NiceMax(maxG)
+
+        for i = 1, 5 do
+            local frac = (i - 1) / 4
+            local y = GRAPH_B + h * frac
+            g.grid[i]:ClearAllPoints()
+            g.grid[i]:SetPoint("BOTTOMLEFT", g, "BOTTOMLEFT", GRAPH_L, y)
+            g.grid[i]:SetPoint("BOTTOMRIGHT", g, "BOTTOMRIGHT", -GRAPH_R, y)
+            g.ylab[i]:ClearAllPoints()
+            g.ylab[i]:SetPoint("RIGHT", g, "BOTTOMLEFT", GRAPH_L - 6, y)
+            g.ylab[i]:SetText(GoldShort(top * frac))
+        end
+        for i = 1, 5 do
+            local frac = (i - 1) / 4
+            local t = from + (now - from) * frac
+            g.xlab[i]:ClearAllPoints()
+            g.xlab[i]:SetPoint("TOP", g, "BOTTOMLEFT", GRAPH_L + w * frac, GRAPH_B - 4)
+            g.xlab[i]:SetText(i == 5 and "nu" or date("%d/%m", t))
+        end
+
+        local function X(t) return GRAPH_L + w * ((t - from) / math.max(1, now - from)) end
+        local function Y(c) return GRAPH_B + h * (c / top) end
+        local nl, nd = 0, 0
+        for _, s in ipairs(series) do
+            local prev
+            for _, p in ipairs(s.pts) do
+                local x, y = X(p[1]), Y(p[2])
+                nd = nd + 1
+                local d = GraphDot(g, nd)
+                d:ClearAllPoints()
+                d:SetPoint("CENTER", g, "BOTTOMLEFT", x, y)
+                d:SetColorTexture(s.col[1], s.col[2], s.col[3], 1)
+                d:Show()
+                if prev then
+                    nl = nl + 1
+                    local l = GraphLine(g, nl)
+                    if l then
+                        l:SetStartPoint("BOTTOMLEFT", g, prev[1], prev[2])
+                        l:SetEndPoint("BOTTOMLEFT", g, x, y)
+                        l:SetColorTexture(s.col[1], s.col[2], s.col[3], 0.9)
+                        l:Show()
+                    end
+                end
+                prev = { x, y }
+            end
+        end
+        for i = nl + 1, #g.lines do if g.lines[i] then g.lines[i]:Hide() end end
+        for i = nd + 1, #g.dots do g.dots[i]:Hide() end
+
+        g.empty:SetText(any and "" or "Ingen guldmålinger i perioden. Der måles, hver gang nogen logger ud.")
+        local total = 0
+        for _, s in ipairs(series) do
+            local last = s.pts[#s.pts]
+            if last then total = total + last[2] end
+        end
+        ns.goldInfo:SetText(any and ("Samlet for de viste: " .. FormatGold(total)) or "")
+    end
+
+    EXTRA_PAGES[9] = { build = BuildGoldPage, refresh = RefreshGoldPage }
+end
+
+do
+    -- =============================================================================
+    -- UI: side 10 - professions (hvem kan crafte hvad)
+    -- =============================================================================
+    local PROF_CAP = 375
+
+    -- profHolders[profession] = { { friend, char, rank, max, class }, ... } med bedste karakter pr. ven først
+    local function ProfHolders()
+        local res = {}
+        for _, pr in ipairs(ns.PROFS) do res[pr.name] = {} end
+        for _, friend in ipairs(ROSTER) do
+            for char, c in pairs((db.friends[friend] and db.friends[friend].chars) or {}) do
+                for name, v in pairs(ns.ParseProf(c.prof)) do
+                    if res[name] then
+                        local list = res[name]
+                        list[#list + 1] = { friend = friend, char = char, rank = v[1], max = v[2], class = c.class }
+                    end
+                end
+            end
+        end
+        for _, list in pairs(res) do
+            table.sort(list, function(a, b)
+                if a.rank ~= b.rank then return a.rank > b.rank end
+                if a.friend ~= b.friend then return a.friend < b.friend end
+                return a.char < b.char
+            end)
+        end
+        return res
+    end
+
+    local function BuildProfPage(page)
+        ns.profRows = {}
+        for i, pr in ipairs(ns.PROFS) do
+            local row = MakeBox("Button", page, COL_PANEL, COL_BORDER)
+            row:SetSize(732, 26)
+            row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(i - 1) * 28)
+            row.prof = pr
+            row.icon = row:CreateTexture(nil, "ARTWORK")
+            row.icon:SetSize(20, 20)
+            row.icon:SetPoint("LEFT", row, "LEFT", 4, 0)
+            row.icon:SetTexture(IC(pr.icon))
+            row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+            row.name = Field(row, 30, 120, "LEFT", "GameFontNormal")
+            row.name:SetText(pr.name)
+            row.who = Field(row, 156, 568, "LEFT")
+            row:SetScript("OnEnter", function(self)
+                self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:AddLine(self.prof.name, 1, 0.82, 0.2)
+                local list = self.data or {}
+                if #list == 0 then
+                    GameTooltip:AddLine("Ingen af jer har det endnu", 0.6, 0.6, 0.66)
+                end
+                for _, e in ipairs(list) do
+                    local r, g, b = ClassColor(e.class)
+                    GameTooltip:AddDoubleLine(e.friend .. " - " .. e.char, string.format("%d/%d", e.rank, e.max), r, g, b,
+                        e.rank >= PROF_CAP and 1 or 0.9, e.rank >= PROF_CAP and 0.82 or 0.9, e.rank >= PROF_CAP and 0.2 or 0.9)
+                end
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", function(self)
+                self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
+                GameTooltip:Hide()
+            end)
+            ns.profRows[i] = row
+        end
+        ns.profNote = Txt(page, "GameFontHighlightSmall")
+        ns.profNote:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(#ns.PROFS * 28 + 4))
+        ns.profNote:SetWidth(732)
+        ns.profNote:SetTextColor(0.5, 0.5, 0.56)
+        ns.profNote:SetText("Hver vens bedste karakter står først. Hold musen over en linje for at se alle karakterer.")
+    end
+
+    local function RefreshProfPage()
+        local holders = ProfHolders()
+        for _, row in ipairs(ns.profRows) do
+            local list = holders[row.prof.name] or {}
+            row.data = list
+            -- Én post pr. ven (den bedste karakter)
+            local parts, seen = {}, {}
+            for _, e in ipairs(list) do
+                if not seen[e.friend] then
+                    seen[e.friend] = true
+                    local col = e.rank >= PROF_CAP and "ffd100" or "ffffff"
+                    parts[#parts + 1] = string.format("%s |cff%s%d|r", ColorName(e.friend, e.class), col, e.rank)
+                end
+            end
+            if #parts == 0 then
+                row.who:SetText("|cff666666ingen endnu|r")
+                row.name:SetTextColor(0.5, 0.5, 0.56)
+                row.icon:SetVertexColor(0.4, 0.4, 0.4)
+            else
+                row.who:SetText(table.concat(parts, "    "))
+                row.name:SetTextColor(1, 0.82, 0.2)
+                row.icon:SetVertexColor(1, 1, 1)
+            end
+        end
+    end
+
+    EXTRA_PAGES[10] = { build = BuildProfPage, refresh = RefreshProfPage }
+end
+
+do
+    -- =============================================================================
+    -- UI: side 11 - gear pr. karakter
+    -- =============================================================================
+    local GEAR_ROWS = 12
+    local GC = { icon = 4, char = 26, friend = 176, level = 270, ilvl = 312, ench = 380, gems = 520, time = 610 }
+
+    local function GearList()
+        local list = {}
+        for _, friend in ipairs(ROSTER) do
+            if not ns.gearFriend or ns.gearFriend == friend then
+                for char, c in pairs((db.friends[friend] and db.friends[friend].chars) or {}) do
+                    if c.gear then
+                        list[#list + 1] = { friend = friend, char = char, class = c.class, level = c.level or 0, g = c.gear }
+                    end
+                end
+            end
+        end
+        table.sort(list, function(a, b)
+            if (a.g.il or 0) ~= (b.g.il or 0) then return (a.g.il or 0) > (b.g.il or 0) end
+            return a.char < b.char
+        end)
+        return list
+    end
+
+    local function MissingSlots(me)
+        local names = {}
+        for id in tostring(me or ""):gmatch("(%d+)") do names[#names + 1] = ns.SLOT_NAME[tonumber(id)] or ("slot " .. id) end
+        return names
+    end
+
+    local function BuildGearPage(page)
+        ns.gearOffset = 0
+        ns.gearFriendBtn = MakeButton(page, 180, 26, "Ven: Alle", function()
+            local idx = 0
+            for i, n in ipairs(ROSTER) do if n == ns.gearFriend then idx = i end end
+            ns.gearFriend = ROSTER[idx + 1]   -- efter sidste ven kommer "Alle" (nil)
+            ns.gearOffset = 0
+            ns.RefreshUI()
+        end)
+        ns.gearFriendBtn:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
+
+        local heads = { { "Karakter", GC.char, 150 }, { "Ven", GC.friend, 90 }, { "Lvl", GC.level, 40 },
+                        { "Item level", GC.ilvl, 66 }, { "Enchants", GC.ench, 136 }, { "Gems", GC.gems, 86 },
+                        { "Opdateret", GC.time, 120 } }
+        for _, hd in ipairs(heads) do
+            local fs = Txt(page, "GameFontHighlightSmall")
+            fs:SetPoint("TOPLEFT", page, "TOPLEFT", hd[2], -34)
+            fs:SetWidth(hd[3])
+            fs:SetTextColor(0.5, 0.5, 0.56)
+            fs:SetText(hd[1])
+        end
+
+        ns.gearRows = {}
+        for i = 1, GEAR_ROWS do
+            local row = MakeBox("Button", page, COL_PANEL, COL_BORDER)
+            row:SetSize(732, 24)
+            row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(52 + (i - 1) * 26))
+            row.icon = row:CreateTexture(nil, "ARTWORK")
+            row.icon:SetSize(18, 18)
+            row.icon:SetPoint("LEFT", row, "LEFT", GC.icon, 0)
+            row.char = Field(row, GC.char, 148, "LEFT", "GameFontNormal")
+            row.friend = Field(row, GC.friend, 90)
+            row.level = Field(row, GC.level, 40)
+            row.ilvl = Field(row, GC.ilvl, 66)
+            row.ench = Field(row, GC.ench, 136)
+            row.gems = Field(row, GC.gems, 86)
+            row.time = Field(row, GC.time, 118)
+            row:SetScript("OnEnter", function(self)
+                self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
+                local d = self.data
+                if not d then return end
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                local r, g, b = ClassColor(d.class)
+                GameTooltip:AddLine(d.char .. " (" .. d.friend .. ")", r, g, b)
+                GameTooltip:AddDoubleLine("Snit item level", string.format("%.1f", d.g.il or 0), 0.8, 0.8, 0.8, 1, 1, 1)
+                local miss = MissingSlots(d.g.me)
+                GameTooltip:AddLine(" ")
+                if #miss == 0 then
+                    GameTooltip:AddLine("Alle enchants er på", 0.4, 0.9, 0.5)
+                else
+                    GameTooltip:AddLine("Mangler enchant: " .. table.concat(miss, ", "), 1, 0.5, 0.5, true)
+                end
+                if (d.g.mg or 0) > 0 then
+                    GameTooltip:AddLine("Tomme gem-sockets: " .. d.g.mg, 1, 0.5, 0.5)
+                else
+                    GameTooltip:AddLine("Ingen tomme sockets", 0.4, 0.9, 0.5)
+                end
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", function(self)
+                self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
+                GameTooltip:Hide()
+            end)
+            ns.gearRows[i] = row
+        end
+
+        ns.gearInfo = Txt(page, "GameFontHighlightSmall")
+        ns.gearInfo:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(52 + GEAR_ROWS * 26 + 4))
+        ns.gearInfo:SetWidth(732)
+        ns.gearInfo:SetTextColor(0.5, 0.5, 0.56)
+
+        ns.gearEmpty = Txt(page, "GameFontHighlight")
+        ns.gearEmpty:SetPoint("TOPLEFT", page, "TOPLEFT", 12, -64)
+        ns.gearEmpty:SetWidth(700)
+        ns.gearEmpty:SetTextColor(0.6, 0.6, 0.66)
+
+        page:EnableMouseWheel(true)
+        page:SetScript("OnMouseWheel", function(_, delta)
+            ns.gearOffset = (ns.gearOffset or 0) - delta * 3
+            ns.RefreshUI()
+        end)
+    end
+
+    local function RefreshGearPage()
+        ns.gearFriendBtn.text:SetText("Ven: " .. (ns.gearFriend or "Alle"))
+        local list = GearList()
+        local total = #list
+        local offset = math.max(0, math.min(ns.gearOffset or 0, math.max(0, total - GEAR_ROWS)))
+        ns.gearOffset = offset
+        for i, row in ipairs(ns.gearRows) do
+            local d = list[offset + i]
+            row.data = d
+            if d then
+                local r, g, b = ClassColor(d.class)
+                SetClassIcon(row.icon, d.class)
+                row.char:SetText(d.char)
+                row.char:SetTextColor(r, g, b)
+                row.friend:SetText(d.friend)
+                row.level:SetText(d.level > 0 and tostring(d.level) or "-")
+                row.ilvl:SetText(string.format("|cffffffff%.1f|r", d.g.il or 0))
+                local miss = MissingSlots(d.g.me)
+                if #miss == 0 then
+                    row.ench:SetText("|cff40e060OK|r")
+                else
+                    row.ench:SetText(string.format("|cffff6060Mangler %d|r |cff888888(%s)|r", #miss, table.concat(miss, ", ")))
+                end
+                row.gems:SetText((d.g.mg or 0) > 0 and string.format("|cffff6060%d tomme|r", d.g.mg) or "|cff40e060OK|r")
+                row.time:SetText("|cff888888" .. FormatAgo(d.g.t and d.g.t > 0 and d.g.t or nil) .. "|r")
+                row:Show()
+            else
+                row:Hide()
+            end
+        end
+        if total == 0 then
+            ns.gearEmpty:SetText("Intet gear registreret endnu. Det måles, når en ven logger ind eller skifter udstyr.")
+            ns.gearInfo:SetText("")
+        else
+            ns.gearEmpty:SetText("")
+            ns.gearInfo:SetText(string.format("Viser %d-%d af %d  -  sorteret efter item level  -  ringe tælles ikke med i enchants",
+                offset + 1, math.min(offset + GEAR_ROWS, total), total))
+        end
+    end
+
+    EXTRA_PAGES[11] = { build = BuildGearPage, refresh = RefreshGearPage }
+end
+
+do
+    -- =============================================================================
+    -- UI: side 12 - reputation (nøgler og exalted)
+    -- =============================================================================
+    local STANDING_NAMES = { "Hated", "Hostile", "Unfriendly", "Neutral", "Friendly", "Honored", "Revered", "Exalted" }
+
+    local function StandingLabel(s)
+        return _G["FACTION_STANDING_LABEL" .. s] or STANDING_NAMES[s] or "?"
+    end
+
+    local function StandingColor(s)
+        local c = FACTION_BAR_COLORS and FACTION_BAR_COLORS[s]
+        if c then return c.r, c.g, c.b end
+        if s >= 7 then return 0.4, 0.9, 0.5 end
+        if s >= 5 then return 0.3, 0.7, 0.3 end
+        return 0.8, 0.8, 0.8
+    end
+
+    -- Vennens karakterer for en nøgle-fraktion: { { char, class, s, p, m, faction } }, bedste først
+    local function RepFor(friend, names)
+        local list = {}
+        for char, c in pairs((db.friends[friend] and db.friends[friend].chars) or {}) do
+            for _, fname in ipairs(names) do
+                local v = c.rep and c.rep[fname]
+                if v then
+                    local s, p, m = ns.ParseRep(v)
+                    list[#list + 1] = { char = char, class = c.class, s = s, p = p, m = m, faction = fname }
+                end
+            end
+        end
+        table.sort(list, function(a, b)
+            if a.s ~= b.s then return a.s > b.s end
+            if a.p ~= b.p then return a.p > b.p end
+            return a.char < b.char
+        end)
+        return list
+    end
+
+    -- Alle fraktioner, vennen er exalted med: { [fraktion] = { karakter, ... } }
+    local function ExaltedFor(friend)
+        local res, n = {}, 0
+        for char, c in pairs((db.friends[friend] and db.friends[friend].chars) or {}) do
+            for fname, v in pairs(c.rep or {}) do
+                if ns.ParseRep(v) >= 8 then
+                    if not res[fname] then res[fname] = {}; n = n + 1 end
+                    table.insert(res[fname], char)
+                end
+            end
+        end
+        return res, n
+    end
+
+    local REP_X, REP_W = 154, 98
+
+    local function RepCellTooltip(self)
+        local d = self.data
+        if not d then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if d.exalted then
+            GameTooltip:AddLine(d.friend .. ": exalted med", 1, 0.82, 0.2)
+            local names = {}
+            for fname in pairs(d.exalted) do names[#names + 1] = fname end
+            table.sort(names)
+            if #names == 0 then GameTooltip:AddLine("Ingen endnu", 0.6, 0.6, 0.66) end
+            for _, fname in ipairs(names) do
+                GameTooltip:AddDoubleLine(fname, table.concat(d.exalted[fname], ", "), 0.9, 0.9, 0.9, 0.6, 0.6, 0.66)
+            end
+        else
+            local k = d.key
+            GameTooltip:AddLine(d.friend .. " - " .. table.concat(k.names, " / "), 1, 0.82, 0.2)
+            GameTooltip:AddLine(k.item .. " (" .. k.what .. ") kræver Revered", 0.6, 0.6, 0.66, true)
+            GameTooltip:AddLine(" ")
+            if #d.list == 0 then GameTooltip:AddLine("Ingen karakterer har denne rep endnu", 0.6, 0.6, 0.66) end
+            for _, e in ipairs(d.list) do
+                local r, g, b = ClassColor(e.class)
+                local sr, sg, sb = StandingColor(e.s)
+                local txt = StandingLabel(e.s) .. (e.s < 8 and e.m > 0 and string.format(" %d/%d", e.p, e.m) or "")
+                GameTooltip:AddDoubleLine(e.char, txt, r, g, b, sr, sg, sb)
+            end
+        end
+        GameTooltip:Show()
+    end
+
+    local function BuildRepPage(page)
+        local function head(text, x, w, tip)
+            local hf = CreateFrame("Frame", nil, page)
+            hf:SetSize(w, 20)
+            hf:SetPoint("TOPLEFT", page, "TOPLEFT", x, 0)
+            local fs = Txt(hf, "GameFontHighlightSmall")
+            fs:SetAllPoints(hf)
+            fs:SetJustifyH(x == 0 and "LEFT" or "CENTER")
+            fs:SetTextColor(0.5, 0.5, 0.56)
+            fs:SetText(text)
+            if tip then
+                hf:EnableMouse(true)
+                hf:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                    GameTooltip:AddLine(tip, 1, 1, 1, true)
+                    GameTooltip:Show()
+                end)
+                hf:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            end
+        end
+        head("Ven", 0, 150)
+        for k, kf in ipairs(ns.KEY_FACTIONS) do
+            head(kf.label, REP_X + (k - 1) * (REP_W + 2), REP_W,
+                table.concat(kf.names, " / ") .. ": " .. kf.item .. " til " .. kf.what .. " (Revered)")
+        end
+        local exX = REP_X + #ns.KEY_FACTIONS * (REP_W + 2)
+        head("Exalted", exX, 732 - exX, "Antal fraktioner, vennen er exalted med på mindst én karakter")
+
+        ns.repRows = {}
+        for i = 1, #ROSTER do
+            local row = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
+            row:SetSize(732, 34)
+            row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(24 + (i - 1) * 38))
+            row.icon = row:CreateTexture(nil, "ARTWORK")
+            row.icon:SetSize(22, 22)
+            row.icon:SetPoint("LEFT", row, "LEFT", 6, 0)
+            row.name = Field(row, 34, 116, "LEFT", "GameFontNormal")
+            row.cells = {}
+            for k = 1, #ns.KEY_FACTIONS + 1 do
+                local x = REP_X + (k - 1) * (REP_W + 2)
+                local w = (k <= #ns.KEY_FACTIONS) and REP_W or (732 - x - 4)
+                local cell = MakeBox("Button", row, COL_BTN, COL_BORDER)
+                cell:SetSize(w, 28)
+                cell:SetPoint("LEFT", row, "LEFT", x, 0)
+                cell.text = Txt(cell, "GameFontHighlightSmall")
+                cell.text:SetPoint("CENTER", cell, "CENTER", 0, 0)
+                cell.text:SetJustifyH("CENTER")
+                cell.text:SetWidth(w - 4)
+                cell.text:SetWordWrap(false)
+                cell:SetScript("OnEnter", function(self)
+                    self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
+                    RepCellTooltip(self)
+                end)
+                cell:SetScript("OnLeave", function(self)
+                    self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
+                    GameTooltip:Hide()
+                end)
+                row.cells[k] = cell
+            end
+            ns.repRows[i] = row
+        end
+
+        ns.repNote = Txt(page, "GameFontHighlightSmall")
+        ns.repNote:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(24 + #ROSTER * 38 + 2))
+        ns.repNote:SetWidth(732)
+        ns.repNote:SetTextColor(0.5, 0.5, 0.56)
+        ns.repNote:SetText("Grøn = Revered eller bedre, så heroic-nøglen kan købes. Vennens bedste karakter vises. Hold musen over et felt for detaljer.")
+    end
+
+    local function RefreshRepPage()
+        local stats = {}
+        for _, s in ipairs(BuildStats()) do stats[s.name] = s end
+        for i, friend in ipairs(ROSTER) do
+            local row = ns.repRows[i]
+            local s = stats[friend] or {}
+            local r, g, b = ClassColor(s.class)
+            SetClassIcon(row.icon, s.class)
+            row.name:SetText(friend .. (friend == db.me and " (dig)" or ""))
+            row.name:SetTextColor(r, g, b)
+            for k, kf in ipairs(ns.KEY_FACTIONS) do
+                local cell = row.cells[k]
+                local list = RepFor(friend, kf.names)
+                cell.data = { friend = friend, key = kf, list = list }
+                local best = list[1]
+                if best then
+                    local sr, sg, sb = StandingColor(best.s)
+                    local pct = (best.s < 8 and best.m > 0) and string.format(" %d%%", math.floor(best.p / best.m * 100)) or ""
+                    cell.text:SetText(StandingLabel(best.s) .. pct)
+                    cell.text:SetTextColor(sr, sg, sb)
+                    if best.s >= ns.KEY_STANDING then
+                        cell:SetBackdropColor(0.08, 0.22, 0.10, 1)
+                    else
+                        cell:SetBackdropColor(COL_BTN[1], COL_BTN[2], COL_BTN[3], 1)
+                    end
+                else
+                    cell.text:SetText("-")
+                    cell.text:SetTextColor(0.4, 0.4, 0.45)
+                    cell:SetBackdropColor(COL_BTN[1], COL_BTN[2], COL_BTN[3], 1)
+                end
+            end
+            local ex, n = ExaltedFor(friend)
+            local cell = row.cells[#ns.KEY_FACTIONS + 1]
+            cell.data = { friend = friend, exalted = ex }
+            cell.text:SetText(n > 0 and tostring(n) or "-")
+            if n > 0 then cell.text:SetTextColor(1, 0.82, 0.2) else cell.text:SetTextColor(0.4, 0.4, 0.45) end
+            cell:SetBackdropColor(COL_BTN[1], COL_BTN[2], COL_BTN[3], 1)
+        end
+    end
+
+    EXTRA_PAGES[12] = { build = BuildRepPage, refresh = RefreshRepPage }
+end
+
+do
+    -- =============================================================================
+    -- Indstillinger: panel i spillets Options (Interface > AddOns > Wasted Coast)
+    -- =============================================================================
+    local QUALITY_CHOICES = { 2, 3, 4, 5 }
+
+    local function MakeCheck(parent, label, tip, get, set)
+        local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+        cb:SetSize(26, 26)
+        cb.label = Txt(parent, "GameFontHighlight")
+        cb.label:SetPoint("LEFT", cb, "RIGHT", 4, 1)
+        cb.label:SetText(label)
+        cb.tip = Txt(parent, "GameFontHighlightSmall")
+        cb.tip:SetPoint("TOPLEFT", cb.label, "BOTTOMLEFT", 0, -2)
+        cb.tip:SetTextColor(0.6, 0.6, 0.66)
+        cb.tip:SetText(tip)
+        cb.get = get
+        cb:SetScript("OnClick", function(self)
+            set(self:GetChecked() and true or false)
+            if ns.RefreshUI then ns.RefreshUI() end
+        end)
+        return cb
+    end
+
+    local function RefreshOptions()
+        local p = ns.options
+        if not p or not db then return end
+        for _, cb in ipairs(p.checks) do cb:SetChecked(cb.get() and true or false) end
+        for _, b in ipairs(p.qualityBtns) do
+            local sel = (db.settings.minQuality or 3) == b.q
+            local c = sel and COL_SELECT or COL_BTN
+            b:SetBackdropColor(c[1], c[2], c[3], 1)
+        end
+        for _, b in ipairs(p.meBtns) do
+            local sel = db.me == b.friend
+            local c = sel and COL_SELECT or COL_BTN
+            b:SetBackdropColor(c[1], c[2], c[3], 1)
+        end
+        p.meText:SetText(db.me and ("Du er registreret som |cffffd100" .. db.me .. "|r.") or "|cffff6060Du har ikke valgt, hvem du er.|r")
+    end
+    ns.RefreshOptions = RefreshOptions
+
+    local function BuildOptions()
+        local p = CreateFrame("Frame", "WastedCoastOptions", UIParent, "BackdropTemplate")
+        p.name = "Wasted Coast"
+        p:Hide()
+
+        local title = Txt(p, "GameFontNormalLarge")
+        title:SetPoint("TOPLEFT", p, "TOPLEFT", 16, -16)
+        title:SetText("Wasted Coast (WC4L)")
+        title:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+        local sub = Txt(p, "GameFontHighlightSmall")
+        sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+        sub:SetTextColor(0.6, 0.6, 0.66)
+        sub:SetText("Alt kan også styres med /wc4l. Ændringer gælder med det samme.")
+
+        p.checks = {}
+        local checks = {
+            { "Lyd", "Egne lydklip og Blizzards lyd ved dødsfald, loot, wipes og trofæer.",
+              function() return db.settings.sound end, function(v) db.settings.sound = v end },
+            { "Beskeder i chatten", "Skriv dødsfald, loot og bosskills i dit chatvindue.",
+              function() return db.settings.announce end, function(v) db.settings.announce = v end },
+            { "Popups", "Små beskeder øverst på skærmen, når en ven logger ind, stiger i level eller wiper.",
+              function() return db.settings.toasts end, function(v) db.settings.toasts = v end },
+        }
+        for i, c in ipairs(checks) do
+            local cb = MakeCheck(p, c[1], c[2], c[3], c[4])
+            cb:SetPoint("TOPLEFT", p, "TOPLEFT", 16, -60 - (i - 1) * 44)
+            p.checks[i] = cb
+        end
+
+        local qh = Txt(p, "GameFontNormal")
+        qh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -200)
+        qh:SetText("Minimumskvalitet for loot")
+        local qs = Txt(p, "GameFontHighlightSmall")
+        qs:SetPoint("TOPLEFT", qh, "BOTTOMLEFT", 0, -2)
+        qs:SetTextColor(0.6, 0.6, 0.66)
+        qs:SetText("Loot under denne kvalitet bliver ikke registreret.")
+        p.qualityBtns = {}
+        for i, q in ipairs(QUALITY_CHOICES) do
+            local b = MakeButton(p, 110, 24, string.format("|cff%s%s|r", QUALITY_HEX[q], QUALITY_NAME[q]), function()
+                db.settings.minQuality = q
+                RefreshOptions()
+                if ns.RefreshUI then ns.RefreshUI() end
+            end)
+            b.q = q
+            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -236)
+            p.qualityBtns[i] = b
+        end
+
+        local mh = Txt(p, "GameFontNormal")
+        mh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -282)
+        mh:SetText("Hvem er du?")
+        p.meText = Txt(p, "GameFontHighlightSmall")
+        p.meText:SetPoint("TOPLEFT", mh, "BOTTOMLEFT", 0, -2)
+        p.meBtns = {}
+        for i, name in ipairs(ROSTER) do
+            local b = MakeButton(p, 110, 24, name, function()
+                if db.me ~= name then SetMe(name) end
+                if ns.picker then ns.picker:Hide() end
+                RefreshOptions()
+            end)
+            b.friend = name
+            local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
+            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + col * 116, -318 - row * 30)
+            p.meBtns[i] = b
+        end
+
+        local open = MakeButton(p, 150, 24, "Åbn Wasted Coast", function()
+            if ns.frame then ns.frame:Show() end
+        end)
+        open:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -392)
+        local test = MakeButton(p, 150, 24, "Vis test-popups", function()
+            SlashCmdList["WASTEDCOAST"]("testtoast")
+        end)
+        test:SetPoint("LEFT", open, "RIGHT", 8, 0)
+        local sync = MakeButton(p, 150, 24, "Synk med vennerne", function()
+            SlashCmdList["WASTEDCOAST"]("sync")
+        end)
+        sync:SetPoint("LEFT", test, "RIGHT", 8, 0)
+
+        p:SetScript("OnShow", RefreshOptions)
+
+        if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
+            local cat = Settings.RegisterCanvasLayoutCategory(p, p.name)
+            Settings.RegisterAddOnCategory(cat)
+            ns.optionsCategory = cat
+        elseif InterfaceOptions_AddCategory then
+            InterfaceOptions_AddCategory(p)
+        else
+            -- Ingen Options-menu i denne klient: vis panelet som et selvstændigt vindue
+            p.standalone = true
+            p:SetBackdrop(FLAT)
+            p:SetBackdropColor(COL_BG[1], COL_BG[2], COL_BG[3], COL_BG[4])
+            p:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
+            p:SetSize(520, 430)
+            p:SetPoint("CENTER")
+            p:SetFrameStrata("DIALOG")
+            p:EnableMouse(true)
+            local close = CreateFrame("Button", nil, p, "UIPanelCloseButton")
+            close:SetPoint("TOPRIGHT", p, "TOPRIGHT", -2, -2)
+            table.insert(UISpecialFrames, "WastedCoastOptions")
+        end
+        ns.options = p
+    end
+
+    function ns.OpenOptions()
+        local p = ns.options
+        if not p then return end
+        if ns.optionsCategory and Settings and Settings.OpenToCategory then
+            local id = ns.optionsCategory.GetID and ns.optionsCategory:GetID() or ns.optionsCategory.ID
+            Settings.OpenToCategory(id)
+        elseif InterfaceOptionsFrame_OpenToCategory and not p.standalone then
+            -- Kaldes to gange: første kald åbner ikke altid den rigtige side
+            InterfaceOptionsFrame_OpenToCategory(p)
+            InterfaceOptionsFrame_OpenToCategory(p)
+        else
+            p:Show()
+        end
+    end
+
+    ns.BuildOptions = BuildOptions
+end
+
 -- =============================================================================
 -- UI: hovedvindue, faner og identitetsvalg
 -- =============================================================================
@@ -2925,9 +4588,12 @@ function ns.RefreshUI()
         RefreshRuns()
     elseif ns.tab == 6 then
         RefreshTrophies()
-    else
+    elseif ns.tab == 7 then
         RefreshRace()
+    elseif EXTRA_PAGES[ns.tab] then
+        EXTRA_PAGES[ns.tab].refresh()
     end
+    if ns.options and ns.options:IsShown() then ns.RefreshOptions() end
 end
 
 function ns.ShowIdentityPicker()
@@ -2963,7 +4629,7 @@ end
 
 local function BuildUI()
     local f = MakeBox("Frame", UIParent, COL_BG, COL_BORDER, "WastedCoastFrame")
-    f:SetSize(760, 520)
+    f:SetSize(760, 552)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetMovable(true)
@@ -2997,24 +4663,26 @@ local function BuildUI()
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
 
-    -- Faner
+    -- Faner i to rækker af seks
     ns.tabs = {}
-    local labels = { "Overblik", "Scoreboard", "Karakterer", "Loot", "Instanser", "Trofæer", "Race" }
+    local labels = { "Overblik", "Scoreboard", "Karakterer", "Loot", "Instanser", "Trofæer",
+                     "Race", "Statistik", "Guld", "Professions", "Gear", "Reputation" }
     for i, label in ipairs(labels) do
-        local tb = MakeButton(f, 100, 26, label, function() ns.ShowTab(i) end)
-        tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + (i - 1) * 104, -42)
+        local tb = MakeButton(f, 118, 26, label, function() ns.ShowTab(i) end)
+        local col, row = (i - 1) % 6, math.floor((i - 1) / 6)
+        tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + col * 122, -42 - row * 30)
         ns.tabs[i] = tb
     end
 
     local line = f:CreateTexture(nil, "ARTWORK")
     line:SetColorTexture(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
-    line:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -74)
-    line:SetPoint("TOPRIGHT", f, "TOPRIGHT", -14, -74)
+    line:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -104)
+    line:SetPoint("TOPRIGHT", f, "TOPRIGHT", -14, -104)
     line:SetHeight(1)
 
     -- Sider
     local content = CreateFrame("Frame", nil, f)
-    content:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -82)
+    content:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -112)
     content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 36)
 
     ns.pages = {}
@@ -3030,6 +4698,7 @@ local function BuildUI()
     BuildRunsPage(ns.pages[5])
     BuildTrophyPage(ns.pages[6])
     BuildRacePage(ns.pages[7])
+    for i, pg in pairs(EXTRA_PAGES) do pg.build(ns.pages[i]) end
 
     -- Footer
     f.me = Txt(f, "GameFontHighlightSmall")
@@ -3037,6 +4706,8 @@ local function BuildUI()
 
     local switch = MakeButton(f, 50, 20, "Skift", function() ns.ShowIdentityPicker() end)
     switch:SetPoint("LEFT", f.me, "RIGHT", 10, 0)
+    local opts = MakeButton(f, 100, 20, "Indstillinger", function() ns.OpenOptions() end)
+    opts:SetPoint("LEFT", switch, "RIGHT", 6, 0)
 
     local hint = Txt(f, "GameFontHighlightSmall")
     hint:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, 14)
@@ -3063,145 +4734,214 @@ end
 -- =============================================================================
 -- Demo-data (kun lokalt, til at se hvordan det ser ud)
 -- =============================================================================
-local DEMO_CLASSES = { "WARRIOR", "MAGE", "PRIEST", "ROGUE", "HUNTER", "WARLOCK", "PALADIN", "SHAMAN", "DRUID" }
-local DEMO_SUFFIX = { "", "tank", "heal", "pvp", "alt" }
-local DEMO_ZONES = { "Hellfire Peninsula", "Zangarmarsh", "Terokkar Forest", "Nagrand", "Blade's Edge Mountains" }
-local DEMO_PLACES = {
-    dungeon = { "The Slave Pens", "Shadow Labyrinth", "The Mechanar", "The Botanica" },
-    raid    = { "Karazhan", "Gruul's Lair", "Magtheridon's Lair" },
-    world   = { "Nagrand", "Hellfire Peninsula", "Netherstorm" },
-    bg      = { "Warsong Gulch", "Arathi Basin" },
-}
-local DEMO_INST = { "The Slave Pens", "Shadow Labyrinth", "The Mechanar", "Karazhan", "The Botanica", "Gruul's Lair" }
-local DEMO_CTX = { "dungeon", "dungeon", "dungeon", "raid", "raid", "world", "bg" }
-local DEMO_HOW = { "need", "need", "greed", "de", "drop", "drop", "roll" }
-local DEMO_ITEMS = {
-    { 28830, "Dragonspine Trophy", 4 }, { 28789, "Eye of Magtheridon", 4 },
-    { 29370, "Icon of the Silver Crescent", 4 }, { 28034, "Hourglass of the Unraveller", 4 },
-    { 32837, "Warglaive of Azzinoth", 4 }, { 19019, "Thunderfury, Blessed Blade of the Windseeker", 5 },
-}
-local DEMO_KILLERS = {
-    { "Bonechewer Ravager", "Nærkamp" }, { "Fel Reaver", "Stomp" }, { "Faldskade", "" },
-    { "Omgivelserne", "Lava" }, { "En meget vred kylling", "Næbhug" }, { "Marsh Lurker", "Nærkamp" },
-}
+-- I en blok for sig (Luas grænse på 200 lokale variabler)
+do
+    local DEMO_CLASSES = { "WARRIOR", "MAGE", "PRIEST", "ROGUE", "HUNTER", "WARLOCK", "PALADIN", "SHAMAN", "DRUID" }
+    local DEMO_SUFFIX = { "", "tank", "heal", "pvp", "alt" }
+    local DEMO_ZONES = { "Hellfire Peninsula", "Zangarmarsh", "Terokkar Forest", "Nagrand", "Blade's Edge Mountains" }
+    local DEMO_PLACES = {
+        dungeon = { "The Slave Pens", "Shadow Labyrinth", "The Mechanar", "The Botanica" },
+        raid    = { "Karazhan", "Gruul's Lair", "Magtheridon's Lair" },
+        world   = { "Nagrand", "Hellfire Peninsula", "Netherstorm" },
+        bg      = { "Warsong Gulch", "Arathi Basin" },
+    }
+    local DEMO_INST = { "The Slave Pens", "Shadow Labyrinth", "The Mechanar", "Karazhan", "The Botanica", "Gruul's Lair" }
+    local DEMO_CTX = { "dungeon", "dungeon", "dungeon", "raid", "raid", "world", "bg" }
+    local DEMO_HOW = { "need", "need", "greed", "de", "drop", "drop", "roll" }
+    local DEMO_ITEMS = {
+        { 28830, "Dragonspine Trophy", 4 }, { 28789, "Eye of Magtheridon", 4 },
+        { 29370, "Icon of the Silver Crescent", 4 }, { 28034, "Hourglass of the Unraveller", 4 },
+        { 32837, "Warglaive of Azzinoth", 4 }, { 19019, "Thunderfury, Blessed Blade of the Windseeker", 5 },
+    }
+    local DEMO_KILLERS = {
+        { "Bonechewer Ravager", "Nærkamp" }, { "Fel Reaver", "Stomp" }, { "Faldskade", "" },
+        { "Omgivelserne", "Lava" }, { "En meget vred kylling", "Næbhug" }, { "Marsh Lurker", "Nærkamp" },
+        { "Omgivelserne", "Faldskade" },
+    }
+    local DEMO_EXALTED = { "Stormwind", "Darnassus", "Timbermaw Hold", "Argent Dawn", "The Aldor", "The Consortium", "Sporeggar" }
 
-local function ClearDemo()
-    for i = #db.events, 1, -1 do
-        if db.events[i].id:find("^demo%-") then
-            db.seen[db.events[i].id] = nil
-            table.remove(db.events, i)
-        end
-    end
-    for i = #db.loot, 1, -1 do
-        if db.loot[i].id:find("^demo%-") then
-            db.lootSeen[db.loot[i].id] = nil
-            table.remove(db.loot, i)
-        end
-    end
-    for friend, runs in pairs(db.runs) do
-        for inst, e in pairs(runs) do
-            if e.demo then runs[inst] = nil end
-        end
-        if not next(runs) then db.runs[friend] = nil end
-    end
-    for friend, ids in pairs(db.demoAch) do
-        for id in pairs(ids) do
-            if db.ach[friend] then db.ach[friend][id] = nil end
-        end
-        if db.ach[friend] and not next(db.ach[friend]) then db.ach[friend] = nil end
-    end
-    wipe(db.demoAch)
-    for name, info in pairs(db.friends) do
-        for cn, c in pairs(info.chars or {}) do
-            if c.demo then
-                info.chars[cn] = nil
-                if db.chars[cn] == name then db.chars[cn] = nil end
+    -- Professions, gear og reputation til en demo-karakter
+    local function DemoCharExtras(c)
+        local parts, used = {}, {}
+        for _ = 1, 2 do
+            local pr = ns.PROFS[math.random(1, 10)]
+            if not used[pr.name] then
+                used[pr.name] = true
+                local rank = math.random(1, 3) == 1 and 375 or math.random(150, 374)
+                parts[#parts + 1] = string.format("%s=%d/375", pr.name, rank)
             end
         end
-        if not next(info.chars or {}) then db.friends[name] = nil end
-    end
-    if ns.RefreshUI then ns.RefreshUI() end
-end
+        if math.random() < 0.6 then parts[#parts + 1] = "Cooking=" .. math.random(50, 375) .. "/375" end
+        if math.random() < 0.4 then parts[#parts + 1] = "First Aid=" .. math.random(100, 375) .. "/375" end
+        table.sort(parts)
+        c.prof = table.concat(parts, ",")
 
-local function MakeDemo()
-    ClearDemo()
-    local now = time()
-    for i, name in ipairs(ROSTER) do
-        if name ~= db.me then
-            local chars = {}
-            local count = math.random(1, 5)
-            for k = 1, count do
-                local cname = name .. DEMO_SUFFIX[k]
-                local class = DEMO_CLASSES[((i + k * 3) % #DEMO_CLASSES) + 1]
-                local seen = (k == 1 and math.random() < 0.5) and now or (now - math.random(600, 400000))
-                local real = db.friends[name] and db.friends[name].chars and db.friends[name].chars[cname]
-                if real then
-                    -- Rør aldrig ægte karakterer: brug den bare som den er
-                    class = real.class or class
-                else
-                    local c = UpdateChar(name, cname, {
-                        class = class, level = math.random(8, 70),
-                        gold = math.random(5, 4000) * 10000 + math.random(0, 99) * 100,
-                        zone = DEMO_ZONES[math.random(#DEMO_ZONES)], xp = math.random(0, 99),
-                    }, seen)
-                    c.demo = true
+        local miss = {}
+        for _, slot in ipairs({ 1, 3, 5, 7, 8, 9, 10, 15, 16 }) do
+            if math.random() < 0.25 then miss[#miss + 1] = slot end
+        end
+        c.gear = { il = math.floor((60 + math.random() * 70) * 10) / 10, me = table.concat(miss, ","),
+                   mg = math.random(0, 3) == 0 and math.random(1, 4) or 0, t = time() - math.random(60, 300000) }
+
+        c.rep = {}
+        for _, kf in ipairs(ns.KEY_FACTIONS) do
+            if math.random() < 0.8 then
+                local s = math.random(4, 8)
+                local m = ({ [4] = 3000, [5] = 6000, [6] = 12000, [7] = 21000, [8] = 999 })[s]
+                c.rep[kf.names[1]] = string.format("%d:%d:%d", s, s == 8 and 0 or math.random(0, m - 1), m)
+            end
+        end
+        for _ = 1, math.random(0, 3) do
+            c.rep[DEMO_EXALTED[math.random(#DEMO_EXALTED)]] = "8:0:999"
+        end
+    end
+
+    local function ClearDemo()
+        for i = #db.events, 1, -1 do
+            if db.events[i].id:find("^demo%-") then
+                db.seen[db.events[i].id] = nil
+                table.remove(db.events, i)
+            end
+        end
+        for i = #db.loot, 1, -1 do
+            if db.loot[i].id:find("^demo%-") then
+                db.lootSeen[db.loot[i].id] = nil
+                table.remove(db.loot, i)
+            end
+        end
+        for friend, runs in pairs(db.runs) do
+            for inst, e in pairs(runs) do
+                if e.demo then runs[inst] = nil end
+            end
+            if not next(runs) then db.runs[friend] = nil end
+        end
+        for friend, ids in pairs(db.demoAch) do
+            for id in pairs(ids) do
+                if db.ach[friend] then db.ach[friend][id] = nil end
+            end
+            if db.ach[friend] and not next(db.ach[friend]) then db.ach[friend] = nil end
+        end
+        wipe(db.demoAch)
+        for friend, r in pairs(db.rolls) do
+            if r.demo then db.rolls[friend] = nil end
+        end
+        for friend, h in pairs(db.goldHist) do
+            for i = #h, 1, -1 do
+                if h[i].d then table.remove(h, i) end
+            end
+            if #h == 0 then db.goldHist[friend] = nil end
+        end
+        for name, info in pairs(db.friends) do
+            for cn, c in pairs(info.chars or {}) do
+                if c.demo then
+                    info.chars[cn] = nil
+                    if db.chars[cn] == name then db.chars[cn] = nil end
                 end
-                chars[#chars + 1] = { name = cname, class = class }
             end
+            if not next(info.chars or {}) then db.friends[name] = nil end
+        end
+        if ns.RefreshUI then ns.RefreshUI() end
+    end
 
-            for d = 1, math.random(0, 5) do
-                local ch = chars[math.random(#chars)]
-                local k = DEMO_KILLERS[math.random(#DEMO_KILLERS)]
-                local id = "demo-" .. name .. "-" .. d
-                db.seen[id] = true
-                table.insert(db.events, {
-                    id = id, name = ch.name, class = ch.class, killer = k[1], ability = k[2],
-                    level = math.random(8, 70), zone = DEMO_ZONES[math.random(#DEMO_ZONES)],
-                    time = now - math.random(60, 90000), friend = name,
-                })
-            end
+    local function MakeDemo()
+        ClearDemo()
+        local now = time()
+        for i, name in ipairs(ROSTER) do
+            if name ~= db.me then
+                local chars = {}
+                local count = math.random(1, 5)
+                for k = 1, count do
+                    local cname = name .. DEMO_SUFFIX[k]
+                    local class = DEMO_CLASSES[((i + k * 3) % #DEMO_CLASSES) + 1]
+                    local seen = (k == 1 and math.random() < 0.5) and now or (now - math.random(600, 400000))
+                    local real = db.friends[name] and db.friends[name].chars and db.friends[name].chars[cname]
+                    if real then
+                        -- Rør aldrig ægte karakterer: brug den bare som den er
+                        class = real.class or class
+                    else
+                        local c = UpdateChar(name, cname, {
+                            class = class, level = math.random(8, 70),
+                            gold = math.random(5, 4000) * 10000 + math.random(0, 99) * 100,
+                            zone = DEMO_ZONES[math.random(#DEMO_ZONES)], xp = math.random(0, 99),
+                        }, seen)
+                        c.demo = true
+                        DemoCharExtras(c)
+                    end
+                    chars[#chars + 1] = { name = cname, class = class }
+                end
 
-            for _ = 1, math.random(1, 4) do
-                local inst = DEMO_INST[math.random(#DEMO_INST)]
-                if not RunEntry(name, inst) then
-                    local e = RunEntry(name, inst, true)
-                    e.demo = true
-                    e.wipes = math.random(0, 6)
-                    e.clears = math.random(0, 5)
-                    e.last = now - math.random(600, 400000)
-                    for _, b in ipairs(BOSSES[inst].list) do
-                        if math.random() < 0.7 then e.boss[b] = math.random(1, 6) end
+                for d = 1, math.random(0, 5) do
+                    local ch = chars[math.random(#chars)]
+                    local k = DEMO_KILLERS[math.random(#DEMO_KILLERS)]
+                    local id = "demo-" .. name .. "-" .. d
+                    db.seen[id] = true
+                    table.insert(db.events, {
+                        id = id, name = ch.name, class = ch.class, killer = k[1], ability = k[2],
+                        level = math.random(8, 70), zone = DEMO_ZONES[math.random(#DEMO_ZONES)],
+                        time = now - math.random(60, 90000), friend = name,
+                    })
+                end
+
+                for _ = 1, math.random(1, 4) do
+                    local inst = DEMO_INST[math.random(#DEMO_INST)]
+                    if not RunEntry(name, inst) then
+                        local e = RunEntry(name, inst, true)
+                        e.demo = true
+                        e.wipes = math.random(0, 6)
+                        e.clears = math.random(0, 5)
+                        e.last = now - math.random(600, 400000)
+                        for _, b in ipairs(BOSSES[inst].list) do
+                            if math.random() < 0.7 then e.boss[b] = math.random(1, 6) end
+                        end
                     end
                 end
-            end
 
-            db.ach[name] = db.ach[name] or {}
-            db.demoAch[name] = db.demoAch[name] or {}
-            for _ = 1, math.random(2, 9) do
-                local a = ACH[math.random(#ACH)]
-                if not db.ach[name][a.id] then
-                    db.ach[name][a.id] = now - math.random(600, 900000)
-                    db.demoAch[name][a.id] = true
+                if not db.rolls[name] then
+                    local rolls = math.random(4, 40)
+                    local cnt = math.random(rolls, rolls * 2)
+                    db.rolls[name] = { rolls = rolls, wins = math.random(0, math.floor(rolls / 2)), cnt = cnt,
+                                       sum = cnt * math.random(35, 65), low = math.random(1, 9), high = math.random(90, 100), demo = true }
+                end
+
+                if not db.goldHist[name] or #db.goldHist[name] == 0 then
+                    local g = math.random(20, 800) * 10000
+                    for k = 1, math.random(4, 16) do
+                        g = math.max(0, g + math.random(-150, 300) * 10000)
+                        ns.AddGoldSample(name, now - (17 - k) * math.random(20000, 200000), g, true)
+                    end
+                end
+
+                db.ach[name] = db.ach[name] or {}
+                db.demoAch[name] = db.demoAch[name] or {}
+                for _ = 1, math.random(2, 9) do
+                    local a = ACH[math.random(#ACH)]
+                    if not db.ach[name][a.id] then
+                        db.ach[name][a.id] = now - math.random(600, 900000)
+                        db.demoAch[name][a.id] = true
+                    end
+                end
+
+                for l = 1, math.random(0, 7) do
+                    local ch = chars[math.random(#chars)]
+                    local it = DEMO_ITEMS[math.random(#DEMO_ITEMS)]
+                    local ctx = DEMO_CTX[math.random(#DEMO_CTX)]
+                    local places = DEMO_PLACES[ctx]
+                    local id = "demo-L-" .. name .. "-" .. l
+                    db.lootSeen[id] = true
+                    table.insert(db.loot, {
+                        id = id, friend = name, char = ch.name, class = ch.class,
+                        item = "item:" .. it[1], name = it[2], quality = it[3],
+                        how = (ctx == "world") and "drop" or DEMO_HOW[math.random(#DEMO_HOW)],
+                        ctx = ctx, zone = places[math.random(#places)], time = now - math.random(60, 300000),
+                    })
                 end
             end
-
-            for l = 1, math.random(0, 7) do
-                local ch = chars[math.random(#chars)]
-                local it = DEMO_ITEMS[math.random(#DEMO_ITEMS)]
-                local ctx = DEMO_CTX[math.random(#DEMO_CTX)]
-                local places = DEMO_PLACES[ctx]
-                local id = "demo-L-" .. name .. "-" .. l
-                db.lootSeen[id] = true
-                table.insert(db.loot, {
-                    id = id, friend = name, char = ch.name, class = ch.class,
-                    item = "item:" .. it[1], name = it[2], quality = it[3],
-                    how = (ctx == "world") and "drop" or DEMO_HOW[math.random(#DEMO_HOW)],
-                    ctx = ctx, zone = places[math.random(#places)], time = now - math.random(60, 300000),
-                })
-            end
         end
+        if ns.RefreshUI then ns.RefreshUI() end
     end
-    if ns.RefreshUI then ns.RefreshUI() end
+
+    ns.ClearDemo = ClearDemo
+    ns.MakeDemo = MakeDemo
 end
 
 -- =============================================================================
@@ -3224,6 +4964,11 @@ events:RegisterEvent("PLAYER_FLAGS_CHANGED")
 -- Boss-events findes ikke i alle spilversioner: en ukendt event giver ellers en Lua-fejl
 pcall(events.RegisterEvent, events, "ENCOUNTER_END")
 pcall(events.RegisterEvent, events, "BOSS_KILL")
+-- v0.5: guld ved logout, professions, gear og reputation
+pcall(events.RegisterEvent, events, "PLAYER_LOGOUT")
+pcall(events.RegisterEvent, events, "SKILL_LINES_CHANGED")
+pcall(events.RegisterEvent, events, "PLAYER_EQUIPMENT_CHANGED")
+pcall(events.RegisterEvent, events, "UPDATE_FACTION")
 
 events:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
@@ -3233,6 +4978,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         BuildLootPatterns()
         if RegisterPrefix then RegisterPrefix(PREFIX) end
         BuildUI()
+        ns.BuildOptions()
         StartPump()
         Print("indlæst. Skriv /wc4l for at åbne vinduet.")
 
@@ -3243,6 +4989,7 @@ events:SetScript("OnEvent", function(_, event, ...)
                 SendHeartbeat()
                 RequestSync()
                 ns.InitAchievements()
+                ns.AfterIdentity()
             else
                 ns.ShowIdentityPicker()
             end
@@ -3259,6 +5006,18 @@ events:SetScript("OnEvent", function(_, event, ...)
 
     elseif event == "PLAYER_XP_UPDATE" then
         TouchMe()
+
+    elseif event == "PLAYER_LOGOUT" then
+        if db and db.me then ns.SampleMyGold() end
+
+    elseif event == "SKILL_LINES_CHANGED" then
+        if db and db.me then ns.ScheduleScan("prof", 3) end
+
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+        if db and db.me then ns.ScheduleScan("gear", 3) end
+
+    elseif event == "UPDATE_FACTION" then
+        if db and db.me and not ns.IsScanningRep() then ns.ScheduleScan("rep", 10) end
 
     elseif event == "PLAYER_FLAGS_CHANGED" then
         ns.OnFlags((...))
@@ -3299,6 +5058,8 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         ns.frame:SetShown(not ns.frame:IsShown())
     elseif cmd == "jeg" then
         ns.ShowIdentityPicker()
+    elseif cmd == "config" or cmd == "indstillinger" or cmd == "options" then
+        ns.OpenOptions()
     elseif cmd == "sound" then
         local isEvent = false
         for _, e in ipairs(SOUND_EVENTS) do if e == arg then isEvent = true end end
@@ -3342,10 +5103,10 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         Print("Anmoder vennerne om at sende deres data...")
     elseif cmd == "demo" then
         if arg == "slut" or arg == "clear" then
-            ClearDemo()
+            ns.ClearDemo()
             Print("Demo-data er fjernet.")
         else
-            MakeDemo()
+            ns.MakeDemo()
             Print("Demo-data lagt ind (kun lokalt). Fjern det igen med |cffffd100/wc4l demo slut|r.")
             ns.frame:Show()
         end
@@ -3369,6 +5130,8 @@ SlashCmdList["WASTEDCOAST"] = function(input)
     elseif cmd == "reset" then
         if arg == "ja" then
             wipe(db.runs)
+            wipe(db.rolls)
+            wipe(db.goldHist)
             wipe(db.ach)
             wipe(db.demoAch)
             db.achInit = nil
@@ -3388,6 +5151,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         Print("Kommandoer:")
         print("  /wc4l              - vis/skjul vinduet")
         print("  /wc4l jeg          - vælg, hvem du er")
+        print("  /wc4l config       - åbn indstillingerne (også under Options > AddOns)")
         print("  /wc4l loot         - vis/skift minimumskvalitet for loot (uncommon, rare, epic, legendary)")
         print("  /wc4l demo         - fyld med demo-data (|cffffd100demo slut|r fjerner det)")
         print("  /wc4l sync         - hent data fra vennerne igen")

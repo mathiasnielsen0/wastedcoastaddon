@@ -1,8 +1,8 @@
 ## Interface: 20506
 ## Title: Wasted Coast (WC4L)
-## Notes: Venne-overblik, scoreboard, karakterer pr. ven, loot-tracker og dødstæller. Synkroniserer i party, raid og guild.
+## Notes: Venne-overblik, scoreboard, loot, dødsstatistik, rolls, guldgraf, professions, gear og reputation. Synkroniserer i party, raid og guild.
 ## Author: Dig
-## Version: 0.4.0
+## Version: 0.5.0
 ## SavedVariables: WastedCoastDB
 
 Sounds.lua

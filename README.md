@@ -2,10 +2,11 @@
 
 Addon til vennegruppen: grafisk overblik over jer alle, et scoreboard, en oversigt
 over alle karakterer hver ven spiller, en loot-tracker for rare og bedre, en
-dødstæller, wipe- og boss-tæller pr. instance, egne trofæer, popups og en
-levelling-race. Alt synkroniserer mellem jer.
+dødstæller, wipe- og boss-tæller pr. instance, egne trofæer, popups, en
+levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions,
+gear og reputation. Alt synkroniserer mellem jer.
 
-Version 0.4.0 (TBC Classic Anniversary, interface 20506)
+Version 0.5.0 (TBC Classic Anniversary, interface 20506)
 
 ---
 
@@ -35,7 +36,8 @@ Til sidst skal du have: `...\AddOns\WastedCoast\WastedCoast.toc`
 
 Kør `install.bat` igen (eller overskriv mappen manuelt) og skriv `/reload`.
 Dine gemte data bliver ikke slettet. Gamle data fra 0.2 og 0.3 bliver flyttet over
-automatisk. Første gang med 0.4 låser addonet de trofæer op, du allerede har
+automatisk. Med 0.5 kommer der fem nye faner; de fyldes, efterhånden som I logger ind
+med den nye version. Første gang med 0.4 låser addonet de trofæer op, du allerede har
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
@@ -49,7 +51,9 @@ Når du logger ind, spørger addonet: **"Hvem er du?"** Vælg dit navn på liste
 Det gælder hele din konto, så alle dine karakterer bliver koblet til dig.
 Du kan skifte senere med knappen "Skift" nederst i vinduet eller `/wc4l jeg`.
 
-Skriv `/wc4l` for at åbne vinduet. Vil du se, hvordan det ser ud med data i,
+Skriv `/wc4l` for at åbne vinduet. Indstillingerne finder du under **Options >
+AddOns > Wasted Coast**, med knappen "Indstillinger" nederst i vinduet eller med
+`/wc4l config`. Vil du se, hvordan det ser ud med data i,
 så skriv `/wc4l demo` (og `/wc4l demo slut` for at fjerne det igen).
 
 ---
@@ -123,6 +127,45 @@ En bar pr. ven, der viser, hvem der er længst fremme (vennens karakter med
 højest level, inkl. XP-procent). Den forreste har guldkant, og barren bliver
 guld ved level 70.
 
+### Statistik
+**Dødsstatistik:** de fem mobs, der har slået flest af jer ihjel, de tre farligste
+zoner og **faldskade-kongen** (flest dødsfald af fald). Ud for hver står, hvem der
+er døde til den.
+
+**Uheldsrating for rolls:** hver gang du vælger Need, Greed eller Disenchant på et
+item, tæller det som et roll. Addonet gemmer, hvor mange du har deltaget i, hvor
+mange du vandt, og selve tallene du slog. **Tabt** er andelen af dine rolls, du
+ikke vandt (fra 5 rolls), og **Snit** er dit gennemsnitlige roll (held er 50,5).
+Den med højest tabt-procent står øverst og får titlen *Uheldsfuglen*. Kun rolls
+fra den nye version tæller.
+
+### Guld
+En graf over hver vens samlede guld (alle karakterer) over tid. Der måles, hver
+gang du logger ud, og ved første login med den nye version. Vælg 7, 30 eller 90
+dage eller det hele, og klik på et navn for at skjule eller vise vennen. Hold
+musen over et navn for at se, hvor meget vennen har tjent eller brugt i perioden.
+
+### Professions
+Hvem kan crafte hvad: en linje pr. profession med hver ven og deres bedste skill.
+375 er guld. Hold musen over en linje for at se alle karakterer med den.
+
+### Gear
+Hver karakters gennemsnitlige item level og hvad der mangler: slots uden enchant
+(hoved, skuldre, bryst, ben, fødder, håndled, hænder, kappe, våben og
+off-hand-våben eller skjold; ringe tæller ikke) og tomme gem-sockets. Gear måles,
+når du logger ind og når du skifter udstyr. Filtrér på ven og rul med musehjulet.
+
+### Reputation
+For hver ven: hvor langt de er med de fem fraktioner, der giver heroic-nøgler
+(Honor Hold/Thrallmar, Cenarion Expedition, Lower City, The Sha'tar og Keepers of
+Time). Grøn betyder Revered, så nøglen kan købes. Sidste kolonne er, hvor mange
+fraktioner vennen er exalted med. Hold musen over et felt for at se hver karakter.
+
+### Indstillinger
+Under **Options > AddOns > Wasted Coast** kan du slå lyd, chatbeskeder og popups
+til og fra, vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
+knapper til at åbne vinduet, vise test-popups og synkronisere.
+
 ### Popups (toasts)
 Små beskeder øverst på skærmen:
 - **Ven logger ind** (højst en gang pr. ven pr. 10 minutter)
@@ -153,6 +196,8 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 - **Højest level**
 - **Alt-junkie**: flest karakterer (mindst to)
 - **Wipe-konge**: flest wipes
+- **Faldskade-konge**: flest dødsfald af fald
+- **Uheldsfuglen**: højest andel tabte rolls (mindst 5 rolls)
 
 ---
 
@@ -162,6 +207,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 |---|---|
 | `/wc4l` | Vis/skjul vinduet |
 | `/wc4l jeg` | Vælg, hvem du er |
+| `/wc4l config` | Åbn indstillingerne |
 | `/wc4l loot` | Vis, hvilken kvalitet loot registreres fra |
 | `/wc4l loot epic` | Registrér kun epic og bedre (også `uncommon`, `rare`, `legendary`) |
 | `/wc4l demo` | Fyld med demo-data, så du kan se, hvordan det ser ud (kun lokalt) |
@@ -194,6 +240,9 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 - **Instanser og trofæer:** Hver spiller tæller sine egne wipes, clears og
   bosskills og sender de samlede tal. Trofæer sendes, når de låses op. Ved
   synk sendes alle dine egne tal og trofæer igen.
+- **Rolls, guld, professions, gear og reputation:** Hver spiller måler sine egne
+  og sender dem, når de ændrer sig. Guldmålingen fra logout sendes næste gang du
+  logger ind. Ved synk sendes det hele igen (de seneste 30 guldmålinger).
 - **Wipe-popup:** Sendes, når hele din gruppe er død. Flere i samme gruppe giver
   kun én popup hos de andre.
 - **Når du logger ind:** Addonet beder vennerne om at sende deres egne karakterer,
