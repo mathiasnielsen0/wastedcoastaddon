@@ -1,10 +1,10 @@
 -- =============================================================================
--- Wasted Coast: egne lyde
+-- Wasted Coast Forever: egne lyde
 --
 -- Sådan gør du:
 --   1. Læg dine lydfiler (.ogg eller .mp3) i mappen  WastedCoast\sounds\
 --   2. Skriv filnavnene herunder, ud for det event de skal bruges til
---   3. Skriv /reload i spillet og test med  /wc4l sound death
+--   3. Skriv /reload i spillet og test med  /wc4f sound death
 --
 -- Står der flere filer på et event, vælges en tilfældig hver gang.
 -- Findes filen ikke, bruger addonet i stedet Blizzards egen lyd (hvis der er en).

@@ -1,4 +1,4 @@
-# Wasted Coast (WC4L)
+# Wasted Coast Forever (WC4F)
 
 Addon til vennegruppen: grafisk overblik over jer alle, et scoreboard, en oversigt
 over alle karakterer hver ven spiller, en loot-tracker for rare og bedre, en
@@ -7,8 +7,12 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.9.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.9.2. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
+
+Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
+indstillinger og synk med venner på en ældre version virker uændret, og
+`/wc4l` virker stadig ved siden af `/wc4f`.
 
 ---
 
@@ -54,7 +58,7 @@ og popups.
 
 ## Vinduet
 
-Åbn med WC4L-logoet ved minimappet eller `/wc4l`. Der er fire faner, og hver har
+Åbn med WC4F-logoet ved minimappet eller `/wc4f`. Der er fire faner, og hver har
 nogle små undersider lige under fanerne:
 
 | Fane | Undersider |
@@ -72,14 +76,14 @@ Klik på en vens kort for at se vennens karakterer.
 
 Når du logger ind, spørger addonet: **"Hvem er du?"** Vælg dit navn på listen.
 Det gælder hele din konto, så alle dine karakterer bliver koblet til dig.
-Du kan skifte senere med knappen "Skift" nederst i vinduet eller `/wc4l jeg`.
+Du kan skifte senere med knappen "Skift" nederst i vinduet eller `/wc4f jeg`.
 I behøver ikke være i samme guild: addonet finder hinanden via en skjult kanal
 (se "Sådan virker synkroniseringen").
 
-Skriv `/wc4l` for at åbne vinduet. Indstillingerne finder du under **Options >
-AddOns > Wasted Coast**, med knappen "Indstillinger" nederst i vinduet eller med
-`/wc4l config`. Vil du se, hvordan det ser ud med data i,
-så skriv `/wc4l demo` (og `/wc4l demo slut` for at fjerne det igen).
+Skriv `/wc4f` for at åbne vinduet. Indstillingerne finder du under **Options >
+AddOns > Wasted Coast Forever**, med knappen "Indstillinger" nederst i vinduet eller med
+`/wc4f config`. Vil du se, hvordan det ser ud med data i,
+så skriv `/wc4f demo` (og `/wc4f demo slut` for at fjerne det igen).
 
 ---
 
@@ -124,7 +128,7 @@ item for Blizzards egen tooltip, og shift-klik for at sætte linket i chatten.
 
 Hvad der **ikke** tæller: items fra quests, bytte og crafting, items andre
 vinder, og crafting-materialer (fx Void Crystals fra disenchant). Vil du kun have epic og bedre,
-så skriv `/wc4l loot epic` (og `/wc4l loot rare` for at gå tilbage).
+så skriv `/wc4f loot epic` (og `/wc4f loot rare` for at gå tilbage).
 
 ### Instanser
 Vælg en ven og se, hvor mange gange vedkommende har **klaret** hver dungeon og
@@ -205,7 +209,7 @@ Fanen samler alt det, der er lavet for at genere hinanden:
 - **Skammens hat:** den, der døde sidst, bærer hatten (dødningehovedet på kortet),
   indtil en anden dør. Fanen viser, hvor længe hatten har siddet, og hvem der har
   båret den længst i alt.
-- **Emote-angreb:** klik på en ven (eller skriv `/wc4l angrib nick`) for at sende en
+- **Emote-angreb:** klik på en ven (eller skriv `/wc4f angrib nick`) for at sende en
   tilfældig fornærmelse. Vennen får en popup, og står I sammen (i gruppe eller med
   vennen som target), laver din karakter også en rigtig emote. Én gang pr. 15
   sekunder.
@@ -222,10 +226,10 @@ Når en ven dør, får alle en popup med en dødsannonce, fx *"Nick blev overlis
 en level 12 Murloc Forager"*. Annoncen afhænger af, hvordan man døde (fald, drukning,
 lava, et alt for lavt eller højt mob osv.), og alle får den samme tekst. Mobbets level
 kommer med, hvis det kunne ses (target eller nameplate), da man døde. Slå dem fra med
-`/wc4l annonce`.
+`/wc4f annonce`.
 
 ### Indstillinger
-Under **Options > AddOns > Wasted Coast** kan du slå lyd, chatbeskeder og popups
+Under **Options > AddOns > Wasted Coast Forever** kan du slå lyd, chatbeskeder og popups
 til og fra, slå synk uden guild til og fra, vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
 knapper til at åbne vinduet, vise test-popups og synkronisere.
 
@@ -238,7 +242,7 @@ Små beskeder øverst på skærmen:
 - **Boss nedlagt** og **instance klaret** (kun til dig)
 - **Trofæer** (dine egne som stor popup, vennernes som lille)
 
-Slå dem fra med `/wc4l toast`, og se eksempler med `/wc4l testtoast`.
+Slå dem fra med `/wc4f toast`, og se eksempler med `/wc4f testtoast`.
 
 ### Egne lyde
 Læg dine egne lydklip (`.ogg` eller `.mp3`) i mappen `WastedCoast\sounds` og skriv
@@ -246,7 +250,7 @@ filnavnene i `Sounds.lua` (der står en vejledning i filen). Du kan vælge lyd t
 disse events: `death`, `loot`, `wipe`, `online`, `levelup`, `achievement`,
 `bosskill`, og give hver ven sin egen lyd (fx Nick har sit eget *av*-skrig).
 Står der flere filer på et event, vælges en tilfældig. Test med
-`/wc4l sound death`. Uden egen lyd bruger addonet Blizzards lyd til dødsfald,
+`/wc4f sound death`. Uden egen lyd bruger addonet Blizzards lyd til dødsfald,
 wipes, level-up og trofæer, mens loot, online og bosskill er tavse.
 Efter du har lagt **nye lydfiler** i mappen, skal spillet genstartes helt (ikke
 kun `/reload`).
@@ -271,29 +275,29 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 
 | Kommando | Hvad den gør |
 |---|---|
-| `/wc4l` | Vis/skjul vinduet |
-| `/wc4l jeg` | Vælg, hvem du er |
-| `/wc4l config` | Åbn indstillingerne |
-| `/wc4l loot` | Vis, hvilken kvalitet loot registreres fra |
-| `/wc4l loot epic` | Registrér kun epic og bedre (også `uncommon`, `rare`, `legendary`) |
-| `/wc4l demo` | Fyld med demo-data, så du kan se, hvordan det ser ud (kun lokalt) |
-| `/wc4l demo slut` | Fjern demo-data igen (rører ikke dine rigtige data) |
-| `/wc4l sync` | Det samme som knappen "Opdater": bed vennerne sende deres data nu |
-| `/wc4l status` | Se, hvordan hver ven nås: guild, party/raid, skjult kanal eller whisper |
-| `/wc4l kanal` | Slå synk uden guild (skjult kanal og whispers) til/fra |
-| `/wc4l sound` | Slå lyd til/fra |
-| `/wc4l sound <event>` | Test en lyd: `death`, `loot`, `wipe`, `online`, `levelup`, `achievement`, `bosskill` |
-| `/wc4l toast` | Slå popups (online, level, wipe) til/fra |
-| `/wc4l minimap` | Vis/skjul WC4L-logoet ved minimappet (klik åbner vinduet, træk flytter det) |
-| `/wc4l testtoast` | Vis eksempler på popups (sendes ikke til de andre) |
-| `/wc4l announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
-| `/wc4l angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
-| `/wc4l annonce` | Slå dødsannoncer til/fra |
-| `/wc4l emotes` | Slå popups for emote-angreb mod dig til/fra |
-| `/wc4l testannonce` | Vis eksempler på dødsannonce, Need-politi og emote-angreb |
-| `/wc4l test` | Lav et falsk dødsfald (sendes ikke til de andre) |
-| `/wc4l testloot` | Lav en falsk loot win (sendes ikke til de andre) |
-| `/wc4l reset ja` | Slet alle data (inkl. valg af, hvem du er) |
+| `/wc4f` | Vis/skjul vinduet (`/wc4l` virker også) |
+| `/wc4f jeg` | Vælg, hvem du er |
+| `/wc4f config` | Åbn indstillingerne |
+| `/wc4f loot` | Vis, hvilken kvalitet loot registreres fra |
+| `/wc4f loot epic` | Registrér kun epic og bedre (også `uncommon`, `rare`, `legendary`) |
+| `/wc4f demo` | Fyld med demo-data, så du kan se, hvordan det ser ud (kun lokalt) |
+| `/wc4f demo slut` | Fjern demo-data igen (rører ikke dine rigtige data) |
+| `/wc4f sync` | Det samme som knappen "Opdater": bed vennerne sende deres data nu |
+| `/wc4f status` | Se, hvordan hver ven nås: guild, party/raid, skjult kanal eller whisper |
+| `/wc4f kanal` | Slå synk uden guild (skjult kanal og whispers) til/fra |
+| `/wc4f sound` | Slå lyd til/fra |
+| `/wc4f sound <event>` | Test en lyd: `death`, `loot`, `wipe`, `online`, `levelup`, `achievement`, `bosskill` |
+| `/wc4f toast` | Slå popups (online, level, wipe) til/fra |
+| `/wc4f minimap` | Vis/skjul WC4F-logoet ved minimappet (klik åbner vinduet, træk flytter det) |
+| `/wc4f testtoast` | Vis eksempler på popups (sendes ikke til de andre) |
+| `/wc4f announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
+| `/wc4f angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
+| `/wc4f annonce` | Slå dødsannoncer til/fra |
+| `/wc4f emotes` | Slå popups for emote-angreb mod dig til/fra |
+| `/wc4f testannonce` | Vis eksempler på dødsannonce, Need-politi og emote-angreb |
+| `/wc4f test` | Lav et falsk dødsfald (sendes ikke til de andre) |
+| `/wc4f testloot` | Lav en falsk loot win (sendes ikke til de andre) |
+| `/wc4f reset ja` | Slet alle data (inkl. valg af, hvem du er) |
 
 `/wastedcoast` virker også.
 
@@ -313,8 +317,8 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
   currently playing" for karakterer, der er offline, bliver skjult.
   **Første gang** uden fælles guild: tilføj vennernes karakterer til vennelisten
   (`/friend Navn`), så finder addonet dem selv.
-- `/wc4l status` viser, hvordan hver ven nås lige nu. Slå kanal og whispers fra med
-  `/wc4l kanal` eller under Indstillinger ("Synk uden guild").
+- `/wc4f status` viser, hvordan hver ven nås lige nu. Slå kanal og whispers fra med
+  `/wc4f kanal` eller under Indstillinger ("Synk uden guild").
 - **Online-status:** Hver spiller sender et livstegn hvert minut. En ven vises som
   online, hvis der er hørt fra vedkommende inden for de seneste par minutter.
   Level, klasse, zone og guld følger med.
@@ -330,7 +334,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
   Ved synk sendes det hele igen (de seneste 30 guldmålinger).
 - **Automatisk synk:** Hvert 10. minut beder addonet vennerne om deres data, så
   du får det, du har misset, uden at logge ud.
-- **Knappen "Opdater"** nederst i vinduet (eller `/wc4l sync`) beder vennerne sende
+- **Knappen "Opdater"** nederst i vinduet (eller `/wc4f sync`) beder vennerne sende
   alt med det samme. De svarer højst hvert 30. sekund på den, og ellers højst hvert
   10. minut. Svaret kan tage op til et halvt minut at komme igennem.
 - **Wipe-popup:** Sendes, når hele din gruppe er død. Flere i samme gruppe giver
@@ -376,21 +380,21 @@ Sæt hak i "Load out of date AddOns" på addon-skærmen. Eller ret tallet i
 
 **Vennerne vises som offline, eller deres karakterer mangler**
 De skal have den nye version og have valgt, hvem de er. Uden fælles guild eller
-gruppe går det via den skjulte kanal; skriv `/wc4l status` for at se, om den er
+gruppe går det via den skjulte kanal; skriv `/wc4f status` for at se, om den er
 forbundet, og hvem der er hørt fra. Står kanalen som ikke forbundet, så tilføj
 vennernes karakterer til vennelisten i spillet, så bruger addonet whispers. Prøv
-`/wc4l sync` og vent et halvt minut.
+`/wc4f sync` og vent et halvt minut.
 
 **Mit loot dukker ikke op**
-Tjek kvaliteten med `/wc4l loot`, og at du har valgt, hvem du er (ellers
-gemmes loot kun hos dig selv). Prøv `/wc4l testloot` for at se, om listen virker.
+Tjek kvaliteten med `/wc4f loot`, og at du har valgt, hvem du er (ellers
+gemmes loot kun hos dig selv). Prøv `/wc4f testloot` for at se, om listen virker.
 Virker det ikke med rigtigt loot, så skriv `/dump LOOT_ITEM_SELF` og send mig
 teksten, så kan jeg tilpasse genkendelsen.
 
 **Ingen lyd fra mine egne klip**
 Tjek, at filen ligger i `WastedCoast\sounds`, at navnet i `Sounds.lua` er stavet
 helt ens (ingen mellemrum, æ, ø eller å), og at du har genstartet spillet efter at
-have lagt filen der. `/wc4l sound death` fortæller, hvad der gik galt.
+have lagt filen der. `/wc4f sound death` fortæller, hvad der gik galt.
 
 **Bosser eller wipes tæller ikke**
 Skriv `/dump GetInstanceInfo()` inde i instancen og send mig det første navn, så

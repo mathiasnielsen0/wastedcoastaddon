@@ -332,7 +332,7 @@ check(db.settings.obits == true, "annoncer til")
 CLOCK = CLOCK + 20
 SENT = {}
 SlashCmdList.WASTEDCOAST("angrib nic")
-check(findSent("XE;Mathias;Nick;") ~= nil, "/wc4l angrib nic")
+check(findSent("XE;Mathias;Nick;") ~= nil, "/wc4f angrib nic")
 SlashCmdList.WASTEDCOAST("testannonce")
 SlashCmdList.WASTEDCOAST("testtoast")
 SlashCmdList.WASTEDCOAST("hjælp")
@@ -370,7 +370,7 @@ local tf = _G.WastedCoastToast
 for _ = 1, 40 do tf.scripts.OnUpdate(tf, 0.25) end
 ns.ShowTab(1)
 
--- Minimap-knappen: klik åbner/lukker, træk gemmer vinklen, /wc4l minimap skjuler
+-- Minimap-knappen: klik åbner/lukker, træk gemmer vinklen, /wc4f minimap skjuler
 local mb = _G.WastedCoastMinimapButton
 check(mb ~= nil, "minimap-knap findes")
 ns.frame:Hide()
@@ -382,9 +382,9 @@ mb.scripts.OnUpdate(mb, 0.1)
 mb.scripts.OnDragStop(mb)
 check(type(db.settings.minimapAngle) == "number", "træk gemmer placering")
 SlashCmdList.WASTEDCOAST("minimap")
-check(db.settings.minimapHide and not mb:IsShown(), "/wc4l minimap skjuler knappen")
+check(db.settings.minimapHide and not mb:IsShown(), "/wc4f minimap skjuler knappen")
 SlashCmdList.WASTEDCOAST("minimap")
-check(not db.settings.minimapHide, "/wc4l minimap viser knappen igen")
+check(not db.settings.minimapHide, "/wc4f minimap viser knappen igen")
 ns.ShowTab(14)
 check(ns.DuelStats("Nick") ~= nil, "demo-dueller kan tegnes")
 SlashCmdList.WASTEDCOAST("demo slut")
