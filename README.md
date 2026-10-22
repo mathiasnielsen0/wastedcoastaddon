@@ -6,7 +6,7 @@ dødstæller, wipe- og boss-tæller pr. instance, egne trofæer, popups, en
 levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions,
 gear og reputation. Alt synkroniserer mellem jer.
 
-Version 0.5.0 (TBC Classic Anniversary, interface 20506)
+Version 0.5.1 (TBC Classic Anniversary, interface 20506)
 
 ---
 
@@ -50,6 +50,8 @@ og popups.
 Når du logger ind, spørger addonet: **"Hvem er du?"** Vælg dit navn på listen.
 Det gælder hele din konto, så alle dine karakterer bliver koblet til dig.
 Du kan skifte senere med knappen "Skift" nederst i vinduet eller `/wc4l jeg`.
+I behøver ikke være i samme guild: addonet finder hinanden via en skjult kanal
+(se "Sådan virker synkroniseringen").
 
 Skriv `/wc4l` for at åbne vinduet. Indstillingerne finder du under **Options >
 AddOns > Wasted Coast**, med knappen "Indstillinger" nederst i vinduet eller med
@@ -164,7 +166,7 @@ fraktioner vennen er exalted med. Hold musen over et felt for at se hver karakte
 
 ### Indstillinger
 Under **Options > AddOns > Wasted Coast** kan du slå lyd, chatbeskeder og popups
-til og fra, vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
+til og fra, slå synk uden guild til og fra, vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
 knapper til at åbne vinduet, vise test-popups og synkronisere.
 
 ### Popups (toasts)
@@ -214,6 +216,8 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4l demo` | Fyld med demo-data, så du kan se, hvordan det ser ud (kun lokalt) |
 | `/wc4l demo slut` | Fjern demo-data igen (rører ikke dine rigtige data) |
 | `/wc4l sync` | Det samme som knappen "Opdater": bed vennerne sende deres data nu |
+| `/wc4l status` | Se, hvordan hver ven nås: guild, party/raid, skjult kanal eller whisper |
+| `/wc4l kanal` | Slå synk uden guild (skjult kanal og whispers) til/fra |
 | `/wc4l sound` | Slå lyd til/fra |
 | `/wc4l sound <event>` | Test en lyd: `death`, `loot`, `wipe`, `online`, `levelup`, `achievement`, `bosskill` |
 | `/wc4l toast` | Slå popups (online, level, wipe) til/fra |
@@ -229,8 +233,20 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 
 ## Sådan virker synkroniseringen
 
-- Alt sendes via usynlige addon-beskeder i **party, raid og guild**. Det kræver,
-  at I har addonet og er i samme guild (eller gruppe).
+- Alt sendes via usynlige addon-beskeder i **party, raid og guild**, og fra 0.5.1
+  også i en **skjult kanal** (`WC4Lsync`), som addonet melder dig ind i, når du
+  logger ind. Så kan I følge hinanden **uden at være i samme guild eller gruppe**.
+  Kanalen vises ikke i dine chatvinduer, og dens beskeder bliver skjult.
+- **Whisper som reserve:** Kan en ven ikke nås i guild, gruppe eller kanal (fx hvis
+  klienten ikke kan sende addon-beskeder i kanaler), sender addonet usynlige
+  whispers til vennens karakter i stedet. For at finde hinanden spørger det ved
+  login og ved synk de seneste karakterer, det kender for hver ven, og de online
+  karakterer på din venneliste i spillet. Fejlbeskeden "No player named ... is
+  currently playing" for karakterer, der er offline, bliver skjult.
+  **Første gang** uden fælles guild: tilføj vennernes karakterer til vennelisten
+  (`/friend Navn`), så finder addonet dem selv.
+- `/wc4l status` viser, hvordan hver ven nås lige nu. Slå kanal og whispers fra med
+  `/wc4l kanal` eller under Indstillinger ("Synk uden guild").
 - **Online-status:** Hver spiller sender et livstegn hvert minut. En ven vises som
   online, hvis der er hørt fra vedkommende inden for de seneste par minutter.
   Level, klasse, zone og guld følger med.
@@ -291,8 +307,11 @@ Sæt hak i "Load out of date AddOns" på addon-skærmen. Eller ret tallet i
 `/dump select(4, GetBuildInfo())` i spillet for at se tallet.
 
 **Vennerne vises som offline, eller deres karakterer mangler**
-De skal have den nye version, have valgt, hvem de er, og være i samme guild
-eller gruppe som dig. Prøv `/wc4l sync` og vent et halvt minut.
+De skal have den nye version og have valgt, hvem de er. Uden fælles guild eller
+gruppe går det via den skjulte kanal; skriv `/wc4l status` for at se, om den er
+forbundet, og hvem der er hørt fra. Står kanalen som ikke forbundet, så tilføj
+vennernes karakterer til vennelisten i spillet, så bruger addonet whispers. Prøv
+`/wc4l sync` og vent et halvt minut.
 
 **Mit loot dukker ikke op**
 Tjek kvaliteten med `/wc4l loot`, og at du har valgt, hvem du er (ellers

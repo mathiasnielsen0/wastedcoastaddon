@@ -10,6 +10,7 @@ local addonName, ns = ...
 --   * v0.4: egne lyde, toasts, wipe- og bosstæller, trofæer og levelling-race
 --   * v0.5: dødsstatistik, uheldsrating for rolls, guldgraf, professions, gear,
 --           reputation og et indstillingsvindue i spillets Options
+--   * v0.5.1: synk uden fælles guild (skjult kanal og whispers som reserve)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -651,16 +652,167 @@ local TITLE_ORDER = { "Klovnen", "Lootgoblin", "Rigmanden", "Højest level", "Al
 -- =============================================================================
 local queue = {}
 
-local function Channels()
-    local ch = {}
-    if IsInRaid() then ch[#ch + 1] = "RAID" elseif IsInGroup() then ch[#ch + 1] = "PARTY" end
-    if IsInGuild() then ch[#ch + 1] = "GUILD" end
-    return ch
+-- Synk uden fælles guild: ud over party/raid og guild sendes alt i en skjult kanal,
+-- som alle med addonet melder sig ind i. Virker kanalen ikke (eller er I på hver sin
+-- side af den), går beskederne som usynlige whispers til vennens karakter.
+-- (Samlet i én tabel: hovedfilen er tæt på Luas grænse på 200 lokale variabler.)
+local route = {
+    CHANNEL = "WC4Lsync",
+    PASSWORD = "wastedcoast",
+    TTL = 180,          -- sekunder: så længe en ven regnes for at kunne nås ad en vej
+    shared = {},        -- ven -> { t, via }: sidst hørt i guild, gruppe eller kanal
+    whisper = {},       -- ven -> { t, char }: sidst hørt via whisper, og fra hvilken karakter
+    probed = {},        -- karakter (små bogstaver) -> GetTime() for seneste whisper derhen
+    channelOK = true,   -- falsk, hvis klienten ikke kan sende addon-beskeder i en kanal
+}
+ns.route = route
+
+do
+    local function FallbackOn()
+        return db and db.settings.fallbackSync ~= false
+    end
+
+    local function ChannelId()
+        if not route.channelOK or not FallbackOn() then return 0 end
+        return (GetChannelName(route.CHANNEL)) or 0
+    end
+    route.ChannelId = ChannelId
+
+    local function Recent(r)
+        return r and (time() - r.t) < route.TTL
+    end
+    route.Recent = Recent
+
+    -- Alle de veje, en besked skal sendes ad lige nu
+    function route.Targets()
+        local ch = {}
+        if IsInRaid() then ch[#ch + 1] = { "RAID" } elseif IsInGroup() then ch[#ch + 1] = { "PARTY" } end
+        if IsInGuild() then ch[#ch + 1] = { "GUILD" } end
+        if ChannelId() > 0 then ch[#ch + 1] = { "CHANNEL" } end
+        -- Venner, der kun kan nås via whisper: karakteren, de sidst whisperede fra
+        if FallbackOn() and db.me then
+            for _, friend in ipairs(ROSTER) do
+                if friend ~= db.me and not Recent(route.shared[friend]) and Recent(route.whisper[friend]) then
+                    ch[#ch + 1] = { "WHISPER", route.whisper[friend].char }
+                end
+            end
+        end
+        return ch
+    end
+
+    function route.SendItem(item)
+        local msg, chatType, target = item[1], item[2], item[3]
+        if chatType == "CHANNEL" then
+            target = ChannelId()
+            if target == 0 then return end
+            -- Ældre klienter kender ikke addon-beskeder i kanaler: så klarer whispers det
+            if not pcall(SendMsg, PREFIX, msg, chatType, target) then route.channelOK = false end
+            return
+        end
+        if chatType == "WHISPER" then route.probed[target:lower()] = GetTime() end
+        SendMsg(PREFIX, msg, chatType, target)
+    end
+
+    -- Online karakterer på vennelisten i spillet (så I kan finde hinanden første gang)
+    local function OnlineFriendList()
+        local out = {}
+        if C_FriendList and C_FriendList.GetNumFriends then
+            for i = 1, C_FriendList.GetNumFriends() or 0 do
+                local f = C_FriendList.GetFriendInfoByIndex(i)
+                if f and f.connected and f.name then out[#out + 1] = f.name end
+            end
+        elseif GetNumFriends and GetFriendInfo then
+            for i = 1, GetNumFriends() or 0 do
+                local name, _, _, _, connected = GetFriendInfo(i)
+                if name and connected then out[#out + 1] = name end
+            end
+        end
+        return out
+    end
+
+    -- Send en besked (en sync-forespørgsel) som whisper til venner, vi ikke kan nå på anden vis:
+    -- deres seneste karakterer og de online karakterer på vennelisten. Den, der er online og
+    -- har addonet, svarer, og derefter går beskederne den vej. "No player named"-fejlene skjules.
+    function route.Probe(msg)
+        if not FallbackOn() or not db.me then return end
+        local me = UnitName("player")
+        local targets, added = {}, {}
+        local function add(char)
+            if char and char ~= "" and char ~= me and not added[char] then
+                added[char] = true
+                targets[#targets + 1] = char
+            end
+        end
+        local function reachable(friend)
+            return friend and (friend == db.me or Recent(route.shared[friend]) or Recent(route.whisper[friend]))
+        end
+        for _, friend in ipairs(ROSTER) do
+            if not reachable(friend) then
+                local list = {}
+                for name, c in pairs((db.friends[friend] and db.friends[friend].chars) or {}) do
+                    if not c.demo then list[#list + 1] = { name, c } end
+                end
+                table.sort(list, function(a, b) return IsNewer(a[1], a[2], b[1], b[2]) end)
+                for i = 1, math.min(#list, 6) do add(list[i][1]) end
+            end
+        end
+        local n = 0
+        for _, char in ipairs(OnlineFriendList()) do
+            if n < 20 and not reachable(FriendOfChar(char)) then
+                add(char)
+                n = n + 1
+            end
+        end
+        for _, char in ipairs(targets) do queue[#queue + 1] = { msg, "WHISPER", char } end
+    end
+
+    -- Hvem har sendt beskeden, og ad hvilken vej? Bruges til at vælge, hvor vi sender hen
+    function route.Note(t, chatType, sender)
+        if not chatType or not sender or not db.me then return end
+        local char = (Ambiguate and Ambiguate(sender, "none")) or sender:match("^[^%-]+") or sender
+        local friend = (ROSTER_SET[t[2]] and t[2]) or FriendOfChar(char)
+        if not friend or friend == db.me then return end
+        if chatType == "WHISPER" then
+            route.whisper[friend] = { t = time(), char = char }
+        elseif chatType ~= "CHANNEL" or ChannelId() > 0 then
+            -- Kun en vej, vi også selv sender ad, tæller (ellers hører vennen os ikke)
+            route.shared[friend] = { t = time(), via = chatType }
+        end
+    end
+
+    function route.Join()
+        if not FallbackOn() or not route.channelOK then return end
+        if ((GetChannelName(route.CHANNEL)) or 0) == 0 then
+            local join = JoinTemporaryChannel or JoinChannelByName
+            if join then pcall(join, route.CHANNEL, route.PASSWORD) end
+        end
+        -- Kanalen skal ikke vises i chatvinduerne
+        C_Timer.After(2, function()
+            if not ChatFrame_RemoveChannel then return end
+            for i = 1, NUM_CHAT_WINDOWS or 10 do
+                local f = _G["ChatFrame" .. i]
+                if f then pcall(ChatFrame_RemoveChannel, f, route.CHANNEL) end
+            end
+        end)
+    end
+
+    function ns.SetFallbackSync(on)
+        db.settings.fallbackSync = on and true or false
+        if on then
+            route.channelOK = true
+            route.Join()
+        else
+            if ((GetChannelName(route.CHANNEL)) or 0) > 0 and LeaveChannelByName then
+                pcall(LeaveChannelByName, route.CHANNEL)
+            end
+            wipe(route.whisper)
+        end
+    end
 end
 
 local function Send(msg, priority)
-    for _, c in ipairs(Channels()) do
-        local item = { msg, c }
+    for _, c in ipairs(route.Targets()) do
+        local item = { msg, c[1], c[2] }
         if priority then table.insert(queue, 1, item) else queue[#queue + 1] = item end
     end
     while #queue > 500 do table.remove(queue, 1) end
@@ -669,7 +821,7 @@ end
 local function StartPump()
     C_Timer.NewTicker(0.3, function()
         local item = table.remove(queue, 1)
-        if item then SendMsg(PREFIX, item[1], item[2]) end
+        if item then route.SendItem(item) end
     end)
 end
 
@@ -744,7 +896,10 @@ end
 
 -- force = true: vennerne svarer, selvom de har svaret for nylig (knappen "Opdater" og /wc4l sync)
 local function RequestSync(force)
-    if db.me then Send("Q;" .. db.me .. (force and ";1" or "")) end
+    if not db.me then return end
+    local msg = "Q;" .. db.me .. (force and ";1" or "")
+    Send(msg)
+    route.Probe(msg)
 end
 
 local function IsLocalOnly(id)
@@ -1966,10 +2121,11 @@ ns.CheckBossDeath = CheckBossDeath
 -- =============================================================================
 local lastSyncReply = {}
 
-local function OnAddonMessage(prefix, message)
+local function OnAddonMessage(prefix, message, chatType, sender)
     if prefix ~= PREFIX or not message then return end
     local t = { strsplit(";", message) }
     local kind = t[1]
+    route.Note(t, chatType, sender)
 
     if kind == "D" then
         local ev = DeserializeDeath(t)
@@ -4483,6 +4639,8 @@ do
               function() return db.settings.announce end, function(v) db.settings.announce = v end },
             { "Popups", "Små beskeder øverst på skærmen, når en ven logger ind, stiger i level eller wiper.",
               function() return db.settings.toasts end, function(v) db.settings.toasts = v end },
+            { "Synk uden guild", "Skjult kanal og usynlige whispers, så I ser hinanden uden fælles guild eller gruppe.",
+              function() return db.settings.fallbackSync ~= false end, function(v) ns.SetFallbackSync(v) end },
         }
         for i, c in ipairs(checks) do
             local cb = MakeCheck(p, c[1], c[2], c[3], c[4])
@@ -4491,7 +4649,7 @@ do
         end
 
         local qh = Txt(p, "GameFontNormal")
-        qh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -200)
+        qh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -244)
         qh:SetText("Minimumskvalitet for loot")
         local qs = Txt(p, "GameFontHighlightSmall")
         qs:SetPoint("TOPLEFT", qh, "BOTTOMLEFT", 0, -2)
@@ -4505,12 +4663,12 @@ do
                 if ns.RefreshUI then ns.RefreshUI() end
             end)
             b.q = q
-            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -236)
+            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -280)
             p.qualityBtns[i] = b
         end
 
         local mh = Txt(p, "GameFontNormal")
-        mh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -282)
+        mh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -326)
         mh:SetText("Hvem er du?")
         p.meText = Txt(p, "GameFontHighlightSmall")
         p.meText:SetPoint("TOPLEFT", mh, "BOTTOMLEFT", 0, -2)
@@ -4523,14 +4681,14 @@ do
             end)
             b.friend = name
             local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
-            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + col * 116, -318 - row * 30)
+            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + col * 116, -362 - row * 30)
             p.meBtns[i] = b
         end
 
         local open = MakeButton(p, 150, 24, "Åbn Wasted Coast", function()
             if ns.frame then ns.frame:Show() end
         end)
-        open:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -392)
+        open:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -436)
         local test = MakeButton(p, 150, 24, "Vis test-popups", function()
             SlashCmdList["WASTEDCOAST"]("testtoast")
         end)
@@ -4554,7 +4712,7 @@ do
             p:SetBackdrop(FLAT)
             p:SetBackdropColor(COL_BG[1], COL_BG[2], COL_BG[3], COL_BG[4])
             p:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
-            p:SetSize(520, 430)
+            p:SetSize(520, 474)
             p:SetPoint("CENTER")
             p:SetFrameStrata("DIALOG")
             p:EnableMouse(true)
@@ -4987,6 +5145,72 @@ do
 end
 
 -- =============================================================================
+-- Synk uden guild: skjul kanalens beskeder og fejl fra whispers til offline karakterer
+-- =============================================================================
+do
+    local notFound
+
+    local function HideNotFound(_, _, msg)
+        notFound = notFound or FormatToPattern(ERR_CHAT_PLAYER_NOT_FOUND_S)
+        local name = notFound and msg and msg:match(notFound)
+        if not name then return false end
+        local key = ((Ambiguate and Ambiguate(name, "none")) or name):lower()
+        local at = route.probed[key]
+        if not at or GetTime() - at > 30 then return false end
+        -- Karakteren er gået offline: stop med at whispere den
+        for friend, w in pairs(route.whisper) do
+            if w.char:lower() == key then route.whisper[friend] = nil end
+        end
+        return true
+    end
+
+    local function IsSyncChannel(...)
+        local want = route.CHANNEL:lower()
+        for i = 1, select("#", ...) do
+            local v = select(i, ...)
+            if type(v) == "string" and v:lower():find(want, 1, true) then return true end
+        end
+        return false
+    end
+
+    local function HideChannelNotice(_, _, _, _, _, channelString, _, _, _, _, channelName)
+        return IsSyncChannel(channelString, channelName)
+    end
+
+    function ns.InitFallbackFilters()
+        if not ChatFrame_AddMessageEventFilter then return end
+        ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", HideNotFound)
+        ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_NOTICE", HideChannelNotice)
+        ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_NOTICE_USER", HideChannelNotice)
+        ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_JOIN", HideChannelNotice)
+        ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_LEAVE", HideChannelNotice)
+    end
+
+    -- /wc4l status: hvordan hver ven nås lige nu
+    local VIA_LABEL = { GUILD = "guild", PARTY = "party", RAID = "raid", CHANNEL = "skjult kanal" }
+    function ns.PrintRoutes()
+        local id = (GetChannelName(route.CHANNEL)) or 0
+        if db.settings.fallbackSync == false then
+            Print("Synk uden guild er slået fra (|cffffd100/wc4l kanal|r slår den til).")
+        elseif not route.channelOK then
+            Print("Den skjulte kanal virker ikke i denne klient. Vennerne nås via whisper.")
+        else
+            Print("Skjult kanal: " .. (id > 0 and ("|cff40ff40forbundet|r (/" .. id .. ")") or "|cffff6060ikke forbundet|r"))
+        end
+        for _, friend in ipairs(ROSTER) do
+            if friend ~= db.me then
+                local s, w = route.shared[friend], route.whisper[friend]
+                local how
+                if route.Recent(s) then how = "|cff40ff40" .. (VIA_LABEL[s.via] or s.via) .. "|r"
+                elseif route.Recent(w) then how = "|cff40ff40whisper|r (" .. w.char .. ")"
+                else how = "|cff9aa0a6ikke hørt fra de seneste 3 minutter|r" end
+                print("  " .. friend .. ": " .. how)
+            end
+        end
+    end
+end
+
+-- =============================================================================
 -- Events
 -- =============================================================================
 local events = CreateFrame("Frame")
@@ -5003,6 +5227,7 @@ events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_XP_UPDATE")
 events:RegisterEvent("PLAYER_FLAGS_CHANGED")
+events:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
 -- Boss-events findes ikke i alle spilversioner: en ukendt event giver ellers en Lua-fejl
 pcall(events.RegisterEvent, events, "ENCOUNTER_END")
 pcall(events.RegisterEvent, events, "BOSS_KILL")
@@ -5021,10 +5246,13 @@ events:SetScript("OnEvent", function(_, event, ...)
         if RegisterPrefix then RegisterPrefix(PREFIX) end
         BuildUI()
         ns.BuildOptions()
+        ns.InitFallbackFilters()
         StartPump()
         Print("indlæst. Skriv /wc4l for at åbne vinduet.")
 
     elseif event == "PLAYER_LOGIN" then
+        -- Den skjulte synk-kanal: efter spillets egne kanaler, så de beholder /1 og /2
+        C_Timer.After(5, route.Join)
         -- Vent lidt, så guild/party-info er klar
         C_Timer.After(6, function()
             if db.me then
@@ -5090,6 +5318,17 @@ events:SetScript("OnEvent", function(_, event, ...)
 
     elseif event == "CHAT_MSG_ADDON" then
         OnAddonMessage(...)
+
+    elseif event == "CHAT_MSG_CHANNEL_NOTICE" then
+        -- Lige kommet ind i den skjulte kanal: sig hej og bed om data dér
+        local notice, _, _, _, _, _, _, _, channelName = ...
+        if notice == "YOU_JOINED" and channelName and channelName:lower() == route.CHANNEL:lower() then
+            C_Timer.After(2, function()
+                if not db.me then return end
+                SendHeartbeat()
+                Send("Q;" .. db.me)
+            end)
+        end
     end
 end)
 
@@ -5147,6 +5386,11 @@ SlashCmdList["WASTEDCOAST"] = function(input)
     elseif cmd == "sync" then
         ns.RefreshNow()
         Print("Anmoder vennerne om at sende deres data...")
+    elseif cmd == "status" then
+        ns.PrintRoutes()
+    elseif cmd == "kanal" then
+        ns.SetFallbackSync(db.settings.fallbackSync == false)
+        Print("Synk uden guild (skjult kanal og whispers): " .. (db.settings.fallbackSync ~= false and "til" or "fra"))
     elseif cmd == "demo" then
         if arg == "slut" or arg == "clear" then
             ns.ClearDemo()
@@ -5201,6 +5445,8 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print("  /wc4l loot         - vis/skift minimumskvalitet for loot (uncommon, rare, epic, legendary)")
         print("  /wc4l demo         - fyld med demo-data (|cffffd100demo slut|r fjerner det)")
         print("  /wc4l sync         - hent data fra vennerne igen")
+        print("  /wc4l status       - se, hvordan hver ven nås (guild, gruppe, kanal eller whisper)")
+        print("  /wc4l kanal        - slå synk uden guild til/fra")
         print("  /wc4l sound        - slå lyd til/fra  (|cffffd100sound <event>|r tester en lyd)")
         print("  /wc4l toast        - slå popups (online, wipe, level) til/fra")
         print("  /wc4l testtoast    - vis eksempler på popups")
