@@ -76,6 +76,8 @@ UISpecialFrames = {}
 SlashCmdList = {}
 YOU = "You"
 RANDOM_ROLL_RESULT = "%s rolls %d (%d-%d)"
+DUEL_WINNER_KNOCKOUT = "%1$s has defeated %2$s in a duel"
+DUEL_WINNER_RETREAT = "%2$s has fled from %1$s in a duel"
 LOOT_ROLL_YOU_WON = "You won: %s"
 LOOT_ROLL_NEED_SELF = "You have selected Need for: %s"
 LOOT_ROLL_ROLLED_NEED = "Need Roll - %d for %s by %s"
@@ -122,7 +124,7 @@ end
 
 lua.execute(MOCK)
 ns = lua.table()
-for f in ["Sounds.lua", "WastedCoast.lua", "Drilleri.lua"]:
+for f in ["Sounds.lua", "WastedCoast.lua", "Drilleri.lua", "Dueller.lua"]:
     code = open(f"{ADDON}/{f}", encoding="utf-8").read()
     fn = lua.eval("function(code, name) local f, err = loadstring(code, name) if not f then error(err) end return f end")(code, "@" + f)
     fn("WastedCoast", ns)
@@ -151,7 +153,7 @@ local realToast = ns.Toast
 ns.Toast = function(o) ns.toastsSeen[#ns.toastsSeen+1] = o return realToast(o) end
 
 -- Sider: 13 (fordelt på 4 faner), og Drilleri-siden findes
-check(#ns.pages == 13 and #ns.tabs == 4, "13 sider på 4 faner")
+check(#ns.pages == 14 and #ns.tabs == 4, "14 sider på 4 faner")
 ns.frame:Show()
 for i = 1, 13 do ns.ShowTab(i) end
 
@@ -383,12 +385,79 @@ SlashCmdList.WASTEDCOAST("minimap")
 check(db.settings.minimapHide and not mb:IsShown(), "/wc4l minimap skjuler knappen")
 SlashCmdList.WASTEDCOAST("minimap")
 check(not db.settings.minimapHide, "/wc4l minimap viser knappen igen")
+ns.ShowTab(14)
+check(ns.DuelStats("Nick") ~= nil, "demo-dueller kan tegnes")
 SlashCmdList.WASTEDCOAST("demo slut")
 for _, e in ipairs(db.needShame) do check(not e.demo, "demo fjernet") end
+for _, list in pairs(db.duels) do for _, d in ipairs(list) do check(not d.demo, "demo-dueller fjernet") end end
 ns.ShowTab(13)
+
+-- Level-toast: egen ding giver popup og XU med tid siden sidste level
+local nT = #ns.toastsSeen
+SENT = {}
+db.myLevelT = { [PLAYER] = NOW - 5400 }
+Fire("PLAYER_LEVEL_UP", 42)
+local lt = ns.toastsSeen[#ns.toastsSeen]
+check(#ns.toastsSeen == nT + 1 and lt.kind == "levelup" and lt.title == "Du nåede level 42", "egen level-toast")
+check(lt.text:find("1 t siden sidste level"), "tid siden sidste level: " .. lt.text)
+check(findSent("XU;Mathias;" .. PLAYER .. ";WARRIOR;42;5400"), "XU sendes")
+-- Vens ding: én popup, selv om livstegnet kommer bagefter
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;Andreas;Andyx;PRIEST;29;100;Elwynn;3", "GUILD", "Andyx")
+STARTED_LONG_AGO = true
+CLOCK = CLOCK + 1000
+nT = #ns.toastsSeen
+Fire("CHAT_MSG_ADDON", "WCOAST", "XU;Andreas;Andyx;PRIEST;30;7200", "GUILD", "Andyx")
+Fire("CHAT_MSG_ADDON", "WCOAST", "XU;Andreas;Andyx;PRIEST;30;7200", "PARTY", "Andyx")
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;Andreas;Andyx;PRIEST;30;100;Elwynn;3", "GUILD", "Andyx")
+check(#ns.toastsSeen == nT + 1, "kun én level-toast pr. ding: " .. (#ns.toastsSeen - nT))
+lt = ns.toastsSeen[#ns.toastsSeen]
+check(lt.title == "Andreas nåede level 30" and lt.text:find("2 t") and lt.text:find("rundt tal"), "vens level-toast: " .. lt.text)
+-- Gamle klienter uden XU: livstegnet giver stadig popup
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;Andreas;Andyx;PRIEST;31;100;Elwynn;3", "GUILD", "Andyx")
+check(#ns.toastsSeen == nT + 2 and ns.toastsSeen[#ns.toastsSeen].title == "Andreas nåede level 31", "level-toast fra livstegn")
+
+-- Dueller
+local w, l, fled = ns.ParseDuel("Mathiasx has defeated Nickchar in a duel")
+check(w == "Mathiasx" and l == "Nickchar" and not fled, "knockout-tekst")
+w, l, fled = ns.ParseDuel("Mathiasx has fled from Nickchar in a duel")
+check(w == "Nickchar" and l == "Mathiasx" and fled, "flygte-tekst (nummererede felter)")
+db.chars["Nickchar"] = "Nick"
+SENT = {}
+NOW = NOW + 10
+Fire("CHAT_MSG_SYSTEM", "Mathiasx has defeated Nickchar in a duel")
+NOW = NOW + 10
+Fire("CHAT_MSG_SYSTEM", "Mathiasx has defeated Nickchar in a duel")
+NOW = NOW + 10
+Fire("CHAT_MSG_SYSTEM", "Mathiasx has fled from Nickchar in a duel")
+NOW = NOW + 10
+Fire("CHAT_MSG_SYSTEM", "Mathiasx has defeated Randomgnome in a duel")
+Fire("CHAT_MSG_SYSTEM", "Frodex has defeated Randomgnome in a duel")
+local st = ns.DuelStats("Mathias")
+check(st.w == 3 and st.l == 1 and st.fw == 2 and st.fl == 1 and st.ow == 1 and st.fled == 1, "egne dueller tælles (ikke andres)")
+check(st.opp.Nick.w == 2 and st.opp.Nick.l == 1 and st.opp.Randomgnome.w == 1, "mod hvem")
+check(lastPrint():find("Randomgnome"), "chat ved duel: " .. lastPrint())
+check(findSent("XD;Mathias;"), "XD sendes")
+local w1, l1 = ns.DuelHeadToHead("Mathias", "Nick")
+check(w1 == 2 and l1 == 1, "head-to-head")
+-- Nick sender sin side af de samme dueller + en mod Jeppe
+db.chars["Jeppex"] = "Jeppe"
+nT = #ns.toastsSeen
+Fire("CHAT_MSG_ADDON", "WCOAST", "XD;Nick;Nickchar-1-Mathiasx;Nickchar;Mathiasx;0;0;" .. NOW .. ";Elwynn", "GUILD", "Nickchar")
+Fire("CHAT_MSG_ADDON", "WCOAST", "XD;Nick;Nickchar-2-Jeppex;Nickchar;Jeppex;1;0;" .. NOW .. ";Elwynn", "GUILD", "Nickchar")
+Fire("CHAT_MSG_ADDON", "WCOAST", "XD;Nick;Nickchar-2-Jeppex;Nickchar;Jeppex;1;0;" .. NOW .. ";Elwynn", "PARTY", "Nickchar")
+check(#ns.toastsSeen == nT + 1 and ns.toastsSeen[#ns.toastsSeen].title == "Nick slog Jeppe", "duel-toast mellem venner (ikke når jeg var med)")
+check(ns.DuelStats("Nick").w == 1 and ns.DuelStats("Nick").l == 1, "vens dueller, uden dubletter")
+check(ns.DuelStats("Mathias").w == 3, "vennens kopi tæller ikke dobbelt hos mig")
+ns.ShowTab(14)
+SENT = {}
+ns.SendMyExtras()
+check(findSent("XD;Mathias;"), "synk sender dueller")
+
 SlashCmdList.WASTEDCOAST("reset ja")
 check(#db.needShame == 0, "reset sletter need-synder")
+check(next(db.duels) == nil, "reset sletter dueller")
 ns.ShowTab(13)
+ns.ShowTab(14)
 return PASSES
 '''
 passes = lua.execute(TESTS, ns)

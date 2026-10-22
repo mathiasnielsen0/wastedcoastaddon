@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.8.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.9.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 ---
@@ -47,7 +47,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua` og (fra 0.7.2) mappen `media`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media` og (fra 0.9) `Dueller.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -187,6 +187,14 @@ For hver ven: hvor langt de er med de fem fraktioner, der giver heroic-nøgler
 Time). Grøn betyder Revered, så nøglen kan købes. Sidste kolonne er, hvor mange
 fraktioner vennen er exalted med. Hold musen over et felt for at se hver karakter.
 
+### Dueller (Rangliste > Dueller)
+Alle dueller, du er med i, bliver talt: vundet, tabt, og om nogen flygtede. Ranglisten
+viser sejre, tab, sejrsprocent, stillingen mod vennerne og den aktuelle stime (+3 = tre
+sejre i træk). Hold musen over en ven for at se alle modstandere, også dem uden for
+vennegruppen. Til højre står det indbyrdes regnskab mellem vennerne (rækken mod
+kolonnen, grøn = rækken fører) og de seneste dueller. Når to venner duellerer, får de
+andre en popup med stillingen.
+
 ### Drilleri
 Fanen samler alt det, der er lavet for at genere hinanden:
 - **Held-rangering:** hvem har haft de bedste rolls på det seneste. Addonet gemmer
@@ -224,7 +232,7 @@ knapper til at åbne vinduet, vise test-popups og synkronisere.
 ### Popups (toasts)
 Små beskeder øverst på skærmen:
 - **Ven logger ind** (højst en gang pr. ven pr. 10 minutter)
-- **Ven stiger i level**
+- **Ven stiger i level** (og dig selv), med det samme og med hvor lang tid det tog siden karakterens sidste level
 - **Wipe:** "Hvad FAaanden laver healer mand, kraftedme hele *Navn* party er død
   i *Instance*" (sendes til alle med addonet)
 - **Boss nedlagt** og **instance klaret** (kun til dig)

@@ -217,9 +217,48 @@ local function SendMyLevel()
 end
 
 -- Kaldes, når du selv stiger i level
+-- =============================================================================
+-- Level-toast: når nogen stiger i level, får alle en popup med det samme (XU-besked),
+-- med hvor lang tid det tog siden karakterens sidste level
+-- =============================================================================
+local levelToasted = {}   -- "ven-karakter" -> level, så livstegnet ikke giver en popup mere
+
+function ns.LevelToasted(friend, char, level)
+    return (levelToasted[tostring(friend) .. "-" .. tostring(char)] or 0) >= (level or 0)
+end
+
+local function LevelToastText(char, level, secs)
+    local parts = { char }
+    if secs and secs > 0 then parts[#parts + 1] = Duration(secs) .. " siden sidste level" end
+    local text = table.concat(parts, "  -  ")
+    if level == C.MAX_LEVEL then
+        text = text .. "\nMAX LEVEL! Endelig. Nu kan det rigtige spil begynde."
+    elseif level % 10 == 0 then
+        text = text .. "\nLevel " .. level .. ". Et rundt tal, tillykke!"
+    end
+    return text
+end
+
+local function ShowLevelToast(friend, char, class, level, secs, isMe)
+    levelToasted[friend .. "-" .. char] = level
+    ns.Toast({ kind = "levelup", title = (isMe and "Du" or friend) .. " nåede level " .. level,
+               text = LevelToastText(char, level, secs), class = class,
+               sound = (not isMe) and "levelup" or nil, friend = friend })
+end
+
 local function OnMyLevelUp(level)
     local db = DB()
     if not db.me or not level then return end
+    -- Tid siden karakterens sidste level (kun hvis vi så det)
+    db.myLevelT = db.myLevelT or {}
+    local char = UnitName("player")
+    local prevT = db.myLevelT[char]
+    db.myLevelT[char] = time()
+    local secs = prevT and (time() - prevT) or 0
+    local class = select(2, UnitClass("player"))
+    C.Send(string.format("XU;%s;%s;%s;%d;%d", db.me, char, class or "", level, secs), true)
+    ShowLevelToast(db.me, char, class, level, secs, true)
+
     local e = db.levelAt[db.me]
     if not e or level > e.l then
         db.levelAt[db.me] = { l = level, t = time() }
@@ -569,6 +608,16 @@ function ns.HandlePrankMessage(kind, t)
                        why = t[8], time = at, name = (t[10] or "?"):sub(1, 40) })
         end
 
+    elseif kind == "XD" then
+        if ns.HandleDuelMessage then ns.HandleDuelMessage(t) end
+
+    elseif kind == "XU" then
+        local friend, char, level = t[2], t[3], tonumber(t[5])
+        if ROSTER_SET[friend] and friend ~= db.me and char and char ~= "" and level
+            and not ns.LevelToasted(friend, char, level) then
+            ShowLevelToast(friend, char, t[4] ~= "" and t[4] or nil, level, tonumber(t[6]))
+        end
+
     elseif kind == "XL" then
         local friend, l, at = t[2], tonumber(t[3]), tonumber(t[4])
         if ROSTER_SET[friend] and friend ~= db.me and l and at and l > 0 then
@@ -604,6 +653,7 @@ function ns.SendPrankExtras()
     local db = DB()
     SendRecentRolls()
     SendMyLevel()
+    if ns.SendDuels then ns.SendDuels() end
     local sent = 0
     for i = #db.needShame, 1, -1 do
         local e = db.needShame[i]
@@ -896,10 +946,12 @@ function ns.MakePrankDemo()
                        time = now - math.random(600, 400000), demo = true })
         end
     end
+    if ns.MakeDuelDemo then ns.MakeDuelDemo() end
 end
 
 function ns.ClearPrankDemo()
     local db = DB()
+    if ns.ClearDuelDemo then ns.ClearDuelDemo() end
     for friend, e in pairs(db.levelAt) do
         if e.d then db.levelAt[friend] = nil end
     end
@@ -914,6 +966,7 @@ function ns.ResetPranks()
     wipe(db.needShame)
     db.emoteStats = { sent = {}, recv = {} }
     wipe(db.levelAt)
+    if ns.ResetDuels then ns.ResetDuels() end
 end
 
 -- Eksempler på de nye popups (gemmes og sendes ikke)

@@ -2151,7 +2151,8 @@ function ns.OnFriendHeartbeat(friend, char, class, level, zone, wasOnline, prevL
                 class = class, sound = "online", friend = friend,
             })
         end
-    elseif prevLevel and level and level == prevLevel + 1 then
+    elseif prevLevel and level and level == prevLevel + 1
+        and not (ns.LevelToasted and ns.LevelToasted(friend, char, level)) then
         ns.Toast({ kind = "levelup", title = friend .. " nåede level " .. level, text = char, class = class,
                    sound = "levelup", friend = friend })
     end
@@ -5160,7 +5161,7 @@ local GROUPS = {
     { label = "Venner",     icon = "INV_Misc_Head_Human_01",
       pages = { 1, 3, 11, 10, 12, 9 }, names = { "Kort", "Karakterer", "Gear", "Professions", "Reputation", "Guld" } },
     { label = "Rangliste",  icon = "Ability_Rogue_Sprint",
-      pages = { 2, 7 },                names = { "Scoreboard", "Race" } },
+      pages = { 2, 7, 14 },            names = { "Scoreboard", "Race", "Dueller" } },
     { label = "Loot & død", icon = "INV_Misc_Bone_HumanSkull_01",
       pages = { 4, 5, 8 },             names = { "Loot", "Instanser", "Statistik" } },
     { label = "Sjov",       icon = "Spell_Nature_Polymorph",
@@ -5475,7 +5476,7 @@ local function BuildUI()
     content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 36)
 
     ns.pages = {}
-    for i = 1, 13 do
+    for i = 1, 14 do
         local p = CreateFrame("Frame", nil, content)
         p:SetAllPoints(content)
         ns.pages[i] = p
