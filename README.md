@@ -140,8 +140,9 @@ Den med højest tabt-procent står øverst og får titlen *Uheldsfuglen*. Kun ro
 fra den nye version tæller.
 
 ### Guld
-En graf over hver vens samlede guld (alle karakterer) over tid. Der måles, hver
-gang du logger ud, og ved første login med den nye version. Vælg 7, 30 eller 90
+En graf over hver vens samlede guld (alle karakterer) over tid. Der måles, mens
+du spiller (højst hvert 10. minut, og kun når guldet har ændret sig), og når du
+logger ud. Nye målinger sendes til vennerne med det samme. Vælg 7, 30 eller 90
 dage eller det hele, og klik på et navn for at skjule eller vise vennen. Hold
 musen over et navn for at se, hvor meget vennen har tjent eller brugt i perioden.
 
@@ -212,7 +213,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4l loot epic` | Registrér kun epic og bedre (også `uncommon`, `rare`, `legendary`) |
 | `/wc4l demo` | Fyld med demo-data, så du kan se, hvordan det ser ud (kun lokalt) |
 | `/wc4l demo slut` | Fjern demo-data igen (rører ikke dine rigtige data) |
-| `/wc4l sync` | Bed vennerne sende deres data igen |
+| `/wc4l sync` | Det samme som knappen "Opdater": bed vennerne sende deres data nu |
 | `/wc4l sound` | Slå lyd til/fra |
 | `/wc4l sound <event>` | Test en lyd: `death`, `loot`, `wipe`, `online`, `levelup`, `achievement`, `bosskill` |
 | `/wc4l toast` | Slå popups (online, level, wipe) til/fra |
@@ -241,8 +242,13 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
   bosskills og sender de samlede tal. Trofæer sendes, når de låses op. Ved
   synk sendes alle dine egne tal og trofæer igen.
 - **Rolls, guld, professions, gear og reputation:** Hver spiller måler sine egne
-  og sender dem, når de ændrer sig. Guldmålingen fra logout sendes næste gang du
-  logger ind. Ved synk sendes det hele igen (de seneste 30 guldmålinger).
+  og sender dem, når de ændrer sig. Guld måles løbende og sendes med det samme.
+  Ved synk sendes det hele igen (de seneste 30 guldmålinger).
+- **Automatisk synk:** Hvert 10. minut beder addonet vennerne om deres data, så
+  du får det, du har misset, uden at logge ud.
+- **Knappen "Opdater"** nederst i vinduet (eller `/wc4l sync`) beder vennerne sende
+  alt med det samme. De svarer højst hvert 30. sekund på den, og ellers højst hvert
+  10. minut. Svaret kan tage op til et halvt minut at komme igennem.
 - **Wipe-popup:** Sendes, når hele din gruppe er død. Flere i samme gruppe giver
   kun én popup hos de andre.
 - **Når du logger ind:** Addonet beder vennerne om at sende deres egne karakterer,

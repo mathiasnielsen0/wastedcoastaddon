@@ -742,8 +742,9 @@ local function TouchMe()
     if ns.RefreshUI then ns.RefreshUI() end
 end
 
-local function RequestSync()
-    if db.me then Send("Q;" .. db.me) end
+-- force = true: vennerne svarer, selvom de har svaret for nylig (knappen "Opdater" og /wc4l sync)
+local function RequestSync(force)
+    if db.me then Send("Q;" .. db.me .. (force and ";1" or "")) end
 end
 
 local function IsLocalOnly(id)
@@ -1266,6 +1267,23 @@ do
         if last and not last.d and last[2] == total and (time() - last[1]) < 6 * 3600 then return end
         AddGoldSample(db.me, time(), total)
     end
+
+    -- Måles også mens du spiller: højst hvert 10. minut og kun når guldet har ændret sig.
+    -- Den nye måling sendes med det samme, så grafen ikke venter på logout.
+    local GOLD_EVERY = 600
+    local function CheckGold()
+        local total = MyTotalGold()
+        if not total then return end
+        local h = db.goldHist[db.me]
+        local last = h and h[#h]
+        if last and not last.d and (last[2] == total or (time() - last[1]) < GOLD_EVERY) then return end
+        local t = time()
+        if AddGoldSample(db.me, t, total) then
+            Send(string.format("G;%s;%d:%d", db.me, t, total))
+            if ns.RefreshUI then ns.RefreshUI() end
+        end
+    end
+    ns.CheckGold = CheckGold
 
     -- Sender dine seneste målinger, pakket ~10 pr. besked
     local function SendGoldHistory(max)
@@ -1995,7 +2013,8 @@ local function OnAddonMessage(prefix, message)
         local friend = t[2]
         if db.me and ROSTER_SET[friend] and friend ~= db.me then
             local now = time()
-            if not lastSyncReply[friend] or now - lastSyncReply[friend] > 600 then
+            local wait = (t[3] == "1") and 30 or 600
+            if not lastSyncReply[friend] or now - lastSyncReply[friend] > wait then
                 lastSyncReply[friend] = now
                 C_Timer.After(1 + math.random() * 6, RespondToSync)
             end
@@ -2014,6 +2033,27 @@ function ns.AfterIdentity()
     ns.ScheduleScan("prof", 2)
     ns.ScheduleScan("gear", 4)
     ns.ScheduleScan("rep", 6)
+end
+
+-- Knappen "Opdater": mål og send dine egne data, og bed vennerne sende deres med det samme
+local lastRefreshNow = -100
+function ns.RefreshNow()
+    if not db.me then
+        Print("Vælg først, hvem du er (|cffffd100/wc4l jeg|r).")
+        return
+    end
+    if GetTime() - lastRefreshNow < 15 then
+        Print("Opdaterer allerede. Vent et øjeblik.")
+        return
+    end
+    lastRefreshNow = GetTime()
+    SendHeartbeat()
+    ns.CheckGold()
+    ns.ScheduleScan("prof", 1)
+    ns.ScheduleScan("gear", 1)
+    ns.ScheduleScan("rep", 1)
+    RequestSync(true)
+    Print("Henter friske data fra vennerne. Det tager op til et halvt minut.")
 end
 
 local function SetMe(friend)
@@ -4708,6 +4748,8 @@ local function BuildUI()
     switch:SetPoint("LEFT", f.me, "RIGHT", 10, 0)
     local opts = MakeButton(f, 100, 20, "Indstillinger", function() ns.OpenOptions() end)
     opts:SetPoint("LEFT", switch, "RIGHT", 6, 0)
+    local refresh = MakeButton(f, 80, 20, "Opdater", function() ns.RefreshNow() end)
+    refresh:SetPoint("LEFT", opts, "RIGHT", 6, 0)
 
     local hint = Txt(f, "GameFontHighlightSmall")
     hint:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, 14)
@@ -4994,7 +5036,12 @@ events:SetScript("OnEvent", function(_, event, ...)
                 ns.ShowIdentityPicker()
             end
         end)
-        C_Timer.NewTicker(60, SendHeartbeat)
+        C_Timer.NewTicker(60, function()
+            SendHeartbeat()
+            ns.CheckGold()
+        end)
+        -- Hent vennernes data automatisk hvert 10. minut (de svarer højst så ofte uden "Opdater")
+        C_Timer.NewTicker(600, function() RequestSync() end)
         C_Timer.NewTicker(2, CheckWipe)
         OnZoneChanged()
 
@@ -5098,8 +5145,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
                 " eller bedre. Skift med |cffffd100/wc4l loot uncommon|rare|epic|legendary|r.")
         end
     elseif cmd == "sync" then
-        SendHeartbeat()
-        RequestSync()
+        ns.RefreshNow()
         Print("Anmoder vennerne om at sende deres data...")
     elseif cmd == "demo" then
         if arg == "slut" or arg == "clear" then
