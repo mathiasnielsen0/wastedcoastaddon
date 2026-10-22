@@ -4,9 +4,10 @@ Addon til vennegruppen: grafisk overblik over jer alle, et scoreboard, en oversi
 over alle karakterer hver ven spiller, en loot-tracker for rare og bedre, en
 dødstæller, wipe- og boss-tæller pr. instance, egne trofæer, popups, en
 levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions,
-gear og reputation. Alt synkroniserer mellem jer.
+gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
+emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.5.1 (TBC Classic Anniversary, interface 20506)
+Version 0.6.0 (TBC Classic Anniversary, interface 20506)
 
 ---
 
@@ -41,7 +42,8 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua` og mappen `sounds`. Kopiér hele `WastedCoast`-mappen.
+**Nye filer:** `Sounds.lua`, mappen `sounds` og (fra 0.6) `Drilleri.lua`. Kopiér hele
+`WastedCoast`-mappen.
 
 ---
 
@@ -164,6 +166,31 @@ For hver ven: hvor langt de er med de fem fraktioner, der giver heroic-nøgler
 Time). Grøn betyder Revered, så nøglen kan købes. Sidste kolonne er, hvor mange
 fraktioner vennen er exalted med. Hold musen over et felt for at se hver karakter.
 
+### Drilleri
+Fanen samler alt det, der er lavet for at genere hinanden:
+- **Held-rangering:** hvem har haft de bedste rolls på det seneste. Addonet gemmer
+  dine seneste 30 rolls (need/greed og `/roll` 1-100) og sammenligner snittet med
+  rent held. *Held 80%* betyder, at dine rolls er bedre end 80% af, hvad tilfældighed
+  ville give; 50% er helt normalt. Kræver mindst 5 rolls. Den heldigste får titlen
+  *Fætter Højben*.
+- **Skammens hat:** den, der døde sidst, bærer hatten (dødningehovedet på kortet),
+  indtil en anden dør. Fanen viser, hvor længe hatten har siddet, og hvem der har
+  båret den længst i alt.
+- **Emote-angreb:** klik på en ven (eller skriv `/wc4l angrib nick`) for at sende en
+  tilfældig fornærmelse. Vennen får en popup, og står I sammen (i gruppe eller med
+  vennen som target), laver din karakter også en rigtig emote. Én gang pr. 15
+  sekunder.
+- **Need-politiet:** når du vinder noget på need, holder addonet øje med det. Tager du
+  det på, er du frikendt. Sælger, disenchanter eller giver du det væk uden at have haft
+  det på, eller ligger det ubrugt i tasken i 3 dage, bliver du hængt ud hos alle.
+
+### Dødsannoncer
+Når en ven dør, får alle en popup med en dødsannonce, fx *"Nick blev overlistet af
+en level 12 Murloc Forager"*. Annoncen afhænger af, hvordan man døde (fald, drukning,
+lava, et alt for lavt eller højt mob osv.), og alle får den samme tekst. Mobbets level
+kommer med, hvis det kunne ses (target eller nameplate), da man døde. Slå dem fra med
+`/wc4l annonce`.
+
 ### Indstillinger
 Under **Options > AddOns > Wasted Coast** kan du slå lyd, chatbeskeder og popups
 til og fra, slå synk uden guild til og fra, vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
@@ -201,6 +228,8 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 - **Wipe-konge**: flest wipes
 - **Faldskade-konge**: flest dødsfald af fald
 - **Uheldsfuglen**: højest andel tabte rolls (mindst 5 rolls)
+- **Fætter Højben**: bedst held i de seneste rolls (over 50%)
+- **Skammens hat**: den, der døde sidst
 
 ---
 
@@ -223,6 +252,10 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4l toast` | Slå popups (online, level, wipe) til/fra |
 | `/wc4l testtoast` | Vis eksempler på popups (sendes ikke til de andre) |
 | `/wc4l announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
+| `/wc4l angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
+| `/wc4l annonce` | Slå dødsannoncer til/fra |
+| `/wc4l emotes` | Slå popups for emote-angreb mod dig til/fra |
+| `/wc4l testannonce` | Vis eksempler på dødsannonce, Need-politi og emote-angreb |
 | `/wc4l test` | Lav et falsk dødsfald (sendes ikke til de andre) |
 | `/wc4l testloot` | Lav en falsk loot win (sendes ikke til de andre) |
 | `/wc4l reset ja` | Slet alle data (inkl. valg af, hvem du er) |

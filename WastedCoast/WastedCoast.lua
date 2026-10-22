@@ -11,6 +11,8 @@ local addonName, ns = ...
 --   * v0.5: dødsstatistik, uheldsrating for rolls, guldgraf, professions, gear,
 --           reputation og et indstillingsvindue i spillets Options
 --   * v0.5.1: synk uden fælles guild (skjult kanal og whispers som reserve)
+--   * v0.6: drillerier (dødsannoncer, Skammens hat, Need-politiet, emote-angreb og
+--           held-rangering). De ligger i Drilleri.lua, som bruger ns.core herfra.
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -610,6 +612,7 @@ local function BuildStats()
             chars = nChars, deaths = d, loot = l, gold = gold, wipes = rw, clears = rc, kills = rk,
             falls = falls[name] or 0,
             unluck = math.floor((ns.LossRate(db.rolls[name]) or 0) * 100 + 0.5),
+            luck = ns.LuckPercent and ns.LuckPercent(name),
             online = IsOnline(name), isMe = (name == db.me),
             -- Wasted Coast-point: loot x 5 + højeste level - døde x 3
             points = l * 5 + maxLevel - d * 3,
@@ -641,11 +644,19 @@ local function ComputeTitles(list)
     award("wipes", "Wipe-konge")
     award("falls", "Faldskade-konge")
     award("unluck", "Uheldsfuglen")
+    award("luck", "Fætter Højben", 51)
+    -- Skammens hat: den, der døde sidst, indtil en anden dør
+    local hat = ns.HatHolder and ns.HatHolder()
+    if hat then
+        titles[hat] = titles[hat] or {}
+        table.insert(titles[hat], 1, "Skammens hat")
+        holders["Skammens hat"] = hat
+    end
     return titles, holders
 end
 
 local TITLE_ORDER = { "Klovnen", "Lootgoblin", "Rigmanden", "Højest level", "Alt-junkie", "Wipe-konge",
-                      "Faldskade-konge", "Uheldsfuglen" }
+                      "Faldskade-konge", "Uheldsfuglen", "Fætter Højben", "Skammens hat" }
 
 -- =============================================================================
 -- Netværk: kø, beskeder og synkronisering
@@ -828,7 +839,7 @@ end
 local function SerializeDeath(ev)
     return table.concat({
         "D", ev.id, ev.name, ev.class or "", ev.killer, ev.ability,
-        ev.level, ev.zone, ev.time, ev.friend or "",
+        ev.level, ev.zone, ev.time, ev.friend or "", ev.klvl or "",
     }, ";")
 end
 
@@ -839,7 +850,7 @@ local function DeserializeDeath(t)
     return {
         id = t[2], name = t[3], class = t[4], killer = t[5], ability = t[6],
         level = tonumber(t[7]) or 0, zone = t[8], time = tonumber(t[9]) or 0,
-        friend = f,
+        friend = f, klvl = tonumber(t[11]),
     }
 end
 
@@ -966,6 +977,7 @@ local function AddDeath(ev)
             Print(string.format("%s%s døde til %s i %s.", ColorName(shown, ev.class), extra, what, ev.zone))
         end
         PlayEventSound("death", f)
+        if ns.OnFreshDeath then ns.OnFreshDeath(ev, f) end
     end
 
     if ns.AfterEvent then ns.AfterEvent() end
@@ -1008,6 +1020,7 @@ local function OnPlayerDead()
         zone    = Clean(GetZoneText()),
         time    = time(),
         friend  = db.me,
+        klvl    = ns.KillerLevel and ns.KillerLevel(killer) or nil,
     }
     if AddDeath(ev) then
         Send(SerializeDeath(ev), true)
@@ -1167,6 +1180,7 @@ do
         r.cnt = r.cnt + 1
         if not r.low or value < r.low then r.low = value end
         if not r.high or value > r.high then r.high = value end
+        if ns.AddRecentRoll then ns.AddRecentRoll(value) end
         RollChanged()
     end
 
@@ -1199,6 +1213,7 @@ local function OnLootMessage(msg)
                 end
                 recentRoll[it.id] = GetTime()
                 ns.CountRollWin(it)
+                if how == "need" and ns.WatchNeed then ns.WatchNeed(it) end
                 RecordLoot(it, how, false)
             else
                 -- "You receive loot" kommer også lige efter en roll-sejr: vent lidt og tjek
@@ -2112,6 +2127,7 @@ function ns.SendMyExtras()
             if c.rep and next(c.rep) then ns.SendRep(char, c.rep) end
         end
     end
+    if ns.SendPrankExtras then ns.SendPrankExtras() end
 end
 
 ns.CheckBossDeath = CheckBossDeath
@@ -2164,6 +2180,10 @@ local function OnAddonMessage(prefix, message, chatType, sender)
     elseif kind == "S" or kind == "B" or kind == "W" or kind == "A"
         or kind == "R" or kind == "G" or kind == "P" or kind == "E" or kind == "F" then
         HandleExtraMessage(kind, t)
+
+    elseif kind and kind:sub(1, 1) == "X" then
+        -- v0.6: drillerier (XE emote-angreb, XN need-politi, XK seneste rolls)
+        if ns.HandlePrankMessage then ns.HandlePrankMessage(kind, t) end
 
     elseif kind == "Q" then
         local friend = t[2]
@@ -2357,6 +2377,12 @@ local function BuildCard(parent, index, friend)
     card.char:SetPoint("TOPLEFT", card.name, "BOTTOMLEFT", 0, -3)
     card.char:SetTextColor(0.7, 0.7, 0.76)
 
+    card.hat = card:CreateTexture(nil, "OVERLAY")
+    card.hat:SetSize(22, 22)
+    card.hat:SetPoint("CENTER", card.icon, "TOPLEFT", 4, -2)
+    card.hat:SetTexture(ns.HAT_ICON or "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01")
+    card.hat:Hide()
+
     card.dot = card:CreateTexture(nil, "OVERLAY")
     card.dot:SetSize(9, 9)
     card.dot:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -12)
@@ -2503,6 +2529,7 @@ local function RefreshOverview()
         end
         card.charsText:SetText(s.chars > 0 and Plural(s.chars, "karakter", "karakterer") or "Ingen karakterer endnu")
         card.titles:SetText(TitleText(titles[s.name]))
+        card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == "Skammens hat")
     end
 
     -- Seneste dødsfald
@@ -3057,6 +3084,9 @@ local TOAST_STYLE = {
     trophy      = { border = { 0.95, 0.78, 0.25 }, bg = { 0.10, 0.08, 0.04 } },
     achievement = { border = { 1.00, 0.82, 0.20 }, bg = { 0.14, 0.10, 0.04 } },
     info        = { border = { 0.60, 0.60, 0.66 }, bg = { 0.07, 0.07, 0.09 } },
+    obit        = { border = { 0.55, 0.55, 0.60 }, bg = { 0.02, 0.02, 0.03 } },
+    police      = { border = { 0.25, 0.45, 1.00 }, bg = { 0.04, 0.05, 0.12 } },
+    emote       = { border = { 1.00, 0.45, 0.75 }, bg = { 0.10, 0.04, 0.08 } },
 }
 
 local toast = { queue = {}, frame = nil, active = nil }
@@ -3771,6 +3801,10 @@ do
                         GameTooltip:AddLine(" ")
                         GameTooltip:AddDoubleLine("Snit-roll", string.format("%.1f (forventet 50,5)", avg), 0.8, 0.8, 0.8, 1, 1, 1)
                         GameTooltip:AddDoubleLine("Laveste / højeste", string.format("%d / %d", r.low or 0, r.high or 0), 0.8, 0.8, 0.8, 1, 1, 1)
+                    end
+                    local luck = ns.LuckStats and ns.LuckStats(d.name)
+                    if luck then
+                        GameTooltip:AddDoubleLine("Held, seneste " .. luck.n .. " rolls", string.format("%d%%", math.floor(luck.pct + 0.5)), 0.8, 0.8, 0.8, 0.5, 0.8, 1)
                     end
                     if (r.rolls or 0) < ns.ROLL_MIN then
                         GameTooltip:AddLine(" ")
@@ -4861,14 +4895,14 @@ local function BuildUI()
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
 
-    -- Faner i to rækker af seks
+    -- Faner i to rækker af syv
     ns.tabs = {}
     local labels = { "Overblik", "Scoreboard", "Karakterer", "Loot", "Instanser", "Trofæer",
-                     "Race", "Statistik", "Guld", "Professions", "Gear", "Reputation" }
+                     "Race", "Statistik", "Guld", "Professions", "Gear", "Reputation", "Drilleri" }
     for i, label in ipairs(labels) do
-        local tb = MakeButton(f, 118, 26, label, function() ns.ShowTab(i) end)
-        local col, row = (i - 1) % 6, math.floor((i - 1) / 6)
-        tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + col * 122, -42 - row * 30)
+        local tb = MakeButton(f, 101, 26, label, function() ns.ShowTab(i) end)
+        local col, row = (i - 1) % 7, math.floor((i - 1) / 7)
+        tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + col * 105, -42 - row * 30)
         ns.tabs[i] = tb
     end
 
@@ -5025,6 +5059,7 @@ do
         for friend, r in pairs(db.rolls) do
             if r.demo then db.rolls[friend] = nil end
         end
+        if ns.ClearPrankDemo then ns.ClearPrankDemo() end
         for friend, h in pairs(db.goldHist) do
             for i = #h, 1, -1 do
                 if h[i].d then table.remove(h, i) end
@@ -5137,6 +5172,7 @@ do
                 end
             end
         end
+        if ns.MakePrankDemo then ns.MakePrankDemo() end
         if ns.RefreshUI then ns.RefreshUI() end
     end
 
@@ -5371,6 +5407,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         local a = ACH[math.random(#ACH)]
         ns.Toast({ kind = "achievement", head = "TROFÆ LÅST OP", title = a.name, text = a.desc, icon = a.icon,
                    pts = a.pts, sound = "achievement", friend = db.me, force = true })
+        if ns.TestPrankToasts then ns.TestPrankToasts() end
     elseif cmd == "announce" then
         db.settings.announce = not db.settings.announce
         Print("Beskeder i chat: " .. (db.settings.announce and "til" or "fra"))
@@ -5422,6 +5459,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
             wipe(db.runs)
             wipe(db.rolls)
             wipe(db.goldHist)
+            if ns.ResetPranks then ns.ResetPranks() end
             wipe(db.ach)
             wipe(db.demoAch)
             db.achInit = nil
@@ -5437,6 +5475,8 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         else
             Print("Skriv |cffffd100/wc4l reset ja|r for at slette alle data.")
         end
+    elseif ns.PrankSlash and ns.PrankSlash(cmd, arg) then
+        -- klaret i Drilleri.lua (angrib, annonce, emotes, testannonce)
     else
         Print("Kommandoer:")
         print("  /wc4l              - vis/skjul vinduet")
@@ -5451,8 +5491,26 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print("  /wc4l toast        - slå popups (online, wipe, level) til/fra")
         print("  /wc4l testtoast    - vis eksempler på popups")
         print("  /wc4l announce     - slå chat-beskeder til/fra")
+        print("  /wc4l angrib <ven> - send et emote-angreb til en ven")
+        print("  /wc4l annonce      - slå dødsannoncer til/fra")
+        print("  /wc4l emotes       - slå popups for emote-angreb mod dig til/fra")
+        print("  /wc4l testannonce  - vis en test-dødsannonce")
         print("  /wc4l test         - lav et falsk dødsfald")
         print("  /wc4l testloot     - lav en falsk loot win")
         print("  /wc4l reset ja     - slet alle data")
     end
 end
+
+-- =============================================================================
+-- v0.6: det, Drilleri.lua skal bruge herfra (filen indlæses efter denne)
+-- =============================================================================
+ns.core = {
+    ROSTER = ROSTER, ROSTER_SET = ROSTER_SET, ENV_NAMES = ENV_NAMES,
+    QUALITY_HEX = QUALITY_HEX, EXTRA_PAGES = EXTRA_PAGES,
+    COL_BG = COL_BG, COL_PANEL = COL_PANEL, COL_BORDER = COL_BORDER, COL_GOLD = COL_GOLD,
+    COL_BTN = COL_BTN, COL_SELECT = COL_SELECT,
+    Print = Print, ClassColor = ClassColor, ColorName = ColorName, FormatAgo = FormatAgo, Plural = Plural,
+    FormatToPattern = FormatToPattern, FriendOfChar = FriendOfChar, EventFriend = EventFriend,
+    IsOnline = IsOnline, BuildStats = BuildStats, Send = Send,
+    MakeBox = MakeBox, Txt = Txt, Field = Field, MakeButton = MakeButton,
+}
