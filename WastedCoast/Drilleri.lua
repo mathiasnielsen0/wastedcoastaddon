@@ -571,7 +571,7 @@ local lastAttack = -100
 function ns.EmoteAttack(target)
     local db = DB()
     if not db.me then
-        Print("Vælg først, hvem du er (|cffffd100/wc4f jeg|r).")
+        Print("Vælg først, hvem du er (|cffffd100/wc4ever jeg|r).")
         return
     end
     if not ROSTER_SET[target] or target == db.me then return end
@@ -1002,7 +1002,7 @@ function ns.PrankSlash(cmd, arg)
     local db = DB()
     if cmd == "angrib" or cmd == "emote" then
         local name = FindFriend(arg)
-        if name then ns.EmoteAttack(name) else Print("Hvem? Skriv fx |cffffd100/wc4f angrib nick|r.") end
+        if name then ns.EmoteAttack(name) else Print("Hvem? Skriv fx |cffffd100/wc4ever angrib nick|r.") end
         return true
     elseif cmd == "annonce" or cmd == "annoncer" then
         db.settings.obits = (db.settings.obits == false)

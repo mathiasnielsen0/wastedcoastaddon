@@ -1,5 +1,5 @@
 ## Interface: 20506, 16001
-## Title: Wasted Coast Forever (WC4F)
+## Title: Wasted Coast Forever (WC4ever)
 ## Notes: Venne-overblik, scoreboard, loot, dødsstatistik, rolls, guldgraf, professions, gear, reputation, drillerier og dueller. Synkroniserer i party, raid, guild og en skjult kanal, så I ikke behøver samme guild.
 ## Author: Dig
 ## Version: 0.9.2

@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Wasted Coast Forever (WC4F) installer
+title Wasted Coast Forever (WC4ever) installer
 
 set "SRC=%~dp0WastedCoast"
 if not exist "%SRC%\WastedCoast.toc" (
@@ -12,7 +12,7 @@ if not exist "%SRC%\WastedCoast.toc" (
 )
 
 echo ==============================================
-echo   Wasted Coast Forever (WC4F) - installer
+echo   Wasted Coast Forever (WC4ever) - installer
 echo ==============================================
 echo.
 
@@ -71,7 +71,7 @@ echo.
 echo Naeste skridt:
 echo   1. Start WoW (eller skriv /reload hvis spillet allerede koerer)
 echo   2. Tjek at Wasted Coast Forever er sat til paa addon-listen ved karaktervalg
-echo   3. Skriv /wc4f i spillet
+echo   3. Skriv /wc4ever i spillet
 echo.
 pause
 exit /b 0

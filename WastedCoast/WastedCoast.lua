@@ -1,7 +1,7 @@
 local addonName, ns = ...
 
 -- =============================================================================
--- Wasted Coast Forever (WC4F)
+-- Wasted Coast Forever (WC4ever)
 --   * Kort-overblik over vennerne
 --   * Scoreboard (sorterbart)
 --   * Karakterer: alle karakterer hver ven har været logget ind med
@@ -15,11 +15,11 @@ local addonName, ns = ...
 --           held-rangering). De ligger i Drilleri.lua, som bruger ns.core herfra.
 --   * v0.7: virker både på TBC Anniversary og WoW Forever (max level, instanser og API)
 --   * v0.7.1: flottere UI (faner med ikoner, skygge, glans, statusbars og pænere toasts)
---   * v0.7.2: WC4F-logo ved minimappet (klik åbner vinduet)
+--   * v0.7.2: WC4L-logo ved minimappet (klik åbner vinduet)
 --   * v0.8: kun fire faner (Venner, Rangliste, Loot & død, Sjov) med undersider
 --   * v0.8.1: legacy points pr. ven på WoW Forever
 --   * v0.9.1: honor points og honorable kills pr. ven
---   * v0.9.2: nyt navn: Wasted Coast Forever (WC4F), /wc4f (/wc4l virker stadig)
+--   * v0.9.2: nyt navn: Wasted Coast Forever (WC4ever), /wc4ever (/wc4l virker stadig)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -249,7 +249,7 @@ local lastDamage    -- { t = GetTime(), source = "...", ability = "..." }
 -- Hjælpefunktioner
 -- =============================================================================
 local function Print(msg)
-    print("|cff33ff99WC4F:|r " .. msg)
+    print("|cff33ff99WC4ever:|r " .. msg)
 end
 
 -- Beskeder bruger ";" som skilletegn, så det må ikke findes i felterne
@@ -338,7 +338,7 @@ local function PickSound(event, friend)
     return list[math.random(#list)]
 end
 
--- Afspiller lyden til et event. Returnerer ok, beskrivelse (bruges af /wc4f sound <event>)
+-- Afspiller lyden til et event. Returnerer ok, beskrivelse (bruges af /wc4ever sound <event>)
 local function PlayEventSound(event, friend, force)
     if not db or (not db.settings.sound and not force) then return false, "lyd er slået fra" end
     local note
@@ -400,7 +400,7 @@ local function InitDB()
     db.friends = db.friends or {}    -- ven -> { chars = { karakter -> { class, level, gold, zone, seen } } }
     db.runs = db.runs or {}          -- ven -> instans -> { wipes, clears, boss = { navn = antal }, last }
     db.ach = db.ach or {}            -- ven -> trofæ-id -> tidspunkt
-    db.demoAch = db.demoAch or {}    -- demo-trofæer (fjernes af /wc4f demo slut)
+    db.demoAch = db.demoAch or {}    -- demo-trofæer (fjernes af /wc4ever demo slut)
     db.rolls = db.rolls or {}        -- ven -> { rolls, wins, sum, cnt, low, high }
     db.goldHist = db.goldHist or {}  -- ven -> { { tid, kobber }, ... } sorteret efter tid
     db.legacy = db.legacy or {}      -- ven -> { p = legacy points, c = klarede challenges, t } (kun WoW Forever)
@@ -1032,7 +1032,7 @@ local function TouchMe()
     if ns.RefreshUI then ns.RefreshUI() end
 end
 
--- force = true: vennerne svarer, selvom de har svaret for nylig (knappen "Opdater" og /wc4f sync)
+-- force = true: vennerne svarer, selvom de har svaret for nylig (knappen "Opdater" og /wc4ever sync)
 local function RequestSync(force)
     if not db.me then return end
     local msg = "Q;" .. db.me .. (force and ";1" or "")
@@ -2561,7 +2561,7 @@ end
 local lastRefreshNow = -100
 function ns.RefreshNow()
     if not db.me then
-        Print("Vælg først, hvem du er (|cffffd100/wc4f jeg|r).")
+        Print("Vælg først, hvem du er (|cffffd100/wc4ever jeg|r).")
         return
     end
     if GetTime() - lastRefreshNow < 15 then
@@ -3526,10 +3526,10 @@ local function RefreshLoot()
         else
             ns.lootEmpty:SetText("Intet loot matcher filteret.")
         end
-        ns.lootInfo:SetText(minName .. " eller bedre registreres  -  /wc4f loot uncommon|rare|epic|legendary ændrer grænsen")
+        ns.lootInfo:SetText(minName .. " eller bedre registreres  -  /wc4ever loot uncommon|rare|epic|legendary ændrer grænsen")
     else
         ns.lootEmpty:SetText("")
-        ns.lootInfo:SetText(string.format("Viser %d-%d af %d  -  %s eller bedre  -  rul med musehjulet  -  /wc4f loot uncommon|rare|epic|legendary",
+        ns.lootInfo:SetText(string.format("Viser %d-%d af %d  -  %s eller bedre  -  rul med musehjulet  -  /wc4ever loot uncommon|rare|epic|legendary",
             offset + 1, math.min(offset + LOOT_ROWS, total), total, minName))
     end
 end
@@ -5140,12 +5140,12 @@ do
 
         local title = Txt(p, "GameFontNormalLarge")
         title:SetPoint("TOPLEFT", p, "TOPLEFT", 16, -16)
-        title:SetText("Wasted Coast Forever (WC4F)")
+        title:SetText("Wasted Coast Forever (WC4ever)")
         title:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
         local sub = Txt(p, "GameFontHighlightSmall")
         sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
         sub:SetTextColor(0.6, 0.6, 0.66)
-        sub:SetText("Alt kan også styres med /wc4f. Ændringer gælder med det samme.")
+        sub:SetText("Alt kan også styres med /wc4ever. Ændringer gælder med det samme.")
 
         p.checks = {}
         local checks = {
@@ -5201,7 +5201,7 @@ do
             p.meBtns[i] = b
         end
 
-        local open = MakeButton(p, 150, 24, "Åbn WC4F", function()
+        local open = MakeButton(p, 150, 24, "Åbn WC4ever", function()
             if ns.frame then ns.frame:Show() end
         end)
         open:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -436)
@@ -5370,7 +5370,7 @@ end
 
 ns.LOGO = "Interface\\AddOns\\" .. addonName .. "\\media\\logo"
 
--- WC4F-logo ved minimappet: venstreklik åbner/lukker, højreklik åbner indstillinger, træk flytter den
+-- WC4ever-logo ved minimappet: venstreklik åbner/lukker, højreklik åbner indstillinger, træk flytter den
 function ns.BuildMinimapButton()
     if ns.minimapButton or not Minimap then return end
     local b = CreateFrame("Button", "WastedCoastMinimapButton", Minimap)
@@ -5418,14 +5418,14 @@ function ns.BuildMinimapButton()
     end)
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:AddLine("Wasted Coast Forever (WC4F)", COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+        GameTooltip:AddLine("Wasted Coast Forever (WC4ever)", COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
         local online = 0
         for _, name in ipairs(ROSTER) do if IsOnline(name) then online = online + 1 end end
         GameTooltip:AddLine(string.format("%d af %d venner online", online, #ROSTER), 1, 1, 1)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Venstreklik: åbn/luk vinduet", 0.7, 0.7, 0.76)
         GameTooltip:AddLine("Højreklik: indstillinger", 0.7, 0.7, 0.76)
-        GameTooltip:AddLine("Træk: flyt knappen  -  skjul med /wc4f minimap", 0.7, 0.7, 0.76)
+        GameTooltip:AddLine("Træk: flyt knappen  -  skjul med /wc4ever minimap", 0.7, 0.7, 0.76)
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -5544,7 +5544,7 @@ local function BuildUI()
     local sub = Txt(f, "GameFontHighlightSmall")
     sub:SetPoint("LEFT", title, "RIGHT", 10, -2)
     sub:SetTextColor(0.6, 0.6, 0.68)
-    sub:SetText("WC4F  -  vi dør sammen")
+    sub:SetText("WC4ever  -  vi dør sammen")
 
     local ver = Txt(f, "GameFontHighlightSmall")
     ver:SetPoint("TOPRIGHT", f, "TOPRIGHT", -36, -13)
@@ -5914,12 +5914,12 @@ do
         ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_LEAVE", HideChannelNotice)
     end
 
-    -- /wc4f status: hvordan hver ven nås lige nu
+    -- /wc4ever status: hvordan hver ven nås lige nu
     local VIA_LABEL = { GUILD = "guild", PARTY = "party", RAID = "raid", CHANNEL = "skjult kanal" }
     function ns.PrintRoutes()
         local id = (GetChannelName(route.CHANNEL)) or 0
         if db.settings.fallbackSync == false then
-            Print("Synk uden guild er slået fra (|cffffd100/wc4f kanal|r slår den til).")
+            Print("Synk uden guild er slået fra (|cffffd100/wc4ever kanal|r slår den til).")
         elseif not route.channelOK then
             Print("Den skjulte kanal virker ikke i denne klient. Vennerne nås via whisper.")
         else
@@ -5984,7 +5984,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         ns.BuildOptions()
         ns.InitFallbackFilters()
         StartPump()
-        Print("indlæst (" .. GAME.label .. "). Skriv /wc4f for at åbne vinduet.")
+        Print("indlæst (" .. GAME.label .. "). Skriv /wc4ever for at åbne vinduet.")
 
     elseif event == "PLAYER_LOGIN" then
         -- Den skjulte synk-kanal: efter spillets egne kanaler, så de beholder /1 og /2
@@ -6077,7 +6077,7 @@ end)
 -- =============================================================================
 -- Slash-kommandoer
 -- =============================================================================
-SLASH_WASTEDCOAST1 = "/wc4f"
+SLASH_WASTEDCOAST1 = "/wc4ever"
 SLASH_WASTEDCOAST2 = "/wastedcoast"
 SLASH_WASTEDCOAST3 = "/wc4l"   -- gammelt navn, virker stadig
 SlashCmdList["WASTEDCOAST"] = function(input)
@@ -6104,7 +6104,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         else
             db.settings.sound = not db.settings.sound
             Print("Lyd: " .. (db.settings.sound and "til" or "fra") ..
-                ".  Test en lyd med |cffffd100/wc4f sound <event>|r (" .. table.concat(SOUND_EVENTS, ", ") .. ").")
+                ".  Test en lyd med |cffffd100/wc4ever sound <event>|r (" .. table.concat(SOUND_EVENTS, ", ") .. ").")
         end
     elseif cmd == "toast" then
         db.settings.toasts = not db.settings.toasts
@@ -6129,7 +6129,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
             Print("Registrerer nu loot af kvalitet |cffffd100" .. QUALITY_NAME[levels[arg]] .. "|r eller bedre.")
         else
             Print("Registrerer loot af kvalitet " .. (QUALITY_NAME[db.settings.minQuality] or "Rare") ..
-                " eller bedre. Skift med |cffffd100/wc4f loot uncommon|rare|epic|legendary|r.")
+                " eller bedre. Skift med |cffffd100/wc4ever loot uncommon|rare|epic|legendary|r.")
         end
     elseif cmd == "sync" then
         ns.RefreshNow()
@@ -6145,7 +6145,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
             Print("Demo-data er fjernet.")
         else
             ns.MakeDemo()
-            Print("Demo-data lagt ind (kun lokalt). Fjern det igen med |cffffd100/wc4f demo slut|r.")
+            Print("Demo-data lagt ind (kun lokalt). Fjern det igen med |cffffd100/wc4ever demo slut|r.")
             ns.frame:Show()
         end
     elseif cmd == "test" then
@@ -6184,32 +6184,32 @@ SlashCmdList["WASTEDCOAST"] = function(input)
             ns.RefreshUI()
             Print("Alle data er slettet.")
         else
-            Print("Skriv |cffffd100/wc4f reset ja|r for at slette alle data.")
+            Print("Skriv |cffffd100/wc4ever reset ja|r for at slette alle data.")
         end
     elseif ns.PrankSlash and ns.PrankSlash(cmd, arg) then
         -- klaret i Drilleri.lua (angrib, annonce, emotes, testannonce)
     else
         Print("Kommandoer:")
-        print("  /wc4f              - vis/skjul vinduet")
-        print("  /wc4f jeg          - vælg, hvem du er")
-        print("  /wc4f config       - åbn indstillingerne (også under Options > AddOns)")
-        print("  /wc4f loot         - vis/skift minimumskvalitet for loot (uncommon, rare, epic, legendary)")
-        print("  /wc4f demo         - fyld med demo-data (|cffffd100demo slut|r fjerner det)")
-        print("  /wc4f sync         - hent data fra vennerne igen")
-        print("  /wc4f status       - se, hvordan hver ven nås (guild, gruppe, kanal eller whisper)")
-        print("  /wc4f kanal        - slå synk uden guild til/fra")
-        print("  /wc4f sound        - slå lyd til/fra  (|cffffd100sound <event>|r tester en lyd)")
-        print("  /wc4f toast        - slå popups (online, wipe, level) til/fra")
-        print("  /wc4f minimap      - vis/skjul WC4F-knappen ved minimappet")
-        print("  /wc4f testtoast    - vis eksempler på popups")
-        print("  /wc4f announce     - slå chat-beskeder til/fra")
-        print("  /wc4f angrib <ven> - send et emote-angreb til en ven")
-        print("  /wc4f annonce      - slå dødsannoncer til/fra")
-        print("  /wc4f emotes       - slå popups for emote-angreb mod dig til/fra")
-        print("  /wc4f testannonce  - vis en test-dødsannonce")
-        print("  /wc4f test         - lav et falsk dødsfald")
-        print("  /wc4f testloot     - lav en falsk loot win")
-        print("  /wc4f reset ja     - slet alle data")
+        print("  /wc4ever              - vis/skjul vinduet")
+        print("  /wc4ever jeg          - vælg, hvem du er")
+        print("  /wc4ever config       - åbn indstillingerne (også under Options > AddOns)")
+        print("  /wc4ever loot         - vis/skift minimumskvalitet for loot (uncommon, rare, epic, legendary)")
+        print("  /wc4ever demo         - fyld med demo-data (|cffffd100demo slut|r fjerner det)")
+        print("  /wc4ever sync         - hent data fra vennerne igen")
+        print("  /wc4ever status       - se, hvordan hver ven nås (guild, gruppe, kanal eller whisper)")
+        print("  /wc4ever kanal        - slå synk uden guild til/fra")
+        print("  /wc4ever sound        - slå lyd til/fra  (|cffffd100sound <event>|r tester en lyd)")
+        print("  /wc4ever toast        - slå popups (online, wipe, level) til/fra")
+        print("  /wc4ever minimap      - vis/skjul WC4ever-knappen ved minimappet")
+        print("  /wc4ever testtoast    - vis eksempler på popups")
+        print("  /wc4ever announce     - slå chat-beskeder til/fra")
+        print("  /wc4ever angrib <ven> - send et emote-angreb til en ven")
+        print("  /wc4ever annonce      - slå dødsannoncer til/fra")
+        print("  /wc4ever emotes       - slå popups for emote-angreb mod dig til/fra")
+        print("  /wc4ever testannonce  - vis en test-dødsannonce")
+        print("  /wc4ever test         - lav et falsk dødsfald")
+        print("  /wc4ever testloot     - lav en falsk loot win")
+        print("  /wc4ever reset ja     - slet alle data")
     end
 end
 
