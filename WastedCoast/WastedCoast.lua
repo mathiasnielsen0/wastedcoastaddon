@@ -23,6 +23,7 @@ local addonName, ns = ...
 --   * v0.9.3: på Forever bruger vinduet spillets egne rammer, faner og knapper (/wc4ever stil skifter)
 --   * v0.10.0: grupper for alle: opret en gruppe med en kode, egne navne, unikke ID'er, admin (Groups.lua)
 --   * v0.10.1: hver besked sendes kun én gang (kanal frem for guild), fælles synk-svar og let synk
+--   * v0.11.0: guild bank (hvem har taget/lagt mest) og repair-regninger (Bank.lua)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -2533,6 +2534,7 @@ function ns.SendMyExtras(light)
         end
     end
     if ns.SendPrankExtras then ns.SendPrankExtras(light) end
+    if ns.SendBank then ns.SendBank() end   -- én lille besked, også ved den lette synk
 end
 
 ns.CheckBossDeath = CheckBossDeath
@@ -2615,6 +2617,10 @@ local function OnAddonMessage(prefix, message, chatType, sender)
 
     elseif kind == "HP" then
         ns.OnHonorMessage(t)
+
+    elseif kind == "BK" then
+        -- v0.11: guild bank og repair (Bank.lua)
+        if ns.OnBankMessage then ns.OnBankMessage(t) end
 
     elseif kind == "S" or kind == "B" or kind == "W" or kind == "A"
         or kind == "R" or kind == "G" or kind == "P" or kind == "E" or kind == "F" then
@@ -5374,7 +5380,7 @@ local GROUPS = {
     { label = "Venner",     icon = "INV_Misc_Head_Human_01",
       pages = { 1, 3, 11, 10, 12, 9 }, names = { "Kort", "Karakterer", "Gear", "Professions", "Reputation", "Guld" } },
     { label = "Rangliste",  icon = "Ability_Rogue_Sprint",
-      pages = { 2, 7, 14 },            names = { "Scoreboard", "Race", "Dueller" } },
+      pages = { 2, 7, 14, 15 },        names = { "Scoreboard", "Race", "Dueller", "Bank & repair" } },
     { label = "Loot & død", icon = "INV_Misc_Bone_HumanSkull_01",
       pages = { 4, 5, 8 },             names = { "Loot", "Instanser", "Statistik" } },
     { label = "Sjov",       icon = "Spell_Nature_Polymorph",
@@ -5758,7 +5764,7 @@ local function BuildUI()
     content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 36)
 
     ns.pages = {}
-    for i = 1, 14 do
+    for i = 1, 15 do
         local p = CreateFrame("Frame", nil, content)
         p:SetAllPoints(content)
         ns.pages[i] = p
