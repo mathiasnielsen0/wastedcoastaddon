@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` og (fra 0.11) `Bank.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -277,6 +277,17 @@ lava, et alt for lavt eller højt mob osv.), og alle får den samme tekst. Mobbe
 kommer med, hvis det kunne ses (target eller nameplate), da man døde. Slå dem fra med
 `/wc4ever annonce`.
 
+### Daglig sladder
+Når du logger ind efter mindst tre timers pause, kommer der efter et halvt minut et lille
+vindue med højdepunkterne siden sidst, fx hvem der tog flest levels, hvem der døde mest,
+den mest pinlige død (fald, lava eller et mob langt under ens eget level), epic loot,
+nye trofæer, dueller, Need-politiets anholdelser, hvem der tjente eller brugte mest guld,
+hvem der bærer Skammens hat, og hvem der ikke har været online i flere dage.
+Sladderen står også i chatten. Den bygges af de data, addonet allerede har, så den sender
+ingen ekstra beskeder. Første gang dækker den det seneste døgn, ellers tiden siden du sidst
+var online (højst en uge). Vis den igen med `/wc4ever sladder`, og slå den fra ved login
+med `/wc4ever sladder fra`.
+
 ### Indstillinger
 Under **Options > AddOns > Wasted Coast Forever** kan du slå lyd, chatbeskeder og popups
 til og fra, slå synk uden guild til og fra, vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
@@ -341,6 +352,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever minimap` | Vis/skjul WC4ever-logoet ved minimappet (klik åbner vinduet, træk flytter det) |
 | `/wc4ever testtoast` | Vis eksempler på popups (sendes ikke til de andre) |
 | `/wc4ever announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
+| `/wc4ever sladder` | Vis sladderen siden sidst igen (`sladder fra`/`til` styrer den ved login) |
 | `/wc4ever angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
 | `/wc4ever annonce` | Slå dødsannoncer til/fra |
 | `/wc4ever emotes` | Slå popups for emote-angreb mod dig til/fra |

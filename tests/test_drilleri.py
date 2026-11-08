@@ -149,7 +149,7 @@ function PanelTemplates_SetNumTabs() end
 function PanelTemplates_TabResize() end
 ''')
 ns = lua.table()
-for f in ["Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua", "Bank.lua"]:
+for f in ["Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua", "Bank.lua", "Gossip.lua"]:
     code = open(f"{ADDON}/{f}", encoding="utf-8").read()
     fn = lua.eval("function(code, name) local f, err = loadstring(code, name) if not f then error(err) end return f end")(code, "@" + f)
     fn("WastedCoast", ns)
@@ -577,6 +577,34 @@ ns.ShowTab(14)
 SENT = {}
 ns.SendMyExtras()
 check(findSent("XD;Mathias;"), "synk sender dueller")
+
+-- Daglig sladder: bygges af de data, der allerede er, og sender intet
+SENT = {}
+local gl = ns.GossipLines(0)
+local all = table.concat(gl, "\n")
+check(#gl > 0 and #gl <= 8, "sladder har linjer: " .. #gl)
+check(all:find("Need%-politiet"), "need-politiet i sladderen: " .. all)
+check(all:find("vandt %d+ duel"), "dueller i sladderen: " .. all)
+check(all:find("ihjel") or all:find("døde"), "dødsfald i sladderen: " .. all)
+check(not all:find("{") and not all:find("%%[sd]"), "ingen tomme felter")
+check(#ns.GossipLines(NOW + 10) == 0, "intet nyt = ingen sladder")
+SlashCmdList.WASTEDCOAST("sladder")
+check(_G.WastedCoastGossip and _G.WastedCoastGossip:IsShown(), "sladder-vinduet vises")
+pump()
+check(#SENT == 0, "sladder sender ingen beskeder")
+Fire("PLAYER_LOGOUT")
+check(db.gossip.out == NOW and db.gossip.snap.Frode, "logout gemmer tid og levels")
+local snap = {}
+for k, v in pairs(db.gossip.snap) do snap[k] = v end
+local rl = snap.Frode
+NOW = NOW + 3600
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;Frode;Frodex;ROGUE;" .. (rl + 3) .. ";100;Nagrand;3", "GUILD", "Frodex")
+local gl2 = table.concat(ns.GossipLines(NOW - 100, snap), "\n")
+check(gl2:find("Frode") and gl2:find("3 levels"), "level-hop siden sidst: " .. gl2)
+SlashCmdList.WASTEDCOAST("sladder fra")
+check(db.settings.gossip == false, "sladder ved login fra")
+SlashCmdList.WASTEDCOAST("sladder til")
+check(db.settings.gossip == true, "sladder ved login til")
 
 SlashCmdList.WASTEDCOAST("reset ja")
 check(#db.needShame == 0, "reset sletter need-synder")

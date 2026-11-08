@@ -1,6 +1,6 @@
 ## Interface: 20506, 16001
 ## Title: Wasted Coast Forever (WC4ever)
-## Notes: Venne-overblik, scoreboard, loot, dødsstatistik, rolls, guldgraf, professions, gear, reputation, drillerier, dueller, guild bank og repair. Synkroniserer i party, raid, guild og en skjult kanal, så I ikke behøver samme guild.
+## Notes: Venne-overblik, scoreboard, loot, dødsstatistik, rolls, guldgraf, professions, gear, reputation, drillerier, dueller, guild bank, repair og daglig sladder. Synkroniserer i party, raid, guild og en skjult kanal, så I ikke behøver samme guild.
 ## Author: Dig
 ## Version: 0.11.0
 ## SavedVariables: WastedCoastDB
@@ -11,3 +11,4 @@ Groups.lua
 Drilleri.lua
 Dueller.lua
 Bank.lua
+Gossip.lua
