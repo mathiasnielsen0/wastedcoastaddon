@@ -23,6 +23,7 @@ local addonName, ns = ...
 --   * v0.9.3: på Forever bruger vinduet spillets egne rammer, faner og knapper (/wc4ever stil skifter)
 --   * v0.10.0: grupper for alle: opret en gruppe med en kode, egne navne, unikke ID'er, admin (Groups.lua)
 --   * v0.10.1: hver besked sendes kun én gang (kanal frem for guild), fælles synk-svar og let synk
+--   * v0.11.0: daglig sladder ved login: højdepunkterne siden sidst (Gossip.lua)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -6392,6 +6393,8 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         else
             Print("Skriv |cffffd100/wc4ever reset ja|r for at slette alle data.")
         end
+    elseif ns.GossipSlash and ns.GossipSlash(cmd, arg) then
+        -- klaret i Gossip.lua (sladder)
     elseif ns.PrankSlash and ns.PrankSlash(cmd, arg) then
         -- klaret i Drilleri.lua (angrib, annonce, emotes, testannonce)
     else
@@ -6410,6 +6413,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print("  /wc4ever stil         - skift mellem spillets egne rammer og addonets egen stil")
         print("  /wc4ever testtoast    - vis eksempler på popups")
         print("  /wc4ever announce     - slå chat-beskeder til/fra")
+        print("  /wc4ever sladder      - vis dagens sladder igen  (|cffffd100sladder fra|r/|cffffd100til|r ved login)")
         print("  /wc4ever angrib <ven> - send et emote-angreb til en ven")
         print("  /wc4ever annonce      - slå dødsannoncer til/fra")
         print("  /wc4ever emotes       - slå popups for emote-angreb mod dig til/fra")
@@ -6434,4 +6438,6 @@ ns.core = {
     MakeBox = MakeBox, Txt = Txt, Field = Field, MakeButton = MakeButton,
     Gradient = Gradient, BarFill = BarFill, SafeIcon = SafeIcon,
     Name = Name, AddShadow = AddShadow, SendHeartbeat = SendHeartbeat, RequestSync = RequestSync,
+    -- v0.11: daglig sladder (Gossip.lua)
+    ACH_BY_ID = ACH_BY_ID, FormatGold = FormatGold, LootLink = LootLink, LastSeen = LastSeen,
 }
