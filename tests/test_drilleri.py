@@ -183,8 +183,16 @@ check(lastPrint():find("Skammens hat"), "hat-besked i chat: " .. lastPrint())
 -- Skammens hat i titler
 local titles, holders = nil, nil
 ns.ShowTab(1)
-check(ns.cards[3].hat.shown == true, "hat-ikon på Nicks kort")
-check(ns.cards[2].hat.shown == false, "intet hat-ikon på Mathias")
+-- Kortet for en ven: store kort (online) eller små kort (offline)
+function CardOf(friend)
+    for _, c in ipairs(ns.cards) do if c.shown ~= false and c.friend == friend then return c end end
+    for _, c in ipairs(ns.offCards) do if c.shown ~= false and c.friend == friend then return c end end
+end
+check(CardOf("Nick").hat.shown == true, "hat-ikon på Nicks kort")
+check(CardOf("Mathias").hat.shown == false, "intet hat-ikon på Mathias")
+check(ns.cards[1].friend == "Mathias" and ns.cards[1].shown ~= false, "online (dig selv) står øverst")
+check(CardOf("Nick") == ns.offCards[1] or CardOf("Nick").state ~= nil, "Nick (offline) ligger under Offline")
+check(ns.onHead:GetText():find("Online") and ns.offHead:GetText():find("Offline"), "grupperne Online og Offline")
 
 -- Egen død: klvl måles fra target og sendes som felt 11
 TARGET_NAME, TARGET_LEVEL = "Defias Thug", 45
@@ -199,6 +207,53 @@ check(ns.HatHolder() == "Mathias", "hatten går videre til Mathias")
 check(lastPrint():find("fra Nick til Mathias"), "hat-overdragelse: " .. lastPrint())
 local t2 = ns.toastsSeen[#ns.toastsSeen]
 check(t2.kind == "obit" and (t2.text:find("Defias Thug") or t2.text:find("Mathias")), "egen dødsannonce: " .. t2.text)
+
+-- Uden combat log (som på Forever): en fjende på en nameplate, der har dig i target, er dræberen
+do
+    local oldName, oldExists, oldLevel = UnitName, UnitExists, UnitLevel
+    UnitCanAttack = function(_, u) return u == "nameplate3" end
+    UnitIsDead = function() return false end
+    UnitIsUnit = function(a, b) return a == "nameplate3target" and b == "player" end
+    UnitExists = function(u) return u == "nameplate3" end
+    UnitName = function(u) if u == "nameplate3" then return "Riverpaw Gnoll" end return oldName(u) end
+    UnitLevel = function(u) if u == "nameplate3" then return 17 end return oldLevel(u) end
+    CLOCK = CLOCK + 60
+    local k, ab, lvl = ns.FindKiller()
+    check(k == "Riverpaw Gnoll" and lvl == 17, "dræber fra nameplate uden combat log: " .. tostring(k))
+    -- Ingen fjende, men du faldt lige: faldskade
+    UnitExists = function() return false end
+    CLOCK = CLOCK + 60
+    IsFalling = function() return true end
+    for _, tk in ipairs(TICKERS) do if tk.d == 0.25 then tk.f() end end
+    IsFalling = function() return false end
+    k, ab = ns.FindKiller()
+    check(k == "Omgivelserne" and ab == ns.core.ENV_NAMES.Falling, "fald uden combat log: " .. tostring(k) .. " " .. tostring(ab))
+    CLOCK = CLOCK + 60
+    k = ns.FindKiller()
+    check(k == "Ukendt", "intet at gå efter: Ukendt")
+    UnitName, UnitExists, UnitLevel = oldName, oldExists, oldLevel
+    UnitCanAttack, UnitIsDead, UnitIsUnit, IsFalling = nil, nil, nil, nil
+end
+
+-- Efternavne: sat med /wc4ever efternavn, sendt i livstegn og dødsfald, vist overalt
+SlashCmdList["WASTEDCOAST"]("efternavn Stormhammer")
+check(db.settings.surnames[PLAYER] == "Stormhammer", "efternavn gemt")
+check(findSent("H;Mathias;" .. PLAYER .. ";"):match(";Stormhammer$"), "efternavn i livstegn")
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;Nick;Sigurd;WARRIOR;30;100;Westfall;10;Jernhånd", "GUILD", "Sigurd")
+check(db.friends.Nick.chars.Sigurd.surname == "Jernhånd", "vennens efternavn gemmes")
+NOW = NOW + 20
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "D", "Sigurd-" .. NOW, "Sigurd", "WARRIOR", "Defias Pillager", "Nærkamp", 30, "Westfall", NOW, "Nick", 31 }, ";"), "GUILD", "Sigurd")
+local deathLine
+for i = #PRINTS, math.max(1, #PRINTS - 5), -1 do if PRINTS[i]:find("døde til") then deathLine = PRINTS[i] break end end
+check(deathLine and deathLine:find("%(Sigurd Jernhånd%)") and deathLine:find("Defias Pillager"), "fuldt navn i dødsbesked: " .. tostring(deathLine))
+check(ns.toastsSeen[#ns.toastsSeen].title:find("Sigurd Jernhånd"), "fuldt navn i dødsannonce")
+ns.frame:Show()
+ns.SelectTarget("Nick")
+ns.ShowTab(3)
+local sigRow
+for _, r in ipairs(ns.charRows) do if type(rawget(r, "data")) == "table" and r.data.name == "Sigurd" then sigRow = r end end
+check(sigRow and sigRow.name:GetText() == "Sigurd Jernhånd", "Karakterer viser fornavn og efternavn")
+ns.ShowTab(1)
 
 -- Gamle klienter uden felt 11 virker stadig
 NOW = NOW + 30
@@ -293,8 +348,8 @@ check(ns.scoreInfo:GetText():find("Skammens hat:|r Frode"), "Skammens hat-titel"
 -- Level-snegl
 ns.ShowTab(1)
 check(ns.snailHolder == "Frode", "Frode (level 20) er sneglen: " .. tostring(ns.snailHolder))
-check(ns.cards[5].name:GetText():find("Turtle"), "snegl ved Frodes navn")
-check(not ns.cards[3].name:GetText():find("Turtle"), "ingen snegl ved Nick")
+check(CardOf("Frode").name:GetText():find("Turtle"), "snegl ved Frodes navn")
+check(not CardOf("Nick").name:GetText():find("Turtle"), "ingen snegl ved Nick")
 check(ns.SnailText("Frode"):find("mindst"), "gættet tid: " .. ns.SnailText("Frode"))
 check(ns.SnailText("Nick") == nil, "kun sneglen har tekst")
 Fire("CHAT_MSG_ADDON", "WCOAST", "XL;Frode;20;" .. (NOW - 2 * 86400) .. ";0", "GUILD", "Frodex")

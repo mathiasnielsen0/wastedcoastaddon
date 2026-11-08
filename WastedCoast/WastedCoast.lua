@@ -23,6 +23,7 @@ local addonName, ns = ...
 --   * v0.9.3: på Forever bruger vinduet spillets egne rammer, faner og knapper (/wc4ever stil skifter)
 --   * v0.10.0: grupper for alle: opret en gruppe med en kode, egne navne, unikke ID'er, admin (Groups.lua)
 --   * v0.10.1: hver besked sendes kun én gang (kanal frem for guild), fælles synk-svar og let synk
+--   * v0.10.3: dræberen findes uden combat log (Forever), fornavn + efternavn, kort delt i Online/Offline
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -457,6 +458,95 @@ local function EventFriend(ev)
     return FriendOfChar(ev.name)
 end
 
+-- =============================================================================
+-- Efternavne (WoW Forever: hver karakter har fornavn + efternavn, og kombinationen er unik)
+-- Blizzard har ikke dokumenteret, hvordan addons læser efternavnet, så vi prøver flere kilder
+-- og bruger kun noget, der ligner et efternavn (ét ord, stort begyndelsesbogstav, ikke realm).
+-- Man kan altid selv sætte det med /wc4ever efternavn <navn>.
+-- =============================================================================
+do
+local function RealmNorm(s)
+    return (tostring(s or ""):gsub("[%s%-']", ""):lower())
+end
+
+local function LooksLikeSurname(s, first)
+    s = GAME.Plain(s)
+    if type(s) ~= "string" then return nil end
+    s = s:gsub("^%s+", ""):gsub("%s+$", "")
+    if #s < 2 or #s > 26 or s == first then return nil end
+    -- Ét ord uden mellemrum, bindestreg, tal eller tegnsætning; stort (evt. accent-)bogstav først
+    if s:find("[%s%d%-%.,;:'|!%?%(%)]") then return nil end
+    if not (s:match("^%u") or s:match("^[\195-\197]")) then return nil end
+    local realm = GetRealmName and GAME.Plain(GetRealmName())
+    local nrealm = GetNormalizedRealmName and GAME.Plain(GetNormalizedRealmName())
+    if (realm and RealmNorm(s) == RealmNorm(realm)) or (nrealm and RealmNorm(s) == RealmNorm(nrealm)) then
+        return nil
+    end
+    return s
+end
+
+local SURNAME_FUNCS = { "UnitSurname", "UnitLastName", "GetUnitSurname" }
+local SURNAME_CFUNCS = { "GetSurname", "GetLastName", "GetPlayerSurname", "GetPlayerLastName" }
+
+local function DetectSurname(first)
+    if not GAME.isForever then return nil end
+    local function try(fn, ...)
+        if type(fn) ~= "function" then return nil end
+        local ok, a, b = pcall(fn, ...)
+        if not ok then return nil end
+        return LooksLikeSurname(a, first) and a or nil, b
+    end
+    for _, n in ipairs(SURNAME_FUNCS) do
+        local s = try(_G[n], "player")
+        if s then return s end
+    end
+    if C_PlayerInfo then
+        for _, n in ipairs(SURNAME_CFUNCS) do
+            local s = try(C_PlayerInfo[n], "player")
+            if s then return s end
+        end
+    end
+    -- Andet returværdi fra UnitName/UnitFullName er normalt realm; på Forever måske efternavnet
+    for _, fn in ipairs({ UnitFullName, UnitName }) do
+        if type(fn) == "function" then
+            local ok, _, second = pcall(fn, "player")
+            if ok and LooksLikeSurname(second, first) then return second end
+        end
+    end
+    -- Titelnavnet ("Sergeant Sigurd Stormhammer"): ordet lige efter fornavnet
+    if UnitPVPName then
+        local ok, pvp = pcall(UnitPVPName, "player")
+        pvp = ok and GAME.Plain(pvp)
+        if type(pvp) == "string" and first then
+            local after = pvp:match("%f[%S]" .. first:gsub("%p", "%%%0") .. " (%S+)")
+            if LooksLikeSurname(after, first) then return after end
+        end
+    end
+    return nil
+end
+
+-- Din egen karakters efternavn: det, du selv har sat, ellers det, spillet giver
+function ns.MySurname()
+    local first = UnitName("player")
+    local manual = db and db.settings and db.settings.surnames and db.settings.surnames[first]
+    if manual and manual ~= "" then return manual end
+    return DetectSurname(first)
+end
+
+-- Fuldt karakternavn: "Sigurd Stormhammer" (eller bare "Sigurd", hvis efternavnet ikke kendes)
+function ns.CharFull(friend, char, sur)
+    if not char or char == "" then return char end
+    if not sur or sur == "" then
+        friend = friend or FriendOfChar(char)
+        local info = friend and db.friends[friend]
+        local c = info and info.chars and info.chars[char]
+        sur = c and c.surname
+    end
+    if sur and sur ~= "" then return char .. " " .. sur end
+    return char
+end
+end
+
 local function LootFriend(ev)
     local f = ev.friend
     if f and f ~= "" and ROSTER_SET[f] then return f end
@@ -567,7 +657,8 @@ local function CharList(friend)
     local now = time()
     for name, c in pairs(info.chars) do
         list[#list + 1] = {
-            name = name, class = c.class, level = c.level or 0, zone = c.zone, gold = c.gold or 0,
+            name = name, full = ns.CharFull(friend, name, c.surname),
+            class = c.class, level = c.level or 0, zone = c.zone, gold = c.gold or 0,
             seen = c.seen, deaths = dBy[name] or 0, loot = lBy[name] or 0,
             online = (c.seen and (now - c.seen) < 150) and true or false,
         }
@@ -732,6 +823,7 @@ local function BuildStats()
         local rw, rc, rk = RunTotals(name)
         list[#list + 1] = {
             name = name, disp = Name(name), class = last and last.class, char = lastName,
+            charFull = lastName and ns.CharFull(name, lastName, last.surname),
             level = last and last.level or 0, maxLevel = maxLevel,
             zone = last and last.zone, seen = last and last.seen,
             chars = nChars, deaths = d, loot = l, gold = gold, wipes = rw, clears = rc, kills = rk,
@@ -1028,7 +1120,7 @@ local function SerializeDeath(ev)
     return table.concat({
         "D", ev.id, ev.name, ev.class or "", ev.killer, ev.ability,
         ev.level, ev.zone, ev.time, ev.friend or "", ev.klvl or "",
-    }, ";")
+    }, ";") .. ((ev.sur and ev.sur ~= "") and (";" .. ev.sur) or "")   -- felt 12: efternavn (Forever)
 end
 
 local function DeserializeDeath(t)
@@ -1038,7 +1130,7 @@ local function DeserializeDeath(t)
     return {
         id = t[2], name = t[3], class = t[4], killer = t[5], ability = t[6],
         level = tonumber(t[7]) or 0, zone = t[8], time = tonumber(t[9]) or 0,
-        friend = f, klvl = tonumber(t[11]),
+        friend = f, klvl = tonumber(t[11]), sur = (t[12] and t[12] ~= "") and t[12] or nil,
     }
 end
 
@@ -1077,9 +1169,11 @@ local function SendHeartbeat()
     local gold = GetMoney()
     local zone = Clean(GetZoneText())
     local xp = MyXP()
-    UpdateChar(db.me, char, { class = class, level = level, gold = gold, zone = zone, xp = xp }, time())
+    local sur = Clean(ns.MySurname() or "")
+    UpdateChar(db.me, char, { class = class, level = level, gold = gold, zone = zone, xp = xp, surname = sur }, time())
     -- Forrest i køen, så online-status og level ikke venter bag et stort synk-svar
-    Send(table.concat({ "H", db.me, char, class or "", level, gold, zone, xp }, ";"), true)
+    Send(table.concat({ "H", db.me, char, class or "", level, gold, zone, xp }, ";")
+        .. (sur ~= "" and (";" .. sur) or ""), true)   -- felt 9: efternavn (Forever)
     if ns.AfterEvent then ns.AfterEvent() end
 end
 
@@ -1121,7 +1215,7 @@ local function RespondToSync(light)
         for name, c in pairs(info.chars) do
             Send(table.concat({
                 "C", db.me, name, c.class or "", c.level or 0, c.gold or 0, Clean(c.zone), c.seen or 0, c.xp or 0,
-            }, ";"))
+            }, ";") .. ((c.surname and c.surname ~= "") and (";" .. Clean(c.surname)) or ""))   -- felt 10: efternavn
         end
     end
 
@@ -1157,7 +1251,7 @@ local function AddDeath(ev)
     table.insert(db.events, ev)
 
     if ev.friend and ROSTER_SET[ev.friend] then
-        UpdateChar(ev.friend, ev.name, { class = ev.class, level = ev.level }, ev.time, true)
+        UpdateChar(ev.friend, ev.name, { class = ev.class, level = ev.level, surname = ev.sur }, ev.time, true)
     end
     local f = EventFriend(ev)
 
@@ -1167,7 +1261,9 @@ local function AddDeath(ev)
             local shown = f or ev.name
             local what = ev.killer
             if ev.ability ~= "" then what = what .. " (" .. ev.ability .. ")" end
-            local extra = (f and ev.name ~= Name(f)) and (" (" .. ev.name .. ")") or ""
+            local full = ns.CharFull(f, ev.name, ev.sur)
+            local extra = (f and full ~= Name(f)) and (" (" .. full .. ")") or ""
+            if not f then shown = full end
             Print(string.format("%s%s døde til %s i %s.", ColorName(shown, ev.class), extra, what, ev.zone))
         end
         PlayEventSound("death", f)
@@ -1196,18 +1292,109 @@ local function OnCombatLog()
     end
 end
 
-local function OnPlayerDead()
-    local killer, ability = "Ukendt", ""
-    if lastDamage and (GetTime() - lastDamage.t) < 15 then
-        killer, ability = lastDamage.source, lastDamage.ability
-    elseif GAME.isForever then
-        -- Uden combat log er vores bedste bud den fjende, vi havde i target
-        local P = GAME.Plain
-        if P(UnitExists("target")) and P(UnitCanAttack("player", "target")) then
-            local t = P(UnitName("target"))
-            if type(t) == "string" and t ~= "" then killer = t end
+-- -----------------------------------------------------------------------------
+-- Hvem slog dig ihjel, når der ikke er nogen combat log (WoW Forever)?
+-- Mens du er i kamp, kigger vi to gange i sekundet efter fjender, der har dig i target
+-- (dit target, focus, mouseover og alle nameplates), og husker den seneste. Vi holder også
+-- øje med fald og med åndedræts-/udmattelsesbjælken. Ved døden vælges den bedste kilde.
+-- Alt læses gennem GAME.Plain, så "secret values" bare tæller som "ved ikke".
+-- -----------------------------------------------------------------------------
+local OnPlayerDead
+do
+local lastHostile     -- { name, t, prio (2 = har dig i target, 1 = dit target), lvl }
+local lastFall = -100 -- GetTime(), sidst du faldt
+local KILLER_WINDOW = 8
+
+local function Yes(v) return GAME.Plain(v) == true end
+
+local function NoteUnit(u)
+    if not Yes(UnitExists(u)) or not Yes(UnitCanAttack("player", u)) then return end
+    if Yes(UnitIsDead(u)) then return end
+    local n = GAME.Plain(UnitName(u))
+    if type(n) ~= "string" or n == "" then return end
+    local prio = 0
+    if Yes(UnitIsUnit(u .. "target", "player")) then
+        prio = 2
+    elseif UnitThreatSituation then
+        local ok, st = pcall(UnitThreatSituation, "player", u)
+        st = ok and GAME.Plain(st)
+        if type(st) == "number" and st >= 2 then prio = 2 end
+    end
+    if prio == 0 and u == "target" then prio = 1 end
+    if prio == 0 then return end
+    local now = GetTime()
+    -- En fjende, der har dig i target, slår en, du selv har i target; ellers vinder den nyeste
+    if lastHostile and lastHostile.t == now and lastHostile.prio > prio then return end
+    if lastHostile and (now - lastHostile.t) < 1 and lastHostile.prio > prio then return end
+    local l = GAME.Plain(UnitLevel(u))
+    lastHostile = { name = n, t = now, prio = prio, lvl = (type(l) == "number" and l ~= 0) and l or nil }
+end
+
+local function ScanAll()
+    NoteUnit("target")
+    NoteUnit("focus")
+    NoteUnit("mouseover")
+    for i = 1, 40 do NoteUnit("nameplate" .. i) end
+end
+-- Må aldrig give en Lua-fejl midt i en kamp eller et dødsfald
+local function ScanHostiles() pcall(ScanAll) end
+ns.ScanHostiles = ScanHostiles
+
+local fallTicker
+function ns.WatchDanger()
+    if fallTicker then return end
+    fallTicker = C_Timer.NewTicker(0.25, function()
+        if IsFalling and Yes(IsFalling()) then lastFall = GetTime() end
+    end)
+end
+
+local combatTicker
+function ns.OnCombatState(inCombat)
+    if inCombat then
+        ScanHostiles()
+        if not combatTicker then combatTicker = C_Timer.NewTicker(0.5, ScanHostiles) end
+    elseif combatTicker then
+        combatTicker:Cancel()
+        combatTicker = nil
+    end
+end
+
+-- Åndedræts- eller udmattelsesbjælken løbet tør? (gælder alle versioner)
+local function MirrorDeath()
+    if not GetMirrorTimerInfo then return nil end
+    for i = 1, 3 do
+        local ok, timer, value = pcall(GetMirrorTimerInfo, i)
+        timer, value = ok and GAME.Plain(timer), ok and GAME.Plain(value)
+        if type(value) == "number" and value <= 0 then
+            if timer == "BREATH" then return ENV_NAMES.Drowning end
+            if timer == "EXHAUSTION" then return ENV_NAMES.Fatigue end
         end
     end
+    return nil
+end
+
+-- Returnerer dræber, evne og evt. dræberens level
+local function FindKiller()
+    local now = GetTime()
+    if lastDamage and (now - lastDamage.t) < 15 then
+        return lastDamage.source, lastDamage.ability, nil
+    end
+    local env = MirrorDeath()
+    if env then return "Omgivelserne", env, nil end
+
+    ScanHostiles()   -- et sidste kig, mens fjenderne stadig står der
+    local h = lastHostile
+    local fresh = h and (now - h.t) < KILLER_WINDOW
+    if fresh and h.prio == 2 then return h.name, "", h.lvl end
+    if (now - lastFall) < 3 then return "Omgivelserne", ENV_NAMES.Falling, nil end
+    if fresh then return h.name, "", h.lvl end
+    return "Ukendt", "", nil
+end
+ns.FindKiller = FindKiller
+
+function OnPlayerDead()
+    local killer, ability, klvl = FindKiller()
+    lastDamage, lastHostile = nil, nil
 
     local name = UnitName("player")
     local _, class = UnitClass("player")
@@ -1221,12 +1408,15 @@ local function OnPlayerDead()
         zone    = Clean(GetZoneText()),
         time    = time(),
         friend  = db.me,
-        klvl    = ns.KillerLevel and ns.KillerLevel(killer) or nil,
+        klvl    = klvl or (ns.KillerLevel and ns.KillerLevel(killer)) or nil,
+        sur     = Clean(ns.MySurname() or ""),
     }
+    if ev.sur == "" then ev.sur = nil end
     if AddDeath(ev) then
         Send(SerializeDeath(ev), true)
         if ns.OnMyDeath then ns.OnMyDeath(ev) end
     end
+end
 end
 
 -- =============================================================================
@@ -2594,6 +2784,7 @@ local function OnAddonMessage(prefix, message, chatType, sender)
             local level = tonumber(t[5])
             UpdateChar(friend, char, {
                 class = t[4], level = level, gold = tonumber(t[6]), zone = t[7], xp = tonumber(t[8]),
+                surname = t[9],
             }, time())
             ns.OnFriendHeartbeat(friend, char, t[4], level, t[7], wasOnline, prevLevel)
             if ns.RefreshUI then ns.RefreshUI() end
@@ -2606,6 +2797,7 @@ local function OnAddonMessage(prefix, message, chatType, sender)
             local seen = tonumber(t[8])
             UpdateChar(friend, t[3], {
                 class = t[4], level = tonumber(t[5]), gold = tonumber(t[6]), zone = t[7], xp = tonumber(t[9]),
+                surname = t[10],
             }, (seen and seen > 0) and seen or 1)
             if ns.RefreshUI then ns.RefreshUI() end
         end
@@ -2982,7 +3174,7 @@ local function BuildCard(parent, index, friend)
             for i = 1, math.min(#chars, 8) do
                 local c = chars[i]
                 local r, g, b = ClassColor(c.class)
-                GameTooltip:AddDoubleLine(c.name, c.level > 0 and ("Level " .. c.level) or "-", r, g, b, 0.8, 0.8, 0.8)
+                GameTooltip:AddDoubleLine(c.full or c.name, c.level > 0 and ("Level " .. c.level) or "-", r, g, b, 0.8, 0.8, 0.8)
             end
             if #chars > 8 then GameTooltip:AddLine("... og " .. (#chars - 8) .. " flere", 0.5, 0.5, 0.56) end
         end
@@ -3018,27 +3210,134 @@ local function BuildCard(parent, index, friend)
     return card
 end
 
-local function BuildOverview(page)
+local BuildOverview
+do
+local HEAD_H, OFF_H, OFF_GAP = 16, 36, 6   -- gruppe-overskrift og de små offline-kort
+
+-- Lille kort til en ven, der er offline: dæmpet, med navn, karakter og hvornår vi sidst så dem
+local function BuildMiniCard(parent, template)
+    local card = MakeBox("Button", parent, COL_BG, COL_BORDER)
+    card:SetSize(CARD_W, OFF_H)
+
+    card.icon = card:CreateTexture(nil, "ARTWORK")
+    card.icon:SetSize(24, 24)
+    card.icon:SetPoint("LEFT", card, "LEFT", 7, 0)
+
+    card.name = Txt(card, "GameFontNormal")
+    card.name:SetPoint("TOPLEFT", card, "TOPLEFT", 38, -5)
+    card.name:SetWidth(CARD_W - 96)
+    card.name:SetWordWrap(false)
+
+    card.state = Txt(card, "GameFontHighlightSmall")
+    card.state:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -6)
+    card.state:SetJustifyH("RIGHT")
+    card.state:SetText("|cff888888OFFLINE|r")
+
+    card.hat = card:CreateTexture(nil, "OVERLAY")
+    card.hat:SetSize(16, 16)
+    card.hat:SetPoint("CENTER", card.icon, "TOPLEFT", 3, -2)
+    card.hat:SetTexture(ns.HAT_ICON or "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01")
+    card.hat:Hide()
+
+    card.sub = Txt(card, "GameFontHighlightSmall")
+    card.sub:SetPoint("TOPLEFT", card, "TOPLEFT", 38, -20)
+    card.sub:SetWidth(CARD_W - 44)
+    card.sub:SetWordWrap(false)
+    card.sub:SetTextColor(0.5, 0.5, 0.55)
+
+    -- Samme klik og tooltip som de store kort
+    card:SetScript("OnClick", template:GetScript("OnClick"))
+    card:SetScript("OnEnter", template:GetScript("OnEnter"))
+    card:SetScript("OnLeave", template:GetScript("OnLeave"))
+    return card
+end
+
+local function GroupHead(page, color)
+    local fs = Txt(page, "GameFontNormal")
+    fs:SetTextColor(color[1], color[2], color[3])
+    fs.line = page:CreateTexture(nil, "ARTWORK")
+    fs.line:SetHeight(1)
+    fs.line:SetPoint("LEFT", fs, "RIGHT", 8, 0)
+    fs.line:SetPoint("RIGHT", page, "RIGHT", 0, 0)
+    Gradient(fs.line, "HORIZONTAL", color[1], color[2], color[3], 0.4, color[1], color[2], color[3], 0)
+    return fs
+end
+
+function BuildOverview(page)
+    ns.overviewPage = page
     ns.cards = {}
     for i = 1, ns.MAX_MEMBERS do
         ns.cards[i] = BuildCard(page, i, nil)
     end
-    local y = -(2 * (CARD_H + GAP) + 4)
+    ns.offCards = {}
+    for i = 1, ns.MAX_MEMBERS do
+        ns.offCards[i] = BuildMiniCard(page, ns.cards[1])
+    end
+    ns.onHead = GroupHead(page, { 0.25, 0.88, 0.38 })
+    ns.offHead = GroupHead(page, { 0.55, 0.55, 0.6 })
+    ns.onEmpty = Txt(page, "GameFontHighlightSmall")
+    ns.onEmpty:SetTextColor(0.5, 0.5, 0.56)
+    ns.onEmpty:SetText("Ingen af vennerne er online lige nu.")
+
     ns.deathTicker = Txt(page, "GameFontHighlightSmall")
-    ns.deathTicker:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
     ns.deathTicker:SetWidth(360)
     -- Flere linjer: med SetWordWrap(false) viser spillet kun den første
-    ns.deathTicker:SetHeight(58)
+    ns.deathTicker:SetHeight(50)
     ns.deathTicker:SetJustifyV("TOP")
     ns.deathTicker:SetSpacing(3)
 
     ns.lootTicker = Txt(page, "GameFontHighlightSmall")
-    ns.lootTicker:SetPoint("TOPLEFT", page, "TOPLEFT", 372, y)
     ns.lootTicker:SetWidth(360)
     -- Flere linjer: med SetWordWrap(false) viser spillet kun den første
-    ns.lootTicker:SetHeight(58)
+    ns.lootTicker:SetHeight(50)
     ns.lootTicker:SetJustifyV("TOP")
     ns.lootTicker:SetSpacing(3)
+end
+
+-- Online øverst (store kort), offline nedenunder (små, dæmpede kort). Returnerer bunden (y).
+function ns.LayoutOverview(on, off)
+    local page = ns.overviewPage
+    local y = 0
+    ns.onHead:ClearAllPoints()
+    ns.onHead:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
+    ns.onHead:SetText(string.format("Online (%d)", #on))
+    y = y - HEAD_H
+    ns.onEmpty:SetShown(#on == 0)
+    if #on == 0 then
+        ns.onEmpty:ClearAllPoints()
+        ns.onEmpty:SetPoint("TOPLEFT", page, "TOPLEFT", 2, y - 2)
+        y = y - 18
+    end
+    for i, card in ipairs(ns.cards) do
+        if i <= #on then
+            local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
+            card:ClearAllPoints()
+            card:SetPoint("TOPLEFT", page, "TOPLEFT", col * (CARD_W + GAP), y - row * (CARD_H + GAP))
+        end
+    end
+    local rows = math.ceil(#on / 4)
+    if rows > 0 then y = y - rows * CARD_H - (rows - 1) * GAP end
+
+    ns.offHead:SetShown(#off > 0)
+    if #off > 0 then
+        y = y - OFF_GAP
+        ns.offHead:ClearAllPoints()
+        ns.offHead:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
+        ns.offHead:SetText(string.format("Offline (%d)", #off))
+        y = y - HEAD_H
+        for i, card in ipairs(ns.offCards) do
+            if i <= #off then
+                local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
+                card:ClearAllPoints()
+                card:SetPoint("TOPLEFT", page, "TOPLEFT", col * (CARD_W + GAP), y - row * (OFF_H + OFF_GAP))
+            end
+        end
+        local orows = math.ceil(#off / 4)
+        y = y - orows * OFF_H - (orows - 1) * OFF_GAP
+    end
+    ns.offHead.line:SetShown(#off > 0)
+    return y
+end
 end
 
 local function TitleText(list)
@@ -3056,8 +3355,38 @@ local function RefreshOverview()
     local maxLoot = 0
     for _, s in ipairs(list) do if s.loot > maxLoot then maxLoot = s.loot end end
 
-    ns.ShowFirst(ns.cards, #list)
+    local on, off = {}, {}
     for i, s in ipairs(list) do
+        s.order = i
+        if s.online then on[#on + 1] = s else off[#off + 1] = s end
+    end
+    -- Offline: senest set først (aldrig set nederst), ellers kort-rækkefølgen
+    table.sort(off, function(a, b)
+        if (a.seen or 0) ~= (b.seen or 0) then return (a.seen or 0) > (b.seen or 0) end
+        return a.order < b.order
+    end)
+    local bottom = ns.LayoutOverview(on, off)
+
+    ns.ShowFirst(ns.offCards, #off)
+    for i, s in ipairs(off) do
+        local card = ns.offCards[i]
+        card.friend = s.name
+        local r, g, b = ClassColor(s.class)
+        card.name:SetText(s.disp .. ((ns.snailHolder == s.name) and (" " .. ns.SNAIL_ICON) or ""))
+        card.name:SetTextColor(r * 0.65 + 0.1, g * 0.65 + 0.1, b * 0.65 + 0.1)
+        SetClassIcon(card.icon, s.class)
+        if card.icon.SetDesaturated then card.icon:SetDesaturated(true) end
+        card.icon:SetAlpha(0.6)
+        if s.class then
+            card.sub:SetText(string.format("%s - %s", s.charFull or s.char or "?", FormatAgo(s.seen)))
+        else
+            card.sub:SetText("Ikke set endnu")
+        end
+        card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == "Skammens hat")
+    end
+
+    ns.ShowFirst(ns.cards, #on)
+    for i, s in ipairs(on) do
         local card = ns.cards[i]
         card.friend = s.name
         local r, g, b = ClassColor(s.class)
@@ -3067,7 +3396,7 @@ local function RefreshOverview()
         card.name:SetTextColor(r, g, b)
         card.name:SetText(s.disp .. ((ns.snailHolder == s.name) and (" " .. ns.SNAIL_ICON) or ""))
         SetClassIcon(card.icon, s.class)
-        card.char:SetText(s.char or "ukendt karakter")
+        card.char:SetText(s.charFull or s.char or "ukendt karakter")
 
         if s.online then card.dot:SetColorTexture(0.25, 0.9, 0.35, 1) else card.dot:SetColorTexture(0.35, 0.35, 0.4, 1) end
 
@@ -3115,6 +3444,14 @@ local function RefreshOverview()
         end
     end
     ns.deathTicker:SetText(table.concat(lines, "\n"))
+    local ty = bottom - 8
+    local room = (ns.overviewPage:GetHeight() or 0) <= 0 or (-ty + 50) <= ns.overviewPage:GetHeight() + 2
+    ns.deathTicker:ClearAllPoints()
+    ns.deathTicker:SetPoint("TOPLEFT", ns.overviewPage, "TOPLEFT", 0, ty)
+    ns.lootTicker:ClearAllPoints()
+    ns.lootTicker:SetPoint("TOPLEFT", ns.overviewPage, "TOPLEFT", 372, ty)
+    ns.deathTicker:SetShown(room)
+    ns.lootTicker:SetShown(room)
 
     -- Seneste loot
     local ll = { "|cffffd100Seneste loot|r" }
@@ -3324,8 +3661,8 @@ local function BuildCharsPage(page)
     panel.bigLabel:SetText("karakterer")
 
     -- Kolonneoverskrifter
-    local heads = { { "Karakter", 44, 136, "LEFT" }, { "Lvl", 184, 40, "CENTER" }, { "Døde", 228, 46, "CENTER" },
-                    { "Loot", 278, 46, "CENTER" }, { "Sidst set", 330, 200, "LEFT" } }
+    local heads = { { "Karakter", 44, 176, "LEFT" }, { "Lvl", 220, 36, "CENTER" }, { "Døde", 258, 42, "CENTER" },
+                    { "Loot", 302, 42, "CENTER" }, { "Sidst set", 350, 180, "LEFT" } }
     for _, h in ipairs(heads) do
         local fs = Txt(panel, "GameFontHighlightSmall")
         fs:SetPoint("TOPLEFT", panel, "TOPLEFT", h[2], -80)
@@ -3343,18 +3680,18 @@ local function BuildCharsPage(page)
         row.icon = row:CreateTexture(nil, "ARTWORK")
         row.icon:SetSize(20, 20)
         row.icon:SetPoint("LEFT", row, "LEFT", 6, 0)
-        row.name = Field(row, 32, 136, "LEFT", "GameFontNormal")
-        row.level = Field(row, 172, 40, "CENTER")
-        row.deaths = Field(row, 216, 46, "CENTER")
-        row.loot = Field(row, 266, 46, "CENTER")
-        row.seen = Field(row, 318, 204, "LEFT")
+        row.name = Field(row, 32, 176, "LEFT", "GameFontNormal")
+        row.level = Field(row, 208, 36, "CENTER")
+        row.deaths = Field(row, 246, 42, "CENTER")
+        row.loot = Field(row, 290, 42, "CENTER")
+        row.seen = Field(row, 338, 184, "LEFT")
         row:SetScript("OnEnter", function(self)
             self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
             local d = self.data
             if not d then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             local r, g, b = ClassColor(d.class)
-            GameTooltip:AddLine(d.name, r, g, b)
+            GameTooltip:AddLine(d.full or d.name, r, g, b)
             GameTooltip:AddLine(string.format("Level %d %s", d.level, ClassName(d.class)), 0.8, 0.8, 0.8)
             if d.zone then GameTooltip:AddLine(d.zone, 0.6, 0.6, 0.66) end
             GameTooltip:AddLine(" ")
@@ -3431,7 +3768,7 @@ local function RefreshChars()
         if d then
             local cr, cg, cb = ClassColor(d.class)
             SetClassIcon(row.icon, d.class)
-            row.name:SetText(d.name)
+            row.name:SetText(d.full or d.name)
             row.name:SetTextColor(cr, cg, cb)
             row.level:SetText(d.level > 0 and tostring(d.level) or "-")
             row.deaths:SetText(tostring(d.deaths))
@@ -4300,7 +4637,7 @@ local function RefreshRace()
             end
             local gap = leader - s.progress
             local tail = (i == 1) and "|cffffd100forrest|r" or string.format("-%.1f level", gap)
-            row.sub:SetText(string.format("%s%s  -  %s", s.char or "?", s.online and "  |cff40e060online|r" or "", tail))
+            row.sub:SetText(string.format("%s%s  -  %s", s.charFull or s.char or "?", s.online and "  |cff40e060online|r" or "", tail))
         else
             row.info:SetText("|cff888888ikke set endnu|r")
             row.sub:SetText("")
@@ -6184,6 +6521,7 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_LOGIN" then
         -- Den skjulte synk-kanal: efter spillets egne kanaler, så de beholder /1 og /2
         ns.InitGroup()   -- gruppen bestemmer vennerne og den skjulte kanal (se Groups.lua)
+        ns.WatchDanger()
         C_Timer.After(5, route.Join)
         -- Vent lidt, så guild/party-info er klar
         C_Timer.After(6, function()
@@ -6193,6 +6531,10 @@ events:SetScript("OnEvent", function(_, event, ...)
                 RequestSync()
                 ns.InitAchievements()
                 ns.AfterIdentity()
+                if GAME.isForever and not ns.MySurname() then
+                    Print("Dit efternavn kunne ikke findes automatisk. Skriv |cffffd100/wc4ever efternavn Ditefternavn|r, " ..
+                        "så vennerne ser dit fulde navn.")
+                end
             else
                 ns.ShowGroupWindow()
             end
@@ -6211,6 +6553,7 @@ events:SetScript("OnEvent", function(_, event, ...)
 
     elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
         lastCombat = GetTime()
+        ns.OnCombatState(event == "PLAYER_REGEN_DISABLED")
 
     elseif event == "PLAYER_XP_UPDATE" then
         TouchMe()
@@ -6321,6 +6664,26 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         ns.Toast({ kind = "achievement", head = "TROFÆ LÅST OP", title = a.name, text = a.desc, icon = a.icon,
                    pts = a.pts, sound = "achievement", friend = db.me, force = true })
         if ns.TestPrankToasts then ns.TestPrankToasts() end
+    elseif cmd == "efternavn" or cmd == "surname" then
+        local raw = strtrim(input or ""):match("^%S+%s+(.+)$")
+        local first = UnitName("player")
+        db.settings.surnames = db.settings.surnames or {}
+        if raw and raw:lower() == "auto" then
+            db.settings.surnames[first] = nil
+        elseif raw then
+            local sur = ns.CleanMemberName and ns.CleanMemberName(raw) or raw
+            sur = sur and sur:gsub("%s.*$", "")
+            if not sur or sur == "" then Print("Ugyldigt efternavn."); return end
+            db.settings.surnames[first] = sur
+        end
+        local sur = ns.MySurname()
+        if sur then
+            Print("Din karakter hedder |cffffd100" .. first .. " " .. sur .. "|r" ..
+                ((db.settings.surnames[first] and "" or " (fundet automatisk)")) .. ".")
+        else
+            Print("Intet efternavn kendt for " .. first .. ". Skriv |cffffd100/wc4ever efternavn Ditefternavn|r.")
+        end
+        if raw and db.me then SendHeartbeat() end
     elseif cmd == "announce" then
         db.settings.announce = not db.settings.announce
         Print("Beskeder i chat: " .. (db.settings.announce and "til" or "fra"))
@@ -6409,6 +6772,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print("  /wc4ever minimap      - vis/skjul WC4ever-knappen ved minimappet")
         print("  /wc4ever stil         - skift mellem spillets egne rammer og addonets egen stil")
         print("  /wc4ever testtoast    - vis eksempler på popups")
+        print("  /wc4ever efternavn X  - sæt din karakters efternavn (auto = find selv)")
         print("  /wc4ever announce     - slå chat-beskeder til/fra")
         print("  /wc4ever angrib <ven> - send et emote-angreb til en ven")
         print("  /wc4ever annonce      - slå dødsannoncer til/fra")
@@ -6433,5 +6797,5 @@ ns.core = {
     IsOnline = IsOnline, BuildStats = BuildStats, Send = Send,
     MakeBox = MakeBox, Txt = Txt, Field = Field, MakeButton = MakeButton,
     Gradient = Gradient, BarFill = BarFill, SafeIcon = SafeIcon,
-    Name = Name, AddShadow = AddShadow, SendHeartbeat = SendHeartbeat, RequestSync = RequestSync,
+    Name = Name, CharFull = ns.CharFull, AddShadow = AddShadow, SendHeartbeat = SendHeartbeat, RequestSync = RequestSync,
 }

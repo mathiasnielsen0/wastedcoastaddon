@@ -391,8 +391,9 @@ function ns.OnFreshDeath(ev, friend)
     if not friend then return end
     if db.settings.obits ~= false then
         local title = Name(friend)
-        if ev.name and ev.name ~= title then
-            title = title .. " (" .. ev.name .. ", level " .. tostring(ev.level or "?") .. ")"
+        local full = ev.name and (C.CharFull and C.CharFull(friend, ev.name, ev.sur) or ev.name)
+        if full and full ~= title then
+            title = title .. " (" .. full .. ", level " .. tostring(ev.level or "?") .. ")"
         else
             title = title .. " (level " .. tostring(ev.level or "?") .. ")"
         end

@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.10.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.10.3. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -120,11 +120,14 @@ så skriv `/wc4ever demo` (og `/wc4ever demo slut` for at fjerne det igen).
 ## Hvad kan det?
 
 ### Overblik
-Et kort for hver ven med klasse-ikon, navn, den karakter vedkommende spillede
-sidst, level, zone, online-prik, antal dødsfald, antal rare+ loot (med bar),
-antal karakterer og titler. Hold musen over et kort for at se alle vennens
-karakterer, "værste fjende" og seneste loot. Klik på et kort for at se alle
-karakterer. Nederst står de seneste dødsfald og det seneste loot.
+Vennerne er delt i to grupper: **Online** øverst og **Offline** nedenunder.
+De online venner har et stort kort med klasse-ikon, navn, den karakter vedkommende
+spiller (fornavn og efternavn), level, zone, online-prik, antal dødsfald, antal
+rare+ loot (med bar), antal karakterer og titler. De offline venner har et lille,
+dæmpet kort med "OFFLINE", karakteren og hvornår de sidst var online (senest set
+øverst). Hold musen over et kort for at se alle vennens karakterer, "værste fjende"
+og seneste loot. Klik på et kort for at se alle karakterer. Nederst står de seneste
+dødsfald og det seneste loot, når der er plads.
 
 ### Scoreboard
 Alle venner i en rangliste. Klik på en kolonne for at sortere (klik igen for at
@@ -136,7 +139,7 @@ din egen række er markeret.
 
 ### Karakterer
 Vælg en ven til venstre og se **alle karakterer vedkommende har været logget ind
-med**: level, døde, rare+ loot og hvornår karakteren sidst var online og hvor.
+med** (fornavn og efternavn): level, døde, rare+ loot og hvornår karakteren sidst var online og hvor.
 Hold musen over en karakter for guld og flere detaljer. Har en ven mange
 karakterer, kan du rulle med musehjulet. Knappen "Se loot" hopper til lootlisten
 filtreret til den ven.
@@ -321,6 +324,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever stil` | Skift mellem spillets egne rammer (native) og addonets egen stil (kræver /reload) |
 | `/wc4ever minimap` | Vis/skjul WC4ever-logoet ved minimappet (klik åbner vinduet, træk flytter det) |
 | `/wc4ever testtoast` | Vis eksempler på popups (sendes ikke til de andre) |
+| `/wc4ever efternavn X` | Sæt din karakters efternavn (WoW Forever). `auto` = find det selv. Uden navn: vis det |
 | `/wc4ever announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
 | `/wc4ever angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
 | `/wc4ever annonce` | Slå dødsannoncer til/fra |
@@ -445,8 +449,15 @@ indlæses). Forever kører på Blizzards nye motor, og det betyder:
 - Max level er 60, så race og trofæer går til 60.
 - Bosser og clears i Forevers dungeons og raids (også de nye, fx Barrow Deeps og
   Forevers egen Hyjal Summit) hentes fra spillets Encounter Journal.
-- Addons kan ikke læse combat log. Ved et dødsfald gætter addonet på den fjende,
-  du havde i target, så dødsstatistikken er mindre præcis, og faldskade kan ikke ses.
+- Addons kan ikke læse combat log. Mens du er i kamp, holder addonet øje med
+  fjender, der har dig i target (dit target, focus, mouseover og alle nameplates),
+  og ved et dødsfald er den seneste af dem dræberen. Fald, drukning og udmattelse
+  genkendes også. Slå nameplates til for fjender (tasten V), så rammer det oftest
+  rigtigt. Kun hvis der slet ikke er noget at gå efter, står der "Ukendt".
+- Karakterer har fornavn og efternavn. Addonet prøver selv at finde efternavnet;
+  lykkes det ikke, skriver det det i chatten, og så sætter du det med
+  `/wc4ever efternavn Ditefternavn`. Efternavnet sendes til vennerne og vises i
+  dødsbeskeder, dødsannoncer, på kortene og under Karakterer.
 - Under bosskampe kan spillet blokere addon-beskeder. De bliver sendt, når det er
   muligt igen.
 - Nøgle-fraktionerne til TBC-heroics vises ikke på reputation-fanen.
