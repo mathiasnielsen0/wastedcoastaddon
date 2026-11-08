@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.10.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.10.2. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -58,14 +58,15 @@ og popups.
 
 ## Vinduet
 
-Åbn med WC4ever-logoet ved minimappet eller `/wc4ever`. Der er fire faner, og hver har
+Åbn med WC4ever-logoet ved minimappet eller `/wc4ever`. Der er fem faner, og hver har
 nogle små undersider lige under fanerne:
 
 | Fane | Undersider |
 |---|---|
 | **Venner** | Kort (forsiden), Karakterer, Gear, Professions, Reputation, Guld |
 | **Rangliste** | Scoreboard, Race, Dueller |
-| **Loot & død** | Loot, Instanser, Statistik |
+| **Loot** | Loot, Rolls |
+| **Død** | Statistik, Instanser |
 | **Sjov** | Trofæer, Drilleri |
 
 Klik på en vens kort for at se vennens karakterer.
@@ -186,11 +187,13 @@ En bar pr. ven, der viser, hvem der er længst fremme (vennens karakter med
 højest level, inkl. XP-procent). Den forreste har guldkant, og barren bliver
 guld ved max level (70 på TBC, 60 på WoW Forever).
 
-### Statistik
+### Statistik (under Død)
 **Dødsstatistik:** de fem mobs, der har slået flest af jer ihjel, de tre farligste
 zoner og **faldskade-kongen** (flest dødsfald af fald). Ud for hver står, hvem der
-er døde til den.
+er døde til den. Til højre står **seneste dødsfald**: hvem, hvornår, hvad der
+slog dem ihjel og hvor.
 
+### Rolls (under Loot)
 **Uheldsrating for rolls:** hver gang du vælger Need, Greed eller Disenchant på et
 item, tæller det som et roll. Addonet gemmer, hvor mange du har deltaget i, hvor
 mange du vandt, og selve tallene du slog. **Tabt** er andelen af dine rolls, du

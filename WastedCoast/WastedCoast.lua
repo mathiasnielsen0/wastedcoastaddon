@@ -23,6 +23,7 @@ local addonName, ns = ...
 --   * v0.9.3: på Forever bruger vinduet spillets egne rammer, faner og knapper (/wc4ever stil skifter)
 --   * v0.10.0: grupper for alle: opret en gruppe med en kode, egne navne, unikke ID'er, admin (Groups.lua)
 --   * v0.10.1: hver besked sendes kun én gang (kanal frem for guild), fælles synk-svar og let synk
+--   * v0.10.2: Loot-fanen er kun loot (Loot, Rolls); død og instanser har fået deres egen fane
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -4326,36 +4327,20 @@ end
 local EXTRA_PAGES = {}   -- fane-nummer -> { build, refresh }
 do
     -- =============================================================================
-    -- UI: side 8 - statistik (dødsfald og uheldsrating for rolls)
+    -- UI: side 8 - uheldsrating for rolls (under Loot-fanen)
     -- =============================================================================
     local ROLL_COLS = {
-        { x = 6,   w = 22,  j = "CENTER", label = "#" },
-        { x = 30,  w = 104, j = "LEFT",   label = "Ven" },
-        { x = 136, w = 46,  j = "CENTER", label = "Rolls" },
-        { x = 184, w = 46,  j = "CENTER", label = "Vundet" },
-        { x = 232, w = 52,  j = "CENTER", label = "Tabt" },
-        { x = 286, w = 50,  j = "CENTER", label = "Snit" },
+        { x = 10,  w = 30,  j = "CENTER", label = "#" },
+        { x = 50,  w = 220, j = "LEFT",   label = "Ven" },
+        { x = 280, w = 90,  j = "CENTER", label = "Rolls" },
+        { x = 380, w = 90,  j = "CENTER", label = "Vundet" },
+        { x = 480, w = 100, j = "CENTER", label = "Tabt" },
+        { x = 590, w = 100, j = "CENTER", label = "Snit" },
     }
 
     local function BuildStatsPage(page)
-        local left = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
-        left:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
-        left:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
-        left:SetWidth(362)
-        local lt = Txt(left, "GameFontNormalLarge")
-        lt:SetPoint("TOPLEFT", left, "TOPLEFT", 12, -10)
-        lt:SetText("Dødsstatistik")
-        lt:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
-        ns.deathStatText = Txt(left, "GameFontHighlightSmall")
-        ns.deathStatText:SetPoint("TOPLEFT", lt, "BOTTOMLEFT", 0, -10)
-        ns.deathStatText:SetWidth(338)
-        ns.deathStatText:SetWordWrap(false)
-        ns.deathStatText:SetSpacing(4)
-
         local right = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
-        right:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
-        right:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 0)
-        right:SetWidth(362)
+        right:SetAllPoints(page)
         local rt = Txt(right, "GameFontNormalLarge")
         rt:SetPoint("TOPLEFT", right, "TOPLEFT", 12, -10)
         rt:SetText("Uheldsrating for rolls")
@@ -4373,7 +4358,7 @@ do
         ns.rollRows = {}
         for i = 1, ns.MAX_MEMBERS do
             local row = MakeBox("Button", right, COL_BTN, COL_BORDER)
-            row:SetSize(342, 28)
+            row:SetSize(712, 28)
             row:SetPoint("TOPLEFT", right, "TOPLEFT", 10, -(56 + (i - 1) * 31))
             row.f = {}
             for k, c in ipairs(ROLL_COLS) do
@@ -4418,35 +4403,12 @@ do
 
         ns.rollNote = Txt(right, "GameFontHighlightSmall")
         ns.rollNote:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 12, 10)
-        ns.rollNote:SetWidth(338)
+        ns.rollNote:SetWidth(700)
         ns.rollNote:SetTextColor(0.5, 0.5, 0.56)
         ns.rollNote:SetText("Tabt = andel af dine need/greed-rolls, du ikke vandt. Snit = dit gennemsnitlige roll (held er 50,5).")
     end
 
     local function RefreshStatsPage()
-        local mobs, zones, falls = ns.DeathStats()
-        local lines = {}
-        local function section(title, list, empty, max, fmt)
-            lines[#lines + 1] = "|cffffd100" .. title .. "|r"
-            if #list == 0 then
-                lines[#lines + 1] = "|cff888888" .. empty .. "|r"
-            else
-                for i = 1, math.min(max, #list) do lines[#lines + 1] = fmt(i, list[i]) end
-            end
-            lines[#lines + 1] = " "
-        end
-        local function withWho(i, e)
-            return string.format("%d. %s  |cffff8080%d|r  |cff888888(%s)|r", i, e.name, e.n, ns.WhoText(e.who, 3))
-        end
-        section("Farligste mob", mobs, "Ingen er blevet slået ihjel af et mob endnu.", 5, withWho)
-        section("Farligste zone", zones, "Ingen dødsfald endnu.", 3, withWho)
-        section("Faldskade-konge", falls, "Ingen er faldet ihjel endnu. Endnu.", 3, function(i, e)
-            return string.format("%d. %s  |cffff8080%s|r%s", i, Name(e.name), Plural(e.n, "fald", "fald"),
-                i == 1 and "  |cffffd100(kongen)|r" or "")
-        end)
-        lines[#lines] = nil
-        ns.deathStatText:SetText(table.concat(lines, "\n"))
-
         local list = {}
         for _, name in ipairs(ROSTER) do
             local r = db.rolls[name]
@@ -4497,6 +4459,85 @@ do
     end
 
     EXTRA_PAGES[8] = { build = BuildStatsPage, refresh = RefreshStatsPage }
+
+    -- =============================================================================
+    -- UI: side 16 - dødsstatistik og seneste dødsfald (under Død-fanen)
+    -- =============================================================================
+    local DEATH_ROWS = 16
+
+    local function BuildDeathPage(page)
+        local left = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
+        left:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
+        left:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
+        left:SetWidth(362)
+        local lt = Txt(left, "GameFontNormalLarge")
+        lt:SetPoint("TOPLEFT", left, "TOPLEFT", 12, -10)
+        lt:SetText("Dødsstatistik")
+        lt:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+        ns.deathStatText = Txt(left, "GameFontHighlightSmall")
+        ns.deathStatText:SetPoint("TOPLEFT", lt, "BOTTOMLEFT", 0, -10)
+        ns.deathStatText:SetWidth(338)
+        ns.deathStatText:SetWordWrap(false)
+        ns.deathStatText:SetSpacing(4)
+
+        local right = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
+        right:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
+        right:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 0)
+        right:SetWidth(362)
+        local rt = Txt(right, "GameFontNormalLarge")
+        rt:SetPoint("TOPLEFT", right, "TOPLEFT", 12, -10)
+        rt:SetText("Seneste dødsfald")
+        rt:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+        ns.deathRecentText = Txt(right, "GameFontHighlightSmall")
+        ns.deathRecentText:SetPoint("TOPLEFT", rt, "BOTTOMLEFT", 0, -10)
+        ns.deathRecentText:SetWidth(338)
+        ns.deathRecentText:SetWordWrap(false)
+        ns.deathRecentText:SetSpacing(4)
+    end
+
+    local function RefreshDeathPage()
+        local mobs, zones, falls = ns.DeathStats()
+        local lines = {}
+        local function section(title, list, empty, max, fmt)
+            lines[#lines + 1] = "|cffffd100" .. title .. "|r"
+            if #list == 0 then
+                lines[#lines + 1] = "|cff888888" .. empty .. "|r"
+            else
+                for i = 1, math.min(max, #list) do lines[#lines + 1] = fmt(i, list[i]) end
+            end
+            lines[#lines + 1] = " "
+        end
+        local function withWho(i, e)
+            return string.format("%d. %s  |cffff8080%d|r  |cff888888(%s)|r", i, e.name, e.n, ns.WhoText(e.who, 3))
+        end
+        section("Farligste mob", mobs, "Ingen er blevet slået ihjel af et mob endnu.", 5, withWho)
+        section("Farligste zone", zones, "Ingen dødsfald endnu.", 3, withWho)
+        section("Faldskade-konge", falls, "Ingen er faldet ihjel endnu. Endnu.", 3, function(i, e)
+            return string.format("%d. %s  |cffff8080%s|r%s", i, Name(e.name), Plural(e.n, "fald", "fald"),
+                i == 1 and "  |cffffd100(kongen)|r" or "")
+        end)
+        lines[#lines] = nil
+        ns.deathStatText:SetText(table.concat(lines, "\n"))
+
+        -- Seneste dødsfald blandt vennerne, nyeste først
+        local recent = {}
+        for _, ev in ipairs(db.events) do
+            if EventFriend(ev) then recent[#recent + 1] = ev end
+        end
+        table.sort(recent, function(a, b) return (a.time or 0) > (b.time or 0) end)
+        local rl = {}
+        for i = 1, math.min(DEATH_ROWS, #recent) do
+            local ev = recent[i]
+            local what = (ev.killer and ev.killer ~= "") and ev.killer or "Ukendt"
+            if what == "Omgivelserne" and ev.ability and ev.ability ~= "" then what = ev.ability end
+            rl[#rl + 1] = string.format("%s  |cff888888%s|r  %s  |cff888888i %s|r",
+                ColorName(EventFriend(ev), ev.class), FormatAgoShort(ev.time), what, ev.zone or "?")
+        end
+        if #rl == 0 then rl[1] = "|cff888888Ingen dødsfald endnu. Nyd det, mens det varer.|r" end
+        ns.deathRecentText:SetText(table.concat(rl, "\n"))
+    end
+
+    EXTRA_PAGES[16] = { build = BuildDeathPage, refresh = RefreshDeathPage }
 end
 
 do
@@ -5369,14 +5410,16 @@ end
 -- =============================================================================
 -- UI: hovedvindue, faner og identitetsvalg
 -- =============================================================================
--- Fire faner, hver med sine undersider. Sidenumrene er de gamle (ns.ShowTab(3) viser stadig karaktererne).
+-- Fem faner, hver med sine undersider. Sidenumrene er de gamle (ns.ShowTab(3) viser stadig karaktererne).
 local GROUPS = {
     { label = "Venner",     icon = "INV_Misc_Head_Human_01",
       pages = { 1, 3, 11, 10, 12, 9 }, names = { "Kort", "Karakterer", "Gear", "Professions", "Reputation", "Guld" } },
     { label = "Rangliste",  icon = "Ability_Rogue_Sprint",
       pages = { 2, 7, 14 },            names = { "Scoreboard", "Race", "Dueller" } },
-    { label = "Loot & død", icon = "INV_Misc_Bone_HumanSkull_01",
-      pages = { 4, 5, 8 },             names = { "Loot", "Instanser", "Statistik" } },
+    { label = "Loot",       icon = "INV_Misc_Bag_10",
+      pages = { 4, 8 },                names = { "Loot", "Rolls" } },
+    { label = "Død",        icon = "INV_Misc_Bone_HumanSkull_01",
+      pages = { 16, 5 },               names = { "Statistik", "Instanser" } },
     { label = "Sjov",       icon = "Spell_Nature_Polymorph",
       pages = { 6, 13 },               names = { "Trofæer", "Drilleri" } },
 }
@@ -5702,7 +5745,7 @@ local function BuildUI()
         FadeLine(f, -37, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.45)
     end
 
-    -- Fire store faner og en række små undersider under den valgte
+    -- Store faner (bredden deles mellem dem) og en række små undersider under den valgte
     ns.tabs, ns.subTabs = {}, {}
     -- Native: spillets faner hænger under vinduet (som Character-vinduet), og undersiderne ligger øverst
     local nativeTabs = ns.native and PanelTemplates_SetTab and TryTemplate("Button", "WastedCoastFrameTab1", f, "PanelTabButtonTemplate")
@@ -5727,8 +5770,9 @@ local function BuildUI()
                 ns.ShowTab(grp.pages[1])
             end)
         else
-            tb = MakeTab(f, 178, 30, grp.label, grp.icon, function() ns.ShowTab(grp.pages[1]) end, "GameFontNormalLarge")
-            tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + (gi - 1) * 184.6, -42)
+            local step = 738.4 / #GROUPS
+            tb = MakeTab(f, step - 6.6, 30, grp.label, grp.icon, function() ns.ShowTab(grp.pages[1]) end, "GameFontNormalLarge")
+            tb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + (gi - 1) * step, -42)
         end
         ns.tabs[gi] = tb
         ns.subTabs[gi] = {}
@@ -5758,7 +5802,11 @@ local function BuildUI()
     content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 36)
 
     ns.pages = {}
-    for i = 1, 14 do
+    local nPages = 0
+    for _, grp in ipairs(GROUPS) do
+        for _, pg in ipairs(grp.pages) do nPages = math.max(nPages, pg) end
+    end
+    for i = 1, nPages do
         local p = CreateFrame("Frame", nil, content)
         p:SetAllPoints(content)
         ns.pages[i] = p
