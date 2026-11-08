@@ -29,7 +29,22 @@ function UnitXP() return 10 end
 function UnitXPMax() return 100 end
 function UnitIsAFK() return false end
 function UnitAffectingCombat() return false end
-function GetMoney() return 12345 end
+MONEY = 12345
+function GetMoney() return MONEY end
+-- Guild bank, tasker og repair
+BAGS = { [0] = { { id = 13446, count = 5 }, {} } }
+C_Container = {
+  GetContainerNumSlots = function(b) return BAGS[b] and #BAGS[b] or 0 end,
+  GetContainerItemInfo = function(b, s) local x = BAGS[b] and BAGS[b][s] if x and x.id and x.count > 0 then return { itemID = x.id, stackCount = x.count } end end,
+}
+function GetInventoryItemID() return nil end
+function hooksecurefunc(name, f) local orig = _G[name] _G[name] = function(...) local r = { orig(...) } f(...) return unpack(r) end end
+function DepositGuildBankMoney() end
+function WithdrawGuildBankMoney() end
+REPAIR_COST = 0
+function GetRepairAllCost() return REPAIR_COST, REPAIR_COST > 0 end
+REPAIR_GUILD_OK = true
+function RepairAllItems(guild) if guild and not REPAIR_GUILD_OK then return end if not guild then MONEY = MONEY - REPAIR_COST end REPAIR_COST = 0 end
 function GetZoneText() return "Westfall" end
 function IsInRaid() return false end
 function IsInGroup() return true end
@@ -134,7 +149,7 @@ function PanelTemplates_SetNumTabs() end
 function PanelTemplates_TabResize() end
 ''')
 ns = lua.table()
-for f in ["Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua"]:
+for f in ["Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua", "Bank.lua"]:
     code = open(f"{ADDON}/{f}", encoding="utf-8").read()
     fn = lua.eval("function(code, name) local f, err = loadstring(code, name) if not f then error(err) end return f end")(code, "@" + f)
     fn("WastedCoast", ns)
@@ -165,7 +180,7 @@ local realToast = ns.Toast
 ns.Toast = function(o) ns.toastsSeen[#ns.toastsSeen+1] = o return realToast(o) end
 
 -- Sider: 13 (fordelt på 4 faner), og Drilleri-siden findes
-check(#ns.pages == 14 and #ns.tabs == 4, "14 sider på 4 faner")
+check(#ns.pages == 15 and #ns.tabs == 4, "15 sider på 4 faner")
 ns.frame:Show()
 for i = 1, 13 do ns.ShowTab(i) end
 
@@ -358,6 +373,98 @@ SENT = {}
 ns.SendMyExtras()
 check(findSent("XK;Mathias;") and findSent("XN;N-"), "synk sender drilleri-data")
 
+-- Guild bank: guld ind og ud
+SENT = {}
+Fire("GUILDBANKFRAME_OPENED")
+MONEY = MONEY - 500000
+DepositGuildBankMoney(500000)
+Fire("PLAYER_MONEY")
+check(db.bank.Mathias and db.bank.Mathias.dg == 500000, "50g lagt i banken")
+WithdrawGuildBankMoney(200000)
+MONEY = MONEY + 200000
+Fire("PLAYER_MONEY")
+check(db.bank.Mathias.wg == 200000, "20g taget ud")
+-- En hævning, der ikke går igennem, tæller ikke (heller ikke når pengene senere ændrer sig)
+WithdrawGuildBankMoney(999999)
+CLOCK = CLOCK + 20
+MONEY = MONEY + 999999
+Fire("PLAYER_MONEY")
+check(db.bank.Mathias.wg == 200000, "afvist hævning tæller ikke")
+-- Ting: 3 lagt ind, så 1 taget ud
+BAGS[0][1].count = 2
+Fire("BAG_UPDATE")
+Fire("GUILDBANKBAGSLOTS_CHANGED")
+RunTimers()
+check(db.bank.Mathias.di == 3 and db.bank.Mathias.items[13446].d == 3, "3 ting lagt ind")
+BAGS[0][2] = { id = 13446, count = 1 }
+Fire("GUILDBANKBAGSLOTS_CHANGED")
+Fire("BAG_UPDATE")
+RunTimers()
+check(db.bank.Mathias.wi == 1, "1 ting taget ud")
+-- Spiser du, mens banken er åben, tæller det ikke
+CLOCK = CLOCK + 10
+BAGS[0][2].count = 0
+Fire("BAG_UPDATE")
+RunTimers()
+CLOCK = CLOCK + 5
+RunTimers()
+Fire("BAG_UPDATE")
+RunTimers()
+check(db.bank.Mathias.di == 3, "spist mad tæller ikke som indsat: " .. db.bank.Mathias.di)
+Fire("GUILDBANKFRAME_CLOSED")
+local bk = findSent("BK;Mathias;")
+check(bk and bk:find(";500000;200000;3;1;"), "BK sendes samlet: " .. tostring(bk))
+
+-- Repair: selv betalt, betalt af guilden, og en solgt slidt ting (ikke repair)
+REPAIR_COST = 150000
+Fire("MERCHANT_SHOW")
+RepairAllItems(false)
+Fire("PLAYER_MONEY")
+Fire("UPDATE_INVENTORY_DURABILITY")
+RunTimers()
+check(db.bank.Mathias.rep == 150000 and db.bank.Mathias.grep == 0 and db.bank.Mathias.nrep == 1, "15g repair betalt selv")
+Fire("MERCHANT_CLOSED")
+REPAIR_COST = 80000
+Fire("MERCHANT_SHOW")
+RepairAllItems(true)
+Fire("UPDATE_INVENTORY_DURABILITY")
+RunTimers()
+check(db.bank.Mathias.rep == 230000 and db.bank.Mathias.grep == 80000 and db.bank.Mathias.maxrep == 150000, "8g repair betalt af guilden")
+REPAIR_COST = 30000
+Fire("UPDATE_INVENTORY_DURABILITY")
+RunTimers()
+REPAIR_COST = 10000
+MONEY = MONEY + 5000
+Fire("PLAYER_MONEY")
+Fire("UPDATE_INVENTORY_DURABILITY")
+RunTimers()
+check(db.bank.Mathias.nrep == 2, "solgt slidt ting er ikke en reparation")
+Fire("MERCHANT_CLOSED")
+
+-- En vens totaler, store bevægelser nævnes, ældre beskeder ignoreres
+local function bkmsg(at, wg, rep) return table.concat({ "BK", "Nick", at, 100000, wg, 2, 40, 500, 9000, rep, 0, 3, rep, "13446:30", "", NOW - 86400 }, ";") end
+Fire("CHAT_MSG_ADDON", "WCOAST", bkmsg(NOW - 10, 1000000, 50000), "GUILD", "Nickchar")
+check(db.bank.Nick and db.bank.Nick.wg == 1000000 and db.bank.Nick.tw == "13446:30", "Nicks bank-tal modtaget")
+Fire("CHAT_MSG_ADDON", "WCOAST", bkmsg(NOW, 2000000, 250000), "GUILD", "Nickchar")
+check(PRINTS[#PRINTS - 1]:find("tog lige") and lastPrint():find("reparere"), "stor hævning og repair nævnes: " .. lastPrint())
+Fire("CHAT_MSG_ADDON", "WCOAST", bkmsg(NOW - 100, 5, 5), "GUILD", "Nickchar")
+check(db.bank.Nick.wg == 2000000, "ældre BK ignoreres")
+Fire("CHAT_MSG_ADDON", "WCOAST", "BK;Nick;" .. (NOW + 5) .. ";x", "GUILD", "Nickchar")
+check(db.bank.Nick.wg == 2000000, "ødelagt BK ignoreres")
+ns.ShowTab(15)
+check(ns.subTabs[2][4].active, "Bank & repair under Rangliste")
+check(ns.bankUI.bankFacts:GetText():find("Bankrøveren:|r .*Nick"), "Nick er bankrøver: " .. ns.bankUI.bankFacts:GetText())
+check(ns.bankUI.repFacts:GetText():find("Rustbunken:|r .*Nick"), "Nick er rustbunke: " .. ns.bankUI.repFacts:GetText())
+check(ns.bankUI.bankRows[1].f[2]:GetText() == "Nick", "Nick øverst på 'Taget'")
+ns.bankSort = "gave"
+ns.RefreshUI()
+check(ns.bankUI.bankRows[1].f[2]:GetText() == "Mathias (dig)", "Mathias øverst på 'Lagt'")
+ns.bankUI.bankRows[1].scripts.OnEnter(ns.bankUI.bankRows[1])
+ns.bankUI.repRows[1].scripts.OnEnter(ns.bankUI.repRows[1])
+SENT = {}
+ns.SendMyExtras(true)
+check(findSent("BK;Mathias;"), "let synk sender også BK")
+
 -- Demo til og fra
 SlashCmdList.WASTEDCOAST("demo")
 ns.ShowTab(13)
@@ -381,7 +488,7 @@ ns.ShowTab(13)
 check(ns.tabs[4].active and ns.subTabs[4][2].active, "drilleri hører under Sjov")
 local seen = {}
 for _, g in ipairs(ns.GROUPS) do for _, pg in ipairs(g.pages) do seen[pg] = true end end
-for i = 1, 13 do check(seen[i], "side " .. i .. " kan nås fra en fane") end
+for i = 1, 15 do check(seen[i], "side " .. i .. " kan nås fra en fane") end
 ns.frame.scripts.OnUpdate(ns.frame, 2.1)
 ns.Toast({ kind = "wipe", title = "Wipe", text = "test", force = true })
 local tf = _G.WastedCoastToast

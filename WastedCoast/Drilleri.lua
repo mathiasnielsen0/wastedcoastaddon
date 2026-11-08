@@ -958,11 +958,13 @@ function ns.MakePrankDemo()
         end
     end
     if ns.MakeDuelDemo then ns.MakeDuelDemo() end
+    if ns.MakeBankDemo then ns.MakeBankDemo() end
 end
 
 function ns.ClearPrankDemo()
     local db = DB()
     if ns.ClearDuelDemo then ns.ClearDuelDemo() end
+    if ns.ClearBankDemo then ns.ClearBankDemo() end
     for friend, e in pairs(db.levelAt) do
         if e.d then db.levelAt[friend] = nil end
     end
@@ -978,6 +980,7 @@ function ns.ResetPranks()
     db.emoteStats = { sent = {}, recv = {} }
     wipe(db.levelAt)
     if ns.ResetDuels then ns.ResetDuels() end
+    if ns.ResetBank then ns.ResetBank() end
 end
 
 -- Eksempler på de nye popups (gemmes og sendes ikke)

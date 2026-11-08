@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.10.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.11.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua` og (fra 0.10) `Groups.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` og (fra 0.11) `Bank.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -64,7 +64,7 @@ nogle små undersider lige under fanerne:
 | Fane | Undersider |
 |---|---|
 | **Venner** | Kort (forsiden), Karakterer, Gear, Professions, Reputation, Guld |
-| **Rangliste** | Scoreboard, Race, Dueller |
+| **Rangliste** | Scoreboard, Race, Dueller, Bank & repair |
 | **Loot & død** | Loot, Instanser, Statistik |
 | **Sjov** | Trofæer, Drilleri |
 
@@ -228,6 +228,25 @@ sejre i træk). Hold musen over en ven for at se alle modstandere, også dem ude
 vennegruppen. Til højre står det indbyrdes regnskab mellem vennerne (rækken mod
 kolonnen, grøn = rækken fører) og de seneste dueller. Når to venner duellerer, får de
 andre en popup med stillingen.
+
+### Bank & repair (Rangliste > Bank & repair)
+**Guild bank:** hvem har taget mest ud af guild banken, og hvem har lagt mest i den.
+Både guld og ting tæller; ting regnes om til deres vendor-pris, så en stak Major Healing
+Potions vejer mere end en grå klud. Skift mellem *Taget*, *Lagt* og *Netto* (lagt ind
+minus taget ud) øverst. Under listen står titlerne *Bankrøveren*, *Bankens bedste ven*,
+*Snylteren* og den ting, der er hævet flest af. Hold musen over en ven for at se guld og
+ting hver for sig og vennens yndlingsting i banken.
+
+**Repair:** hvor meget hver ven har betalt for at reparere, hvor meget guild banken har
+betalt (Repair med guildens penge), antal reparationer og den største enkelte regning.
+Titlerne er *Rustbunken*, *Guildens regning* og *Største regning*.
+
+Hver ven måler kun sine egne handler, så alle skal have 0.11 for at tælle med, og der
+tælles fra det tidspunkt, man opdaterer. Spillets egen bank-log bruges ikke, fordi den
+kun gemmer de seneste handler og ikke har præcise tider. Totalerne sendes som én lille
+besked efter et bank-besøg og ved synk. Tager eller lægger en ven mindst 50g, eller får
+en repair-regning på mindst 15g, står det i chatten hos de andre (kan slås fra med
+annonceringerne).
 
 ### Drilleri
 Fanen samler alt det, der er lavet for at genere hinanden:
