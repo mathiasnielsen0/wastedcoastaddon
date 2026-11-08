@@ -179,10 +179,10 @@ check(#ns.core.ROSTER == 8 and ns.core.ROSTER[2] == "Mathias", "samme rækkeføl
 local realToast = ns.Toast
 ns.Toast = function(o) ns.toastsSeen[#ns.toastsSeen+1] = o return realToast(o) end
 
--- Sider: 13 (fordelt på 4 faner), og Drilleri-siden findes
-check(#ns.pages == 15 and #ns.tabs == 4, "15 sider på 4 faner")
+-- Sider: 16 (fordelt på 5 faner), og Drilleri-siden findes
+check(#ns.pages == 16 and #ns.tabs == 5, "16 sider på 5 faner")
 ns.frame:Show()
-for i = 1, 13 do ns.ShowTab(i) end
+for i = 1, 16 do if ns.pages[i] then ns.ShowTab(i) end end
 
 -- Dødsannonce: en vens død via netværket, med svagt mob
 SENT = {}
@@ -473,7 +473,7 @@ ns.ShowTab(1)
 -- Hele vinduet kan tegnes med demo-data: alle faner, fade-in og toast-animation
 ns.frame:Show()
 ns.frame.scripts.OnShow(ns.frame)
-check(#ns.tabs == 4, "fire faner")
+check(#ns.tabs == 5, "fem faner")
 if TABSET then
   check(ns.native and ns.frame.chrome ~= nil, "native stil bruger spillets ramme")
   check(#TABSET > 0, "native faner vælges med PanelTemplates_SetTab")
@@ -485,10 +485,21 @@ ns.ShowTab(3)
 check(ns.tabs[1].active and not ns.tabs[2].active, "karakterer hører under Venner")
 check(ns.subTabs[1][2].active and ns.subTabs[1][2]:IsShown() and not ns.subTabs[3][1]:IsShown(), "undersider følger fanen")
 ns.ShowTab(13)
-check(ns.tabs[4].active and ns.subTabs[4][2].active, "drilleri hører under Sjov")
+check(ns.tabs[5].active and ns.subTabs[5][2].active, "drilleri hører under Sjov")
 local seen = {}
 for _, g in ipairs(ns.GROUPS) do for _, pg in ipairs(g.pages) do seen[pg] = true end end
-for i = 1, 15 do check(seen[i], "side " .. i .. " kan nås fra en fane") end
+for _, i in ipairs({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }) do check(seen[i], "side " .. i .. " kan nås fra en fane") end
+-- Loot-fanen er kun loot; død og instanser ligger under Død
+local lootGrp, deathGrp = ns.GROUPS[3], ns.GROUPS[4]
+check(lootGrp.label == "Loot" and #lootGrp.pages == 2 and lootGrp.pages[1] == 4 and lootGrp.pages[2] == 8, "Loot-fanen: Loot og Rolls")
+check(deathGrp.label == "Død" and deathGrp.pages[1] == 16 and deathGrp.pages[2] == 5, "Død-fanen: Statistik og Instanser")
+ns.ShowTab(16)
+check(ns.tabs[4].active and not ns.tabs[3].active, "dødsstatistik hører under Død")
+check(#db.events > 0 and ns.deathRecentText.text_:find("|cff888888i ", 1, true) and not ns.deathRecentText.text_:find("Ingen dødsfald"), "seneste dødsfald vises: " .. tostring(ns.deathRecentText.text_))
+check(not ns.deathRecentText.text_:find("Omgivelserne"), "omgivelserne vises som selve årsagen")
+check(ns.deathStatText.text_:find("Farligste mob"), "dødsstatistik vises")
+ns.ShowTab(8)
+check(ns.tabs[3].active and ns.rollRows[1]:IsShown(), "rolls hører under Loot")
 ns.frame.scripts.OnUpdate(ns.frame, 2.1)
 ns.Toast({ kind = "wipe", title = "Wipe", text = "test", force = true })
 local tf = _G.WastedCoastToast
@@ -651,7 +662,7 @@ local bobCard
 for _, c in ipairs(ns.cards) do if c.friend == bob then bobCard = c end end
 check(bobCard and bobCard.name.text_:find("Bob") and not bobCard.name.text_:find(bob), "kortet viser navnet, ikke ID'et")
 check(ns.cards[3].shown == false, "tomme kort skjules")
-for i = 1, 14 do ns.ShowTab(i) end
+for i = 1, #ns.pages do ns.ShowTab(i) end
 
 -- Fremmede kan ikke melde andre ind, og andre gruppers beskeder ignoreres
 Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", "uCCCCCCCC", g.id, "uDDDDDDDD", "Snyder", NOW, NOW }, ";"), "GUILD", "Snyder")
@@ -724,7 +735,7 @@ check(ns.JoinGroup("WC-WASTED-COAST"), "deltager i Wasted Coast")
 check(db.me == "Nick" and #ns.core.ROSTER == 8 and db.group.admin == "Mathias", "Nick med de 8 venner")
 check(ns.route.CHANNEL == "WC4Lsync", "gamle kanal, så ældre versioner er med")
 check(ns.GroupName() == "Wasted Coast", "gruppens navn")
-for i = 1, 14 do ns.ShowTab(i) end
+for i = 1, #ns.pages do ns.ShowTab(i) end
 return PASSES
 '''
 passes = lua.execute(TESTS, ns)
