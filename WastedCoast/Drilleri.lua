@@ -652,10 +652,12 @@ function ns.HandlePrankMessage(kind, t)
 end
 
 -- Ved synk: send dine seneste rolls og dine egne need-synder
-function ns.SendPrankExtras()
+function ns.SendPrankExtras(light)
     local db = DB()
     SendRecentRolls()
     SendMyLevel()
+    -- Den lette synk (hvert 10. minut) springer historikken over: den sendes, når den sker
+    if light then return end
     if ns.SendDuels then ns.SendDuels() end
     local sent = 0
     for i = #db.needShame, 1, -1 do

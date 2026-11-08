@@ -22,6 +22,7 @@ local addonName, ns = ...
 --   * v0.9.2: nyt navn: Wasted Coast Forever (WC4ever), /wc4ever (/wc4l virker stadig)
 --   * v0.9.3: på Forever bruger vinduet spillets egne rammer, faner og knapper (/wc4ever stil skifter)
 --   * v0.10.0: grupper for alle: opret en gruppe med en kode, egne navne, unikke ID'er, admin (Groups.lua)
+--   * v0.10.1: hver besked sendes kun én gang (kanal frem for guild), fælles synk-svar og let synk
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -802,10 +803,12 @@ local route = {
     CHANNEL = "WC4Lsync",   -- beholdt fra WC4L-tiden, så gamle og nye versioner finder hinanden
     PASSWORD = "wastedcoast",
     TTL = 180,          -- sekunder: så længe en ven regnes for at kunne nås ad en vej
-    shared = {},        -- ven -> { t, via }: sidst hørt i guild, gruppe eller kanal
+    shared = {},        -- ven -> { GUILD = t, PARTY = t, RAID = t, CHANNEL = t }: sidst hørt ad hver vej
     whisper = {},       -- ven -> { t, char }: sidst hørt via whisper, og fra hvilken karakter
     probed = {},        -- karakter (små bogstaver) -> GetTime() for seneste whisper derhen
     channelOK = true,   -- falsk, hvis klienten ikke kan sende addon-beskeder i en kanal
+    stats = { sent = 0, throttled = 0, dropped = 0 },   -- til /wc4ever status
+    reply = { full = -1000, light = -1000 },             -- seneste synk-svar (GetTime)
 }
 ns.route = route
 
@@ -825,20 +828,49 @@ do
     end
     route.Recent = Recent
 
-    -- Alle de veje, en besked skal sendes ad lige nu
+    -- Hørt fra vennen ad denne vej (eller en af vejene) inden for TTL?
+    local function Heard(friend, ...)
+        local h = route.shared[friend]
+        if not h then return false end
+        for i = 1, select("#", ...) do
+            local at = h[select(i, ...)]
+            if at and (time() - at) < route.TTL then return true end
+        end
+        return false
+    end
+    route.Heard = Heard
+
+    -- Alle de veje, en besked skal sendes ad lige nu. Hver besked sendes så få gange som
+    -- muligt: spillet lader kun et addon sende omkring én besked i sekundet, og sendte vi
+    -- alt både i guild, gruppe og kanal, hobede køen sig op, og vennerne fik data sent eller
+    -- slet ikke. Er den skjulte kanal oppe, når den hele gruppen. Guild og party bruges
+    -- så kun til venner, der ikke er hørt i kanalen (fx hvis deres kanal ikke virker).
     function route.Targets()
         local ch = {}
-        if IsInRaid() then ch[#ch + 1] = { "RAID" } elseif IsInGroup() then ch[#ch + 1] = { "PARTY" } end
-        if IsInGuild() then ch[#ch + 1] = { "GUILD" } end
-        if ChannelId() > 0 then ch[#ch + 1] = { "CHANNEL" } end
-        -- Venner, der kun kan nås via whisper: karakteren, de sidst whisperede fra
-        if FallbackOn() and db.me then
+        local groupType = (IsInRaid() and "RAID") or (IsInGroup() and "PARTY") or nil
+        local inGuild = IsInGuild()
+        local chanUp = ChannelId() > 0
+        local needGroup, needGuild = not chanUp and groupType ~= nil, not chanUp and inGuild
+        local whispers = {}
+        if db.me then
             for _, friend in ipairs(ROSTER) do
-                if friend ~= db.me and not Recent(route.shared[friend]) and Recent(route.whisper[friend]) then
-                    ch[#ch + 1] = { "WHISPER", route.whisper[friend].char }
+                if friend ~= db.me and not (chanUp and Heard(friend, "CHANNEL")) then
+                    if inGuild and Heard(friend, "GUILD") then
+                        needGuild = true
+                    elseif groupType and Heard(friend, "PARTY", "RAID") then
+                        needGroup = true
+                    elseif FallbackOn() and Recent(route.whisper[friend])
+                        and not Heard(friend, "GUILD", "PARTY", "RAID", "CHANNEL") then
+                        -- Venner, der kun kan nås via whisper: karakteren, de sidst whisperede fra
+                        whispers[#whispers + 1] = route.whisper[friend].char
+                    end
                 end
             end
         end
+        if chanUp then ch[#ch + 1] = { "CHANNEL" } end
+        if needGroup then ch[#ch + 1] = { groupType } end
+        if needGuild then ch[#ch + 1] = { "GUILD" } end
+        for _, char in ipairs(whispers) do ch[#ch + 1] = { "WHISPER", char } end
         return ch
     end
 
@@ -887,7 +919,8 @@ do
             end
         end
         local function reachable(friend)
-            return friend and (friend == db.me or Recent(route.shared[friend]) or Recent(route.whisper[friend]))
+            return friend and (friend == db.me or Heard(friend, "GUILD", "PARTY", "RAID", "CHANNEL")
+                or Recent(route.whisper[friend]))
         end
         for _, friend in ipairs(ROSTER) do
             if not reachable(friend) then
@@ -919,7 +952,8 @@ do
             route.whisper[friend] = { t = time(), char = char }
         elseif chatType ~= "CHANNEL" or ChannelId() > 0 then
             -- Kun en vej, vi også selv sender ad, tæller (ellers hører vennen os ikke)
-            route.shared[friend] = { t = time(), via = chatType }
+            route.shared[friend] = route.shared[friend] or {}
+            route.shared[friend][chatType] = time()
         end
     end
 
@@ -958,7 +992,11 @@ local function Send(msg, priority)
         local item = { msg, c[1], c[2] }
         if priority then table.insert(queue, 1, item) else queue[#queue + 1] = item end
     end
-    while #queue > 500 do table.remove(queue, 1) end
+    -- Fuld kø: smid de nyeste almindelige beskeder (synk-svar), ikke de vigtige forrest
+    while #queue > 500 do
+        table.remove(queue)
+        route.stats.dropped = route.stats.dropped + 1
+    end
 end
 
 local function StartPump()
@@ -973,8 +1011,15 @@ local function StartPump()
         if ok and R and res ~= nil and (res == R.AddOnMessageLockdown or res == R.AddonMessageThrottle
                 or res == R.ChannelThrottle) then
             item.tries = (item.tries or 0) + 1
-            if item.tries < 20 then table.insert(queue, 1, item) end
+            route.stats.throttled = route.stats.throttled + 1
+            if item.tries < 20 then
+                table.insert(queue, 1, item)
+            else
+                route.stats.dropped = route.stats.dropped + 1
+            end
             pauseUntil = GetTime() + 5
+        elseif ok then
+            route.stats.sent = route.stats.sent + 1
         end
     end)
 end
@@ -1033,7 +1078,8 @@ local function SendHeartbeat()
     local zone = Clean(GetZoneText())
     local xp = MyXP()
     UpdateChar(db.me, char, { class = class, level = level, gold = gold, zone = zone, xp = xp }, time())
-    Send(table.concat({ "H", db.me, char, class or "", level, gold, zone, xp }, ";"))
+    -- Forrest i køen, så online-status og level ikke venter bag et stort synk-svar
+    Send(table.concat({ "H", db.me, char, class or "", level, gold, zone, xp }, ";"), true)
     if ns.AfterEvent then ns.AfterEvent() end
 end
 
@@ -1049,9 +1095,11 @@ local function TouchMe()
 end
 
 -- force = true: vennerne svarer, selvom de har svaret for nylig (knappen "Opdater" og /wc4ever sync)
-local function RequestSync(force)
+-- light = true: den automatiske synk hvert 10. minut. Vennerne sender kun det seneste, ikke al
+-- historikken (den kommer, når du logger ind). Ældre versioner kender ikke feltet og svarer fuldt.
+local function RequestSync(force, light)
     if not db.me then return end
-    local msg = "Q;" .. db.me .. (force and ";1" or "")
+    local msg = "Q;" .. db.me .. (force and ";1" or (light and ";0;L" or ""))
     Send(msg)
     route.Probe(msg)
 end
@@ -1060,9 +1108,11 @@ local function IsLocalOnly(id)
     return id:find("^test%-") or id:find("^demo%-")
 end
 
--- Svar på en sync-forespørgsel: send MINE egne karakterer, dødsfald og loot
-local function RespondToSync()
+-- Svar på en sync-forespørgsel: send MINE egne karakterer, dødsfald og loot.
+-- light: kun det seneste (den automatiske synk), ellers historikken med.
+local function RespondToSync(light)
     if not db.me then return end
+    local max = light and 10 or 60
     ns.SendGroupInfo()
     SendHeartbeat()
 
@@ -1081,7 +1131,7 @@ local function RespondToSync()
         if EventFriend(ev) == db.me and not IsLocalOnly(ev.id) then
             Send(SerializeDeath(ev))
             sent = sent + 1
-            if sent >= 60 then break end
+            if sent >= max then break end
         end
     end
 
@@ -1091,11 +1141,11 @@ local function RespondToSync()
         if LootFriend(ev) == db.me and not IsLocalOnly(ev.id) then
             Send(SerializeLoot(ev))
             sent = sent + 1
-            if sent >= 60 then break end
+            if sent >= max then break end
         end
     end
 
-    if ns.SendMyExtras then ns.SendMyExtras() end
+    if ns.SendMyExtras then ns.SendMyExtras(light) end
 end
 
 -- =============================================================================
@@ -2447,10 +2497,11 @@ local function HandleExtraMessage(kind, t)
 end
 
 -- Ved sync: send MINE instans-tal og trofæer
-function ns.SendMyExtras()
+function ns.SendMyExtras(light)
     if not db.me then return end
     local n = 0
-    for inst, e in pairs(db.runs[db.me] or {}) do
+    -- Instans-tal og trofæer sendes, når de ændrer sig. Den lette synk springer dem over.
+    for inst, e in pairs(light and {} or db.runs[db.me] or {}) do
         if not e.demo then
             Send(string.format("S;%s;%s;%d;%d;%d", db.me, inst, e.wipes or 0, e.clears or 0, e.last or 0))
             n = n + 1
@@ -2463,7 +2514,7 @@ function ns.SendMyExtras()
             if n >= 120 then break end
         end
     end
-    for id, at in pairs(db.ach[db.me] or {}) do
+    for id, at in pairs(light and {} or db.ach[db.me] or {}) do
         if ACH_BY_ID[id] and not (db.demoAch[db.me] and db.demoAch[db.me][id]) then
             Send(string.format("A;%s;%s;%d", db.me, id, at))
         end
@@ -2471,7 +2522,7 @@ function ns.SendMyExtras()
 
     -- v0.5: rolls, guld, professions, gear og reputation
     ns.SendRollSummary()
-    ns.SendGoldHistory(30)
+    ns.SendGoldHistory(light and 5 or 30)
     ns.SendLegacy()
     for char, c in pairs((db.friends[db.me] and db.friends[db.me].chars) or {}) do
         if not c.demo then
@@ -2481,7 +2532,7 @@ function ns.SendMyExtras()
             if c.rep and next(c.rep) then ns.SendRep(char, c.rep) end
         end
     end
-    if ns.SendPrankExtras then ns.SendPrankExtras() end
+    if ns.SendPrankExtras then ns.SendPrankExtras(light) end
 end
 
 ns.CheckBossDeath = CheckBossDeath
@@ -2490,6 +2541,31 @@ ns.CheckBossDeath = CheckBossDeath
 -- Indkommende beskeder
 -- =============================================================================
 local lastSyncReply = {}
+-- Et synk-svar sendes til alle på én gang, så ét svar dækker alle, der spørger samtidig.
+-- Uden det sendte hver spiller hele sin historik én gang pr. ven, der spurgte, og køen
+-- (som spillet kun lader tømme med omkring én besked i sekundet) blev aldrig tom.
+function route.reply.Queue(force, light)
+    local now = GetTime()
+    if route.reply.pending ~= nil then
+        if not light then route.reply.pending = false end   -- et fuldt svar er på vej
+        return
+    end
+    local sinceFull, sinceAny = now - route.reply.full, now - math.max(route.reply.full, route.reply.light)
+    if force then
+        if sinceFull < 30 then return end
+    elseif light then
+        if sinceAny < 300 then return end
+    elseif sinceFull < 60 then
+        return
+    end
+    route.reply.pending = light and true or false
+    C_Timer.After(1 + math.random() * 6, function()
+        local isLight = route.reply.pending
+        route.reply.pending = nil
+        route.reply[isLight and "light" or "full"] = GetTime()
+        RespondToSync(isLight)
+    end)
+end
 
 local function OnAddonMessage(prefix, message, chatType, sender)
     prefix, message, sender = GAME.Plain(prefix), GAME.Plain(message), GAME.Plain(sender)
@@ -2557,10 +2633,13 @@ local function OnAddonMessage(prefix, message, chatType, sender)
         if not ROSTER_SET[friend] then ns.UnknownMember(friend) end
         if db.me and ROSTER_SET[friend] and friend ~= db.me then
             local now = time()
-            local wait = (t[3] == "1") and 30 or 600
+            local force, light = t[3] == "1", t[4] == "L"
+            -- Pr. ven: højst hvert halve minut med "Opdater", ellers hvert andet minut (eller ved
+            -- den lette synk lidt under de 10 minutter, så den ikke rammer lige ved siden af)
+            local wait = force and 30 or (light and 500 or 120)
             if not lastSyncReply[friend] or now - lastSyncReply[friend] > wait then
                 lastSyncReply[friend] = now
-                C_Timer.After(1 + math.random() * 6, RespondToSync)
+                route.reply.Queue(force, light)
             end
         end
     end
@@ -6035,14 +6114,22 @@ do
         end
         for _, friend in ipairs(ROSTER) do
             if friend ~= db.me then
-                local s, w = route.shared[friend], route.whisper[friend]
-                local how
-                if route.Recent(s) then how = "|cff40ff40" .. (VIA_LABEL[s.via] or s.via) .. "|r"
-                elseif route.Recent(w) then how = "|cff40ff40whisper|r (" .. w.char .. ")"
-                else how = "|cff9aa0a6ikke hørt fra de seneste 3 minutter|r" end
+                local w = route.whisper[friend]
+                local via = {}
+                for _, k in ipairs({ "CHANNEL", "GUILD", "PARTY", "RAID" }) do
+                    if route.Heard(friend, k) then via[#via + 1] = VIA_LABEL[k] end
+                end
+                if route.Recent(w) then via[#via + 1] = "whisper (" .. w.char .. ")" end
+                local how = (#via > 0) and ("|cff40ff40" .. table.concat(via, ", ") .. "|r")
+                    or "|cff9aa0a6ikke hørt fra de seneste 3 minutter|r"
                 print("  " .. Name(friend) .. ": " .. how)
             end
         end
+        local paths = {}
+        for _, c in ipairs(route.Targets()) do paths[#paths + 1] = c[2] and ("whisper " .. c[2]) or (VIA_LABEL[c[1]] or c[1]) end
+        local st = route.stats
+        print(string.format("  Sender via: %s.  Kø: %d.  Sendt: %d, ventet på spillets grænse: %d, droppet: %d.",
+            #paths > 0 and table.concat(paths, ", ") or "ingen", #queue, st.sent, st.throttled, st.dropped))
     end
 end
 
@@ -6115,7 +6202,7 @@ events:SetScript("OnEvent", function(_, event, ...)
             ns.CheckGold()
         end)
         -- Hent vennernes data automatisk hvert 10. minut (de svarer højst så ofte uden "Opdater")
-        C_Timer.NewTicker(600, function() RequestSync() end)
+        C_Timer.NewTicker(600, function() RequestSync(false, true) end)
         C_Timer.NewTicker(2, CheckWipe)
         OnZoneChanged()
 

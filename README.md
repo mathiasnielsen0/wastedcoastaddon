@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.10.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.10.1. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -349,7 +349,12 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
   currently playing" for karakterer, der er offline, bliver skjult.
   **Første gang** uden fælles guild: tilføj vennernes karakterer til vennelisten
   (`/friend Navn`), så finder addonet dem selv.
-- `/wc4ever status` viser, hvordan hver ven nås lige nu. Slå kanal og whispers fra med
+- **Hver besked sendes kun én gang:** Spillet lader et addon sende omkring én besked i
+  sekundet. Er den skjulte kanal forbundet, går alt derigennem, og guild og party bruges
+  kun til venner, der ikke er hørt i kanalen. (Før 0.10.1 blev alt sendt både i guild og
+  kanal, og køen hobede sig op, så vennernes tal kun kom igennem i party.)
+- `/wc4ever status` viser, hvordan hver ven nås lige nu, hvilke veje der sendes ad, og
+  hvor mange beskeder der står i kø. Slå kanal og whispers fra med
   `/wc4ever kanal` eller under Indstillinger ("Synk uden guild").
 - **Online-status:** Hver spiller sender et livstegn hvert minut. En ven vises som
   online, hvis der er hørt fra vedkommende inden for de seneste par minutter.
@@ -364,8 +369,10 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 - **Rolls, guld, professions, gear og reputation:** Hver spiller måler sine egne
   og sender dem, når de ændrer sig. Guld måles løbende og sendes med det samme.
   Ved synk sendes det hele igen (de seneste 30 guldmålinger).
-- **Automatisk synk:** Hvert 10. minut beder addonet vennerne om deres data, så
-  du får det, du har misset, uden at logge ud.
+- **Automatisk synk:** Hvert 10. minut beder addonet vennerne om deres seneste data, så
+  du får det, du har misset, uden at logge ud. Den sender ikke hele historikken igen
+  (den kommer, når du logger ind). Ét svar går til alle, så spørger flere venner på
+  samme tid, svarer hver spiller kun én gang.
 - **Knappen "Opdater"** nederst i vinduet (eller `/wc4ever sync`) beder vennerne sende
   alt med det samme. De svarer højst hvert 30. sekund på den, og ellers højst hvert
   10. minut. Svaret kan tage op til et halvt minut at komme igennem.
