@@ -260,7 +260,51 @@ end
 -- Efternavne: sat med /wc4ever efternavn, sendt i livstegn og dødsfald, vist overalt
 SlashCmdList["WASTEDCOAST"]("efternavn Stormhammer")
 check(db.settings.surnames[PLAYER] == "Stormhammer", "efternavn gemt")
-check(findSent("H;Mathias;" .. PLAYER .. ";"):match(";Stormhammer$"), "efternavn i livstegn")
+check(findSent("H;Mathias;" .. PLAYER .. ";"):match(";Stormhammer;%d+$"), "efternavn i livstegn")
+
+-- "Er online"-toasten: kun ved et rigtigt login, ikke når et par livstegn går tabt midt i en session
+do
+    local function onlineToasts()
+        local n = 0
+        for _, o in ipairs(ns.toastsSeen) do if o.kind == "online" and o.friend == "Jeppe" then n = n + 1 end end
+        return n
+    end
+    local function hb(session) Fire("CHAT_MSG_ADDON", "WCOAST", "H;Jeppe;Bus Knud;PALADIN;30;100;Westfall;10;;" .. (session or ""), "PARTY", "Bus Knud") end
+    local before = onlineToasts()
+    local savedJeppe, savedNow, savedClock = db.friends.Jeppe, NOW, CLOCK
+    db.friends.Jeppe = nil
+    CLOCK = CLOCK + 1000; NOW = NOW + 1000
+    hb(5000)
+    check(onlineToasts() == before + 1, "Jeppe logger ind: én toast")
+    -- Samme session hele aftenen, men livstegnene udebliver i 4-5 minutter flere gange (fx boss-lockdown)
+    for i = 1, 6 do
+        CLOCK = CLOCK + 280; NOW = NOW + 280
+        hb(5000)
+        for j = 1, 5 do CLOCK = CLOCK + 60; NOW = NOW + 60; hb(5000) end
+    end
+    check(onlineToasts() == before + 1, "ingen ny toast i samme session: " .. (onlineToasts() - before))
+    -- Logger ud og ind igen: ny session, ny toast
+    CLOCK = CLOCK + 1200; NOW = NOW + 1200
+    hb(9000)
+    check(onlineToasts() == before + 2, "nyt login giver ny toast")
+    -- Ældre version uden session: et par mistede livstegn giver ingen toast, et langt hul gør
+    db.friends.Jeppe.session = nil
+    CLOCK = CLOCK + 300; NOW = NOW + 300
+    hb(nil)
+    check(onlineToasts() == before + 2, "uden session: kort hul giver ingen toast")
+    CLOCK = CLOCK + 1800; NOW = NOW + 1800
+    hb(nil)
+    check(onlineToasts() == before + 3, "uden session: langt hul giver toast")
+    check(ns.CameOnline(1, 1, 5000) == false and ns.CameOnline(2, 1, 10) == true, "session afgør, ikke hullet")
+    -- Egen session: den samme ved /reload, ny efter et rigtigt login
+    local id = ns.MySession()
+    ns.sessionLive = nil; NOW = NOW + 30
+    check(ns.MySession() == id, "/reload beholder sessionen")
+    ns.sessionLive = nil; NOW = NOW + 3600
+    check(ns.MySession() ~= id, "nyt login giver ny session")
+    db.friends.Jeppe, db.chars["Bus Knud"], NOW, CLOCK = savedJeppe, nil, savedNow, savedClock
+    ns.sessionLive = nil; db.session = nil
+end
 Fire("CHAT_MSG_ADDON", "WCOAST", "H;Nick;Sigurd;WARRIOR;30;100;Westfall;10;Jernhånd", "GUILD", "Sigurd")
 check(db.friends.Nick.chars.Sigurd.surname == "Jernhånd", "vennens efternavn gemmes")
 NOW = NOW + 20

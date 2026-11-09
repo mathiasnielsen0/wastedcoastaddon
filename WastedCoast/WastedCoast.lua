@@ -33,6 +33,7 @@ local addonName, ns = ...
 --   * v0.15.0: dødsfald deles op i PvP (dræbt af en spiller) og PvE overalt, også i deaths/hr
 --   * v0.16.0: toast hos alle, når en ven får rare/epic loot eller dræber et rare mob (Rares.lua)
 --   * v0.17.0: plads til 10 medlemmer (højere vindue, fem smalle kort pr. række med over 8 online)
+--   * v0.17.1: "er online"-toasten kommer kun ved et rigtigt login (login-session i livstegnet), ikke igen og igen midt i en session
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -1221,10 +1222,29 @@ local function SendHeartbeat()
     local xp = MyXP()
     local sur = Clean(ns.MySurname() or "")
     UpdateChar(db.me, char, { class = class, level = level, gold = gold, zone = zone, xp = xp, surname = sur }, time())
-    -- Forrest i køen, så online-status og level ikke venter bag et stort synk-svar
-    Send(table.concat({ "H", db.me, char, class or "", level, gold, zone, xp }, ";")
-        .. (sur ~= "" and (";" .. sur) or ""), true)   -- felt 9: efternavn (Forever)
+    -- Forrest i køen, så online-status og level ikke venter bag et stort synk-svar.
+    -- Felt 9: efternavn (Forever, kan være tomt). Felt 10: login-session (se ns.MySession).
+    Send(table.concat({ "H", db.me, char, class or "", level, gold, zone, xp, sur, ns.MySession() }, ";"), true)
     if ns.AfterEvent then ns.AfterEvent() end
+end
+
+-- Login-session: et tal, der er det samme, så længe du er logget ind. Det skifter kun ved et
+-- rigtigt login, ikke ved /reload, loadingskærme eller skift af karakter inden for 5 minutter.
+-- Vennerne viser kun "er online", når sessionen skifter. Før gik det på, om der var gået 150
+-- sekunder siden sidste livstegn, og det skete jævnligt midt i en session (fx når spillet
+-- spærrer addon-beskeder under en boss), så samme ven poppede op som online igen og igen.
+function ns.MySession()
+    local s = db.session
+    local now = time()
+    if not ns.sessionLive then
+        ns.sessionLive = true
+        if not (s and s.id and s.last and now - s.last < 300) then
+            s = { id = now }
+            db.session = s
+        end
+    end
+    s.last = now
+    return s.id
 end
 
 -- Opdaterer kun din egen karakter lokalt (fx ved XP), uden at sende noget
@@ -2488,13 +2508,21 @@ end
 local startedAt = GetTime()
 local toastedAt = {}
 
-function ns.OnFriendHeartbeat(friend, char, class, level, zone, wasOnline, prevLevel)
+-- Er vennen lige logget ind? session = felt 10 i livstegnet (nil fra ældre versioner),
+-- prevSession = den sidst kendte, gap = sekunder siden vennen sidst blev hørt (nil = aldrig).
+function ns.CameOnline(session, prevSession, gap)
+    if session and prevSession then return session ~= prevSession end
+    -- Ingen session at sammenligne med: kun efter et langt hul, ikke et par mistede livstegn
+    return gap == nil or gap >= 600
+end
+
+function ns.OnFriendHeartbeat(friend, char, class, level, zone, cameOnline, prevLevel)
     local now = GetTime()
     if now - startedAt < 70 then          -- lige efter login lander alles livstegn på én gang
         toastedAt[friend] = now
         return
     end
-    if not wasOnline then
+    if cameOnline then
         if not toastedAt[friend] or now - toastedAt[friend] > 600 then
             toastedAt[friend] = now
             ns.Toast({
@@ -2873,7 +2901,10 @@ local function OnAddonMessage(prefix, message, chatType, sender)
         ns.NoteCharOwner(friend, t[3], sender)
         if ROSTER_SET[friend] and friend ~= db.me then
             local char = t[3]
-            local wasOnline = IsOnline(friend)
+            local seen = LastSeen(friend)
+            local session = tonumber(t[10])
+            local prevSession = db.friends[friend] and db.friends[friend].session
+            local came = ns.CameOnline(session, prevSession, seen and (time() - seen))
             local prev = db.friends[friend] and db.friends[friend].chars and db.friends[friend].chars[char]
             local prevLevel = prev and prev.level
             local level = tonumber(t[5])
@@ -2881,7 +2912,8 @@ local function OnAddonMessage(prefix, message, chatType, sender)
                 class = t[4], level = level, gold = tonumber(t[6]), zone = t[7], xp = tonumber(t[8]),
                 surname = t[9],
             }, time())
-            ns.OnFriendHeartbeat(friend, char, t[4], level, t[7], wasOnline, prevLevel)
+            if session then db.friends[friend].session = session end
+            ns.OnFriendHeartbeat(friend, char, t[4], level, t[7], came, prevLevel)
             if ns.RefreshUI then ns.RefreshUI() end
         end
 
