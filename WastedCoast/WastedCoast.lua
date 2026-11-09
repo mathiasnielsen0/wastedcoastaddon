@@ -29,6 +29,7 @@ local addonName, ns = ...
 --   * v0.11.0: daglig sladder ved login: højdepunkterne siden sidst (Gossip.lua)
 --   * v0.12.0: samlet udgivelse af 0.10.2, 0.10.3 og 0.11.0; seneste dødsfald viser fornavn + efternavn
 --   * v0.13.0: spilletid (/played) pr. karakter, pr. ven og for hele gruppen, og deaths/hr (Played.lua)
+--   * v0.14.0: XP-procent i det nuværende level på hver karakter (Venner, Rangliste og tooltips)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -645,7 +646,20 @@ local function LatestLoot(friend)
     return best
 end
 
--- Alle karakterer hos en ven, sorteret efter level og derefter senest set
+-- Level med XP-procent i det nuværende level, fx "42 (63%)". Max level og ukendt XP viser kun level.
+function ns.XPPct(level, xp)
+    if not level or level <= 0 or level >= MAX_LEVEL or not xp then return nil end
+    return math.max(0, math.min(99, math.floor(xp)))
+end
+function ns.LevelText(level, xp, prefix)
+    if not level or level <= 0 then return "-" end
+    local base = (prefix or "") .. level
+    local pct = ns.XPPct(level, xp)
+    if not pct then return base end
+    return base .. " |cff9a9aa6(" .. pct .. "%)|r"
+end
+
+-- Alle karakterer hos en ven, sorteret efter level, XP og derefter senest set
 local function CharList(friend)
     local list = {}
     local info = db.friends[friend]
@@ -663,13 +677,15 @@ local function CharList(friend)
     for name, c in pairs(info.chars) do
         list[#list + 1] = {
             name = name, full = ns.CharFull(friend, name, c.surname),
-            class = c.class, level = c.level or 0, zone = c.zone, gold = c.gold or 0,
+            class = c.class, level = c.level or 0, xp = c.xp, zone = c.zone, gold = c.gold or 0,
             seen = c.seen, deaths = dBy[name] or 0, loot = lBy[name] or 0,
             online = (c.seen and (now - c.seen) < 150) and true or false,
         }
     end
     table.sort(list, function(a, b)
         if a.level ~= b.level then return a.level > b.level end
+        local xa, xb = ns.XPPct(a.level, a.xp) or 0, ns.XPPct(b.level, b.xp) or 0
+        if xa ~= xb then return xa > xb end
         if (a.seen or 0) ~= (b.seen or 0) then return (a.seen or 0) > (b.seen or 0) end
         return a.name < b.name
     end)
@@ -816,11 +832,17 @@ local function BuildStats()
     local list = {}
     for _, name in ipairs(ROSTER) do
         local info = db.friends[name] or {}
-        local nChars, maxLevel, gold = 0, 0, 0
+        local nChars, maxLevel, maxXP, gold = 0, 0, nil, 0
         local lastName, last
         for cn, c in pairs(info.chars or {}) do
             nChars = nChars + 1
-            if (c.level or 0) > maxLevel then maxLevel = c.level end
+            local lv = c.level or 0
+            if lv > maxLevel then
+                maxLevel, maxXP = lv, ns.XPPct(lv, c.xp)
+            elseif lv == maxLevel and lv > 0 then
+                local x = ns.XPPct(lv, c.xp)
+                if x and (not maxXP or x > maxXP) then maxXP = x end
+            end
             gold = gold + (c.gold or 0)
             if not last or IsNewer(cn, c, lastName, last) then lastName, last = cn, c end
         end
@@ -829,7 +851,8 @@ local function BuildStats()
         list[#list + 1] = {
             name = name, disp = Name(name), class = last and last.class, char = lastName,
             charFull = lastName and ns.CharFull(name, lastName, last.surname),
-            level = last and last.level or 0, maxLevel = maxLevel,
+            level = last and last.level or 0, xp = last and last.xp, maxLevel = maxLevel, maxXP = maxXP,
+            levelSort = maxLevel + (maxXP or 0) / 100,
             zone = last and last.zone, seen = last and last.seen,
             chars = nChars, deaths = d, loot = l, gold = gold, wipes = rw, clears = rc, kills = rk,
             falls = falls[name] or 0,
@@ -861,7 +884,7 @@ local function ComputeTitles(list)
     award("deaths", "Klovnen")
     award("loot", "Lootgoblin")
     award("gold", "Rigmanden")
-    award("maxLevel", "Højest level")
+    award("levelSort", "Højest level")
     award("chars", "Alt-junkie", 2)
     award("wipes", "Wipe-konge")
     award("falls", "Faldskade-konge")
@@ -3189,7 +3212,7 @@ local function BuildCard(parent, index, friend)
             for i = 1, math.min(#chars, 8) do
                 local c = chars[i]
                 local r, g, b = ClassColor(c.class)
-                GameTooltip:AddDoubleLine(c.full or c.name, c.level > 0 and ("Level " .. c.level) or "-", r, g, b, 0.8, 0.8, 0.8)
+                GameTooltip:AddDoubleLine(c.full or c.name, ns.LevelText(c.level, c.xp, "Level "), r, g, b, 0.8, 0.8, 0.8)
             end
             if #chars > 8 then GameTooltip:AddLine("... og " .. (#chars - 8) .. " flere", 0.5, 0.5, 0.56) end
         end
@@ -3416,7 +3439,7 @@ local function RefreshOverview()
         if s.online then card.dot:SetColorTexture(0.25, 0.9, 0.35, 1) else card.dot:SetColorTexture(0.35, 0.35, 0.4, 1) end
 
         if s.class then
-            card.info1:SetText(string.format("Level %d  %s", s.level, ClassName(s.class)))
+            card.info1:SetText(ns.LevelText(s.level, s.xp, "Level ") .. "  " .. ClassName(s.class))
         else
             card.info1:SetText("Ikke set endnu")
         end
@@ -3490,8 +3513,8 @@ end
 -- =============================================================================
 local SCORE_COLS = {
     { label = "#",      w = 36 },
-    { label = "Navn",   w = 160, sort = "name" },
-    { label = "Level",  w = 60,  sort = "maxLevel" },
+    { label = "Navn",   w = 140, sort = "name" },
+    { label = "Level",  w = 80,  sort = "levelSort" },
     { label = "Chars",  w = 60,  sort = "chars" },
     { label = "Døde",   w = 60,  sort = "deaths" },
     { label = "Loot",   w = 60,  sort = "loot" },
@@ -3584,7 +3607,7 @@ local function RefreshScoreboard()
         SetClassIcon(row.icon, s.class)
         row.name:SetText(s.disp .. (s.isMe and "  (dig)" or ""))
         row.name:SetTextColor(r, g, b)
-        row.level:SetText(s.maxLevel > 0 and tostring(s.maxLevel) or "-")
+        row.level:SetText(ns.LevelText(s.maxLevel, s.maxXP))
         row.chars:SetText(s.chars > 0 and tostring(s.chars) or "-")
 
         row.deaths:SetText(tostring(s.deaths))
@@ -3676,8 +3699,8 @@ local function BuildCharsPage(page)
     panel.bigLabel:SetText("karakterer")
 
     -- Kolonneoverskrifter
-    local heads = { { "Karakter", 44, 176, "LEFT" }, { "Lvl", 220, 36, "CENTER" }, { "Døde", 258, 42, "CENTER" },
-                    { "Loot", 302, 42, "CENTER" }, { "Sidst set", 350, 180, "LEFT" } }
+    local heads = { { "Karakter", 44, 176, "LEFT" }, { "Lvl (XP)", 220, 70, "CENTER" }, { "Døde", 292, 42, "CENTER" },
+                    { "Loot", 336, 42, "CENTER" }, { "Sidst set", 384, 146, "LEFT" } }
     for _, h in ipairs(heads) do
         local fs = Txt(panel, "GameFontHighlightSmall")
         fs:SetPoint("TOPLEFT", panel, "TOPLEFT", h[2], -80)
@@ -3696,10 +3719,10 @@ local function BuildCharsPage(page)
         row.icon:SetSize(20, 20)
         row.icon:SetPoint("LEFT", row, "LEFT", 6, 0)
         row.name = Field(row, 32, 176, "LEFT", "GameFontNormal")
-        row.level = Field(row, 208, 36, "CENTER")
-        row.deaths = Field(row, 246, 42, "CENTER")
-        row.loot = Field(row, 290, 42, "CENTER")
-        row.seen = Field(row, 338, 184, "LEFT")
+        row.level = Field(row, 208, 70, "CENTER")
+        row.deaths = Field(row, 280, 42, "CENTER")
+        row.loot = Field(row, 324, 42, "CENTER")
+        row.seen = Field(row, 372, 150, "LEFT")
         row:SetScript("OnEnter", function(self)
             self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
             local d = self.data
@@ -3707,7 +3730,9 @@ local function BuildCharsPage(page)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             local r, g, b = ClassColor(d.class)
             GameTooltip:AddLine(d.full or d.name, r, g, b)
-            GameTooltip:AddLine(string.format("Level %d %s", d.level, ClassName(d.class)), 0.8, 0.8, 0.8)
+            GameTooltip:AddLine(ns.LevelText(d.level, d.xp, "Level ") .. " " .. ClassName(d.class), 0.8, 0.8, 0.8)
+            local pct = ns.XPPct(d.level, d.xp)
+            if pct then GameTooltip:AddDoubleLine("XP i level", pct .. "%", 0.8, 0.8, 0.8, 0.5, 0.75, 1) end
             if d.zone then GameTooltip:AddLine(d.zone, 0.6, 0.6, 0.66) end
             GameTooltip:AddLine(" ")
             GameTooltip:AddDoubleLine("Guld", d.gold > 0 and FormatGold(d.gold) or "-", 0.8, 0.8, 0.8, 1, 1, 1)
@@ -3795,7 +3820,7 @@ local function RefreshChars()
             SetClassIcon(row.icon, d.class)
             row.name:SetText(d.full or d.name)
             row.name:SetTextColor(cr, cg, cb)
-            row.level:SetText(d.level > 0 and tostring(d.level) or "-")
+            row.level:SetText(ns.LevelText(d.level, d.xp))
             row.deaths:SetText(tostring(d.deaths))
             row.deaths:SetTextColor(d.deaths > 0 and 1 or 0.6, d.deaths > 0 and 0.5 or 0.6, d.deaths > 0 and 0.5 or 0.66)
             row.loot:SetText(tostring(d.loot))

@@ -181,6 +181,13 @@ ns.Toast = function(o) ns.toastsSeen[#ns.toastsSeen+1] = o return realToast(o) e
 
 -- Sider: 16 (fordelt på 5 faner), og Drilleri-siden findes
 check(#ns.pages == 17 and #ns.tabs == 5, "17 sider på 5 faner")
+
+-- XP-procent i level
+check(ns.LevelText(42, 63) == "42 |cff9a9aa6(63%)|r", "level med XP-procent: " .. ns.LevelText(42, 63))
+check(ns.LevelText(42, nil) == "42", "ukendt XP viser kun level")
+check(ns.LevelText(ns.core.MAX_LEVEL, 50) == tostring(ns.core.MAX_LEVEL), "max level viser ingen procent")
+check(ns.LevelText(0, 10) == "-", "ukendt level")
+check(ns.LevelText(12, 5, "Level ") == "Level 12 |cff9a9aa6(5%)|r", "med præfiks")
 ns.frame:Show()
 for i = 1, 17 do if ns.pages[i] then ns.ShowTab(i) end end
 
