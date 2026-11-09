@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.12.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.13.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` og (fra 0.11) `Bank.lua` og `Gossip.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` og (fra 0.13) `Played.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -64,7 +64,7 @@ nogle små undersider lige under fanerne:
 | Fane | Undersider |
 |---|---|
 | **Venner** | Kort (forsiden), Karakterer, Gear, Professions, Reputation, Guld |
-| **Rangliste** | Scoreboard, Race, Dueller, Bank & repair |
+| **Rangliste** | Scoreboard, Spilletid, Race, Dueller, Bank & repair |
 | **Loot** | Loot, Rolls |
 | **Død** | Statistik, Instanser |
 | **Sjov** | Trofæer, Drilleri |
@@ -190,9 +190,18 @@ En bar pr. ven, der viser, hvem der er længst fremme (vennens karakter med
 højest level, inkl. XP-procent). Den forreste har guldkant, og barren bliver
 guld ved max level (70 på TBC, 60 på WoW Forever).
 
+### Spilletid (Rangliste > Spilletid)
+Spilletiden (`/played`) for hver ven og hele gruppen tilsammen, og **deaths/hr**:
+dødsfald pr. times spilletid. Klik på en ven for at se spilletid, dødsfald og
+deaths/hr på hver af vennens karakterer (med fornavn og efternavn). Spilletiden
+måles automatisk lidt efter login (uden at skrive "Total time played" i chatten),
+tæller videre, mens du spiller, og sendes til de andre hvert kvarter og ved synk.
+Deaths/hr regnes kun på karakterer med kendt spilletid og mindst en halv times
+spil. Spilletiden kan også ses i karakter-tooltippen under Venner > Karakterer.
+
 ### Statistik (under Død)
 **Dødsstatistik:** de fem mobs, der har slået flest af jer ihjel, de tre farligste
-zoner og **faldskade-kongen** (flest dødsfald af fald). Ud for hver står, hvem der
+zoner, de tre med flest **deaths/hr** og **faldskade-kongen** (flest dødsfald af fald). Ud for hver står, hvem der
 er døde til den. Til højre står **seneste dødsfald**: hvem (med karakterens fornavn og efternavn), hvornår, hvad der
 slog dem ihjel og hvor.
 
