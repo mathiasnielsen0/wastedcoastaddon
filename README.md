@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.15.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.16.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` og (fra 0.13) `Played.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua` og (fra 0.16) `Rares.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -172,6 +172,15 @@ item for Blizzards egen tooltip, og shift-klik for at sætte linket i chatten.
 Hvad der **ikke** tæller: items fra quests, bytte og crafting, items andre
 vinder, og crafting-materialer (fx Void Crystals fra disenchant). Vil du kun have epic og bedre,
 så skriv `/wc4ever loot epic` (og `/wc4ever loot rare` for at gå tilbage).
+
+### Toasts for rare/epic loot og rare mobs
+Når en ven får et **rare** (blåt), **epic** (lilla) eller legendary item, får alle
+en popup øverst på skærmen med vennens fulde karakternavn (fornavn + efternavn)
+og item-linket, farvet efter kvaliteten. Det samme sker, når en ven **dræber et
+rare eller rare elite mob**: popuppen viser mobbets navn, level og zone. Er flere
+venner med til drabet, kommer den kun én gang. Rare mobs ses via target, focus,
+mouseover, gruppens targets og nameplates, så hav mobbet i target, når det dør.
+Slå dem fra hver for sig med `/wc4ever loottoast` og `/wc4ever raretoast`.
 
 ### Instanser
 Vælg en ven og se, hvor mange gange vedkommende har **klaret** hver dungeon og
@@ -325,6 +334,7 @@ Små beskeder øverst på skærmen:
   i *Instance*" (sendes til alle med addonet)
 - **Boss nedlagt** og **instance klaret** (kun til dig)
 - **Trofæer** (dine egne som stor popup, vennernes som lille)
+- **Rare/epic loot** og **rare mobs dræbt** (sendes til alle med addonet)
 
 Slå dem fra med `/wc4ever toast`, og se eksempler med `/wc4ever testtoast`.
 
@@ -372,7 +382,9 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever kanal` | Slå synk uden guild (skjult kanal og whispers) til/fra |
 | `/wc4ever sound` | Slå lyd til/fra |
 | `/wc4ever sound <event>` | Test en lyd: `death`, `loot`, `wipe`, `online`, `levelup`, `achievement`, `bosskill` |
-| `/wc4ever toast` | Slå popups (online, level, wipe) til/fra |
+| `/wc4ever toast` | Slå alle popups (online, level, wipe, loot, rares) til/fra |
+| `/wc4ever loottoast` | Slå popups for rare/epic loot til/fra |
+| `/wc4ever raretoast` | Slå popups for dræbte rare mobs til/fra |
 | `/wc4ever stil` | Skift mellem spillets egne rammer (native) og addonets egen stil (kræver /reload) |
 | `/wc4ever minimap` | Vis/skjul WC4ever-logoet ved minimappet (klik åbner vinduet, træk flytter det) |
 | `/wc4ever testtoast` | Vis eksempler på popups (sendes ikke til de andre) |

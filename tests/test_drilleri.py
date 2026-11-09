@@ -149,7 +149,7 @@ function PanelTemplates_SetNumTabs() end
 function PanelTemplates_TabResize() end
 ''')
 ns = lua.table()
-for f in ["Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua", "Bank.lua", "Played.lua", "Gossip.lua"]:
+for f in ["Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua", "Bank.lua", "Played.lua", "Gossip.lua", "Rares.lua"]:
     code = open(f"{ADDON}/{f}", encoding="utf-8").read()
     fn = lua.eval("function(code, name) local f, err = loadstring(code, name) if not f then error(err) end return f end")(code, "@" + f)
     fn("WastedCoast", ns)
@@ -292,6 +292,99 @@ for _, kind in ipairs({ "Faldskade", "Drukning", "Udmattelse", "Lava", "Ukendt",
     local s = ns.Obituary(e, "Søren")
     check(not s:find("{"), "alle felter udfyldt: " .. s)
   end
+end
+
+-- v0.16: toast hos alle ved rare/epic loot, med fuldt karakternavn og item-link
+local nL = #ns.toastsSeen
+NOW = NOW + 10
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "L", "L-Sigurd-" .. NOW, "Nick", "Sigurd", "WARRIOR", "item:30000", 4, "need", "raid", "Gruul's Lair", NOW, "Big Purple" }, ";"), "GUILD", "Sigurd")
+local lt = ns.toastsSeen[#ns.toastsSeen]
+check(#ns.toastsSeen == nL + 1 and lt.kind == "epicloot", "epic loot giver toast")
+check(lt.title == "Sigurd Jernhånd", "fuldt karakternavn i loot-toast: " .. tostring(lt.title))
+check(lt.text:find("|Hitem:30000|h%[Big Purple%]|h") and lt.text:find("a335ee"), "item-link i lilla: " .. lt.text)
+check(lt.head:find("EPIC") and lt.head:find("Nick"), "overskrift med vennens navn: " .. lt.head)
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "L", "L-Sigurd-" .. NOW, "Nick", "Sigurd", "WARRIOR", "item:30000", 4, "need", "raid", "Gruul's Lair", NOW, "Big Purple" }, ";"), "CHANNEL", "Sigurd")
+check(#ns.toastsSeen == nL + 1, "samme loot via to kanaler giver kun én toast")
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "L", "L-Sigurd-old", "Nick", "Sigurd", "WARRIOR", "item:30001", 4, "need", "raid", "Gruul's Lair", NOW - 3600, "Old Purple" }, ";"), "GUILD", "Sigurd")
+check(#ns.toastsSeen == nL + 1, "gammelt loot fra synk giver ingen toast")
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "L", "L-Sigurd-g" .. NOW, "Nick", "Sigurd", "WARRIOR", "item:30002", 2, "drop", "world", "Westfall", NOW, "Green Thing" }, ";"), "GUILD", "Sigurd")
+check(#ns.toastsSeen == nL + 1, "grønt loot giver ingen toast")
+-- Eget rare drop: toast hos mig selv, og det sendes til de andre
+SENT = {}
+Fire("CHAT_MSG_LOOT", "You receive loot: |cff0070dd|Hitem:30003::::::::40:::::|h[Blue Thing]|h|r.")
+RunTimers()
+lt = ns.toastsSeen[#ns.toastsSeen]
+check(lt.kind == "rareloot" and lt.title == PLAYER .. " Stormhammer" and lt.text:find("Blue Thing"), "eget rare loot giver toast: " .. tostring(lt.title))
+check(findSent("L;") and findSent("L;"):find("item:30003"), "eget rare loot sendes til de andre")
+SlashCmdList["WASTEDCOAST"]("loottoast")
+NOW = NOW + 1
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "L", "L-Sigurd-o" .. NOW, "Nick", "Sigurd", "WARRIOR", "item:30004", 4, "need", "raid", "Gruul's Lair", NOW, "Off Purple" }, ";"), "GUILD", "Sigurd")
+check(ns.toastsSeen[#ns.toastsSeen] == lt, "loottoast fra: ingen toast")
+SlashCmdList["WASTEDCOAST"]("loottoast")
+check(db.settings.lootToasts == true, "loottoast til igen")
+-- Ryd test-loottet igen, så resten af testene (fx sladderen) ser det samme som før
+for i = #db.loot, 1, -1 do if db.loot[i].item:find("^item:3000%d") then table.remove(db.loot, i) end end
+
+-- v0.16: rare mobs. Et rare elite mob i target, i kamp, og så dødt
+do
+  local U = { target = { guid = "Creature-0-1-2-3-4-0000AAAA", name = "Rak'shiri", level = 64, cls = "rareelite", dead = false, combat = true, denied = false } }
+  local o = { UnitExists, UnitGUID, UnitName, UnitLevel, UnitAffectingCombat }
+  local function u(x) return U[x] end
+  UnitExists = function(x) if u(x) then return true end return o[1](x) end
+  UnitGUID = function(x) if u(x) then return u(x).guid end return o[2](x) end
+  UnitName = function(x) if u(x) then return u(x).name end return o[3](x) end
+  UnitLevel = function(x) if u(x) then return u(x).level end return o[4](x) end
+  UnitAffectingCombat = function(x) if u(x) then return u(x).combat end return o[5](x) end
+  UnitClassification = function(x) return u(x) and u(x).cls or "normal" end
+  UnitIsDead = function(x) return u(x) and u(x).dead or false end
+  UnitIsTapDenied = function(x) return u(x) and u(x).denied or false end
+  local nR = #ns.toastsSeen
+  SENT = {}
+  Fire("PLAYER_TARGET_CHANGED")
+  check(#ns.toastsSeen == nR, "levende rare giver ingen toast")
+  U.target.dead = true
+  Fire("UNIT_HEALTH", "target")
+  local rt = ns.toastsSeen[#ns.toastsSeen]
+  check(#ns.toastsSeen == nR + 1 and rt.kind == "raremob", "dræbt rare giver toast")
+  check(rt.title == PLAYER .. " Stormhammer" and rt.text:find("Rak'shiri") and rt.text:find("64") and rt.text:find("Rare Elite"), "rare-toast: " .. rt.text)
+  local rm = findSent("RM;")
+  check(rm and rm:find("^RM;Mathias;" .. PLAYER .. ";WARRIOR;Rak'shiri;64;rareelite;"), "drabet sendes: " .. tostring(rm))
+  ns.ScanRares()
+  check(#ns.toastsSeen == nR + 1, "samme corpse giver kun én toast")
+  -- En vens drab af samme mob (de var med i gruppen): ingen ekstra toast
+  Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "RM", "Nick", "Sigurd", "WARRIOR", "Rak'shiri", 64, "rareelite", "Nagrand", NOW, U.target.guid }, ";"), "GUILD", "Sigurd")
+  check(#ns.toastsSeen == nR + 1, "samme mob fra en ven giver ingen ekstra toast")
+  -- En vens drab af et andet rare
+  Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "RM", "Nick", "Sigurd", "WARRIOR", "Voidhunter Yar", 63, "rare", "Netherstorm", NOW, "Creature-0-1-2-3-5-0000BBBB" }, ";"), "GUILD", "Sigurd")
+  rt = ns.toastsSeen[#ns.toastsSeen]
+  check(#ns.toastsSeen == nR + 2 and rt.title == "Sigurd Jernhånd" and rt.text:find("Voidhunter Yar") and rt.text:find("Netherstorm"), "vens rare-drab: " .. tostring(rt.title))
+  check(db.rareKills.Nick == 1 and db.rareKills.Mathias == 1, "rare-drab tælles")
+  Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "RM", "Nick", "Sigurd", "WARRIOR", "Voidhunter Yar", 63, "rare", "Netherstorm", NOW, "Creature-0-1-2-3-5-0000BBBB" }, ";"), "CHANNEL", "Sigurd")
+  check(#ns.toastsSeen == nR + 2, "samme besked to gange: én toast")
+  Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "RM", "Nick", "Sigurd", "WARRIOR", "Old Rare", 63, "rare", "X", NOW - 3600, "Creature-0-9" }, ";"), "GUILD", "Sigurd")
+  check(#ns.toastsSeen == nR + 2, "gammelt drab giver ingen toast")
+  -- Et rare, en anden har tagget, tæller ikke
+  U.target = { guid = "Creature-0-1-2-3-6-0000CCCC", name = "Stolen Rare", level = 60, cls = "rare", dead = false, combat = true, denied = true }
+  Fire("PLAYER_TARGET_CHANGED")
+  U.target.dead = true
+  Fire("UNIT_HEALTH", "target")
+  check(#ns.toastsSeen == nR + 2, "tagget af andre: ingen toast")
+  -- Et normalt mob tæller ikke; et rare, vi aldrig har været i kamp med, heller ikke
+  U.target = { guid = "Creature-0-1-2-3-7-0000DDDD", name = "Boar", level = 10, cls = "normal", dead = true, combat = false }
+  Fire("PLAYER_TARGET_CHANGED")
+  U.target = { guid = "Creature-0-1-2-3-8-0000EEEE", name = "Old Corpse", level = 30, cls = "rare", dead = true, combat = false }
+  Fire("PLAYER_TARGET_CHANGED")
+  check(#ns.toastsSeen == nR + 2, "normalt mob og fremmed corpse: ingen toast")
+  -- Combat loggen (TBC): et husket rare dør uden at være i target
+  U.target = { guid = "Creature-0-1-2-3-9-0000FFFF", name = "Log Rare", level = 61, cls = "rare", dead = false, combat = true }
+  Fire("PLAYER_TARGET_CHANGED")
+  U.target = nil
+  ns.OnRareDied("Creature-0-1-2-3-9-0000FFFF")
+  check(ns.toastsSeen[#ns.toastsSeen].text:find("Log Rare"), "rare fundet via combat log")
+  ns.TestRareToast()
+  check(ns.toastsSeen[#ns.toastsSeen].kind == "raremob", "test-toast for rare")
+  UnitExists, UnitGUID, UnitName, UnitLevel, UnitAffectingCombat = o[1], o[2], o[3], o[4], o[5]
+  UnitClassification, UnitIsDead, UnitIsTapDenied = nil, nil, nil
 end
 
 -- Need-politiet: et needet item, der bliver solgt

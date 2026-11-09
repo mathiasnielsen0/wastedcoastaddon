@@ -31,6 +31,7 @@ local addonName, ns = ...
 --   * v0.13.0: spilletid (/played) pr. karakter, pr. ven og for hele gruppen, og deaths/hr (Played.lua)
 --   * v0.14.0: XP-procent i det nuværende level på hver karakter (Venner, Rangliste og tooltips)
 --   * v0.15.0: dødsfald deles op i PvP (dræbt af en spiller) og PvE overalt, også i deaths/hr
+--   * v0.16.0: toast hos alle, når en ven får rare/epic loot eller dræber et rare mob (Rares.lua)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -430,6 +431,8 @@ local function InitDB()
     db.goldHist = db.goldHist or {}  -- ven -> { { tid, kobber }, ... } sorteret efter tid
     db.legacy = db.legacy or {}      -- ven -> { p = legacy points, c = klarede challenges, t } (kun WoW Forever)
     if db.settings.toasts == nil then db.settings.toasts = true end
+    if db.settings.lootToasts == nil then db.settings.lootToasts = true end
+    if db.settings.rareToasts == nil then db.settings.rareToasts = true end
     if db.settings.sound == nil then db.settings.sound = true end
     if db.settings.announce == nil then db.settings.announce = true end
     -- Standard: rare eller bedre (3). Ældre installationer havde epic (4) som standard og flyttes med.
@@ -1324,8 +1327,9 @@ end
 
 local function OnCombatLog()
     local _, sub, _, sourceGUID, sourceName, sourceFlags, _, destGUID, destName, _, _, a12, a13 = CombatLogGetCurrentEventInfo()
-    if sub == "UNIT_DIED" then
-        if ns.CheckBossDeath then ns.CheckBossDeath(destName) end
+    if sub == "UNIT_DIED" or sub == "PARTY_KILL" then
+        if sub == "UNIT_DIED" and ns.CheckBossDeath then ns.CheckBossDeath(destName) end
+        if ns.OnRareDied then ns.OnRareDied(destGUID) end   -- v0.16: sjældne mobs (Rares.lua)
         return
     end
     if destGUID ~= UnitGUID("player") then return end
@@ -1494,11 +1498,37 @@ local function AddLoot(ev)
         if f and ev.char ~= Name(f) then who = who .. " (" .. ev.char .. ")" end
         Print(string.format("%s vandt %s (%s) - %s.", who, LootLink(ev), HOW_LABEL[ev.how] or ev.how, ev.zone))
     end
-    if (time() - (ev.time or 0)) < 120 then PlayEventSound("loot", f) end
+    if (time() - (ev.time or 0)) < 120 then
+        PlayEventSound("loot", f)
+        -- v0.16: rare, epic og legendary giver en toast hos alle (også en selv)
+        if (ev.quality or 0) >= 3 then ns.LootToast(ev, f) end
+    end
 
     if ns.AfterEvent then ns.AfterEvent() end
     if ns.RefreshUI then ns.RefreshUI() end
     return true
+end
+
+-- v0.16: toast, når nogen får rare (blå), epic (lilla) eller legendary loot
+-- (main-chunken har næsten 200 lokale variabler, så tabellen ligger på ns)
+ns.LOOT_TOAST_HEAD = { [3] = "RARE LOOT", [4] = "EPIC LOOT", [5] = "LEGENDARY LOOT" }
+function ns.LootToast(ev, friend)
+    if not db.settings.lootToasts then return end
+    local q = math.min(ev.quality or 3, 5)
+    local full = ns.CharFull(friend, ev.char) or ev.char or "?"
+    local head = ns.LOOT_TOAST_HEAD[q] or "LOOT"
+    if friend and Name(friend) ~= ev.char then head = head .. "  -  " .. Name(friend) end
+    local where = (ev.zone and ev.zone ~= "") and ev.zone or nil
+    local how = HOW_LABEL[ev.how]
+    local extra = (how and where) and (how .. ", " .. where) or how or where
+    local id = LootItemID(ev)
+    local icon = id and select(5, GAME.ItemInfoInstant(id))
+    ns.Toast({
+        kind = q >= 5 and "legendloot" or q == 4 and "epicloot" or "rareloot",
+        head = head, title = full, class = ev.class,
+        text = LootLink(ev) .. (extra and ("  |cff9a9aa6(" .. extra .. ")|r") or ""),
+        icon = icon, friend = friend, dur = q >= 4 and 7 or 5.5,
+    })
 end
 
 local function FormatToPattern(fmt)
@@ -2866,6 +2896,10 @@ local function OnAddonMessage(prefix, message, chatType, sender)
             if ns.RefreshUI then ns.RefreshUI() end
         end
 
+    elseif kind == "RM" then
+        -- v0.16: en ven har dræbt et sjældent mob (Rares.lua)
+        if ns.OnRareMessage then ns.OnRareMessage(t) end
+
     elseif kind == "LP" then
         ns.OnLegacyMessage(t)
 
@@ -4103,6 +4137,11 @@ local TOAST_STYLE = {
     obit        = { border = { 0.55, 0.55, 0.60 }, bg = { 0.02, 0.02, 0.03 } },
     police      = { border = { 0.25, 0.45, 1.00 }, bg = { 0.04, 0.05, 0.12 } },
     emote       = { border = { 1.00, 0.45, 0.75 }, bg = { 0.10, 0.04, 0.08 } },
+    -- v0.16: loot efter kvalitet og sjældne mobs
+    rareloot    = { border = { 0.00, 0.44, 0.87 }, bg = { 0.03, 0.06, 0.12 } },
+    epicloot    = { border = { 0.64, 0.21, 0.93 }, bg = { 0.08, 0.04, 0.12 } },
+    legendloot  = { border = { 1.00, 0.50, 0.00 }, bg = { 0.12, 0.07, 0.02 } },
+    raremob     = { border = { 0.80, 0.82, 0.90 }, bg = { 0.07, 0.08, 0.10 } },
 }
 
 local toast = { queue = {}, frame = nil, active = nil }
@@ -5774,7 +5813,7 @@ do
               function() return db.settings.sound end, function(v) db.settings.sound = v end },
             { "Beskeder i chatten", "Skriv dødsfald, loot og bosskills i dit chatvindue.",
               function() return db.settings.announce end, function(v) db.settings.announce = v end },
-            { "Popups", "Små beskeder øverst på skærmen, når en ven logger ind, stiger i level eller wiper.",
+            { "Popups", "Små beskeder øverst på skærmen, når en ven logger ind, stiger i level, wiper, får rare/epic loot eller dræber et rare mob.",
               function() return db.settings.toasts end, function(v) db.settings.toasts = v end },
             { "Synk uden guild", "Skjult kanal og usynlige whispers, så I ser hinanden uden fælles guild eller gruppe.",
               function() return db.settings.fallbackSync ~= false end, function(v) ns.SetFallbackSync(v) end },
@@ -6829,7 +6868,13 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         end
     elseif cmd == "toast" then
         db.settings.toasts = not db.settings.toasts
-        Print("Toasts (online, wipe, level): " .. (db.settings.toasts and "til" or "fra"))
+        Print("Toasts (online, wipe, level, loot, rares): " .. (db.settings.toasts and "til" or "fra"))
+    elseif cmd == "loottoast" then
+        db.settings.lootToasts = not db.settings.lootToasts
+        Print("Toasts for rare/epic loot: " .. (db.settings.lootToasts and "til" or "fra"))
+    elseif cmd == "raretoast" then
+        db.settings.rareToasts = not db.settings.rareToasts
+        Print("Toasts for dræbte rare mobs: " .. (db.settings.rareToasts and "til" or "fra"))
     elseif cmd == "testtoast" then
         -- Viser eksempler på alle popups, uden at gemme eller sende noget
         local _, class = UnitClass("player")
@@ -6840,6 +6885,9 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         ns.Toast({ kind = "achievement", head = "TROFÆ LÅST OP", title = a.name, text = a.desc, icon = a.icon,
                    pts = a.pts, sound = "achievement", friend = db.me, force = true })
         if ns.TestPrankToasts then ns.TestPrankToasts() end
+        ns.LootToast({ char = UnitName("player"), class = class, item = "item:28830", name = "Dragonspine Trophy",
+                       quality = 4, how = "need", zone = "Gruul's Lair" }, db.me)
+        if ns.TestRareToast then ns.TestRareToast() end
     elseif cmd == "efternavn" or cmd == "surname" then
         local raw = strtrim(input or ""):match("^%S+%s+(.+)$")
         local first = UnitName("player")
@@ -6959,6 +7007,8 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print("  /wc4ever testannonce  - vis en test-dødsannonce")
         print("  /wc4ever test         - lav et falsk dødsfald")
         print("  /wc4ever testloot     - lav en falsk loot win")
+        print("  /wc4ever loottoast    - slå toasts for rare/epic loot til/fra")
+        print("  /wc4ever raretoast    - slå toasts for dræbte rare mobs til/fra")
         print("  /wc4ever reset ja     - slet alle data")
     end
 end
@@ -6981,4 +7031,6 @@ ns.core = {
     ACH_BY_ID = ACH_BY_ID, FormatGold = FormatGold, LootLink = LootLink, LastSeen = LastSeen,
     -- v0.13: spilletid og deaths/hr (Played.lua)
     UpdateChar = UpdateChar,
+    -- v0.16: sjældne mobs (Rares.lua)
+    PlayEventSound = PlayEventSound,
 }
