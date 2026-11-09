@@ -28,6 +28,7 @@ local addonName, ns = ...
 --   * v0.11.0: guild bank (hvem har taget/lagt mest) og repair-regninger (Bank.lua)
 --   * v0.11.0: daglig sladder ved login: højdepunkterne siden sidst (Gossip.lua)
 --   * v0.12.0: samlet udgivelse af 0.10.2, 0.10.3 og 0.11.0; seneste dødsfald viser fornavn + efternavn
+--   * v0.13.0: spilletid (/played) pr. karakter, pr. ven og for hele gruppen, og deaths/hr (Played.lua)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -2728,6 +2729,7 @@ function ns.SendMyExtras(light)
     end
     if ns.SendPrankExtras then ns.SendPrankExtras(light) end
     if ns.SendBank then ns.SendBank() end   -- én lille besked, også ved den lette synk
+    if ns.SendPlayed then ns.SendPlayed(light) end
 end
 
 ns.CheckBossDeath = CheckBossDeath
@@ -2812,6 +2814,10 @@ local function OnAddonMessage(prefix, message, chatType, sender)
 
     elseif kind == "HP" then
         ns.OnHonorMessage(t)
+
+    elseif kind == "PT" then
+        -- v0.13: spilletid (Played.lua)
+        if ns.OnPlayedMessage then ns.OnPlayedMessage(t) end
 
     elseif kind == "BK" then
         -- v0.11: guild bank og repair (Bank.lua)
@@ -3706,6 +3712,12 @@ local function BuildCharsPage(page)
             GameTooltip:AddLine(" ")
             GameTooltip:AddDoubleLine("Guld", d.gold > 0 and FormatGold(d.gold) or "-", 0.8, 0.8, 0.8, 1, 1, 1)
             GameTooltip:AddDoubleLine("Dødsfald", tostring(d.deaths), 0.8, 0.8, 0.8, 1, 1, 1)
+            local info = ns.target and db.friends[ns.target]
+            local secs = ns.PlayedNow and ns.PlayedNow(ns.target, d.name, info and info.chars and info.chars[d.name])
+            if secs then
+                GameTooltip:AddDoubleLine("Spilletid", ns.FormatPlayed(secs), 0.8, 0.8, 0.8, 1, 1, 1)
+                GameTooltip:AddDoubleLine("Deaths/hr", ns.FormatDPH(ns.DeathRate(d.deaths, secs)), 0.8, 0.8, 0.8, 1, 0.5, 0.5)
+            end
             GameTooltip:AddDoubleLine("Rare+ loot", tostring(d.loot), 0.8, 0.8, 0.8, 0.75, 0.4, 1)
             GameTooltip:AddDoubleLine("Sidst set", d.online and "Online nu" or FormatAgo(d.seen), 0.8, 0.8, 0.8, 1, 1, 1)
             GameTooltip:Show()
@@ -3760,6 +3772,10 @@ local function RefreshChars()
     panel.name:SetText(cur.disp)
     panel.name:SetTextColor(r, g, b)
     local extra = ns.CardExtraText(cur.name)
+    local pt = ns.PlayedTotals and ns.PlayedTotals(cur.name)
+    if pt and pt.secs then
+        extra = (extra and (extra .. "  -  ") or "") .. ns.FormatPlayed(pt.secs) .. " spilletid"
+    end
     panel.sub:SetText(string.format("%s  -  %d dødsfald  -  %d rare+ loot%s",
         Plural(cur.chars, "karakter", "karakterer"), cur.deaths, cur.loot, extra and ("  -  " .. extra) or ""))
     panel.big:SetText(tostring(cur.chars))
@@ -4857,6 +4873,13 @@ do
         end
         section("Farligste mob", mobs, "Ingen er blevet slået ihjel af et mob endnu.", 5, withWho)
         section("Farligste zone", zones, "Ingen dødsfald endnu.", 3, withWho)
+        if ns.DeathRateRanking then
+            section("Deaths/hr (døde pr. times spilletid)", ns.DeathRateRanking(), "Ingen spilletid kendt endnu.", 3,
+                function(i, e)
+                    return string.format("%d. %s  |cffff8080%s|r  |cff888888(%d døde på %s)|r", i, Name(e.name),
+                        ns.FormatDPH(e.dph), e.deaths, ns.FormatPlayed(e.secs))
+                end)
+        end
         section("Faldskade-konge", falls, "Ingen er faldet ihjel endnu. Endnu.", 3, function(i, e)
             return string.format("%d. %s  |cffff8080%s|r%s", i, Name(e.name), Plural(e.n, "fald", "fald"),
                 i == 1 and "  |cffffd100(kongen)|r" or "")
@@ -5764,7 +5787,7 @@ local GROUPS = {
     { label = "Venner",     icon = "INV_Misc_Head_Human_01",
       pages = { 1, 3, 11, 10, 12, 9 }, names = { "Kort", "Karakterer", "Gear", "Professions", "Reputation", "Guld" } },
     { label = "Rangliste",  icon = "Ability_Rogue_Sprint",
-      pages = { 2, 7, 14, 15 },        names = { "Scoreboard", "Race", "Dueller", "Bank & repair" } },
+      pages = { 2, 17, 7, 14, 15 },    names = { "Scoreboard", "Spilletid", "Race", "Dueller", "Bank & repair" } },
     { label = "Loot",       icon = "INV_Misc_Bag_10",
       pages = { 4, 8 },                names = { "Loot", "Rolls" } },
     { label = "Død",        icon = "INV_Misc_Bone_HumanSkull_01",
@@ -6377,6 +6400,7 @@ do
                         }, seen)
                         c.demo = true
                         DemoCharExtras(c)
+                        if ns.DemoPlayed then ns.DemoPlayed(c) end
                     end
                     chars[#chars + 1] = { name = cname, class = class }
                 end
@@ -6863,4 +6887,6 @@ ns.core = {
     Name = Name, CharFull = ns.CharFull, AddShadow = AddShadow, SendHeartbeat = SendHeartbeat, RequestSync = RequestSync,
     -- v0.11: daglig sladder (Gossip.lua)
     ACH_BY_ID = ACH_BY_ID, FormatGold = FormatGold, LootLink = LootLink, LastSeen = LastSeen,
+    -- v0.13: spilletid og deaths/hr (Played.lua)
+    UpdateChar = UpdateChar,
 }

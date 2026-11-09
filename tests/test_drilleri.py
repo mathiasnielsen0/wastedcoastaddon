@@ -149,7 +149,7 @@ function PanelTemplates_SetNumTabs() end
 function PanelTemplates_TabResize() end
 ''')
 ns = lua.table()
-for f in ["Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua", "Bank.lua", "Gossip.lua"]:
+for f in ["Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua", "Bank.lua", "Played.lua", "Gossip.lua"]:
     code = open(f"{ADDON}/{f}", encoding="utf-8").read()
     fn = lua.eval("function(code, name) local f, err = loadstring(code, name) if not f then error(err) end return f end")(code, "@" + f)
     fn("WastedCoast", ns)
@@ -180,9 +180,9 @@ local realToast = ns.Toast
 ns.Toast = function(o) ns.toastsSeen[#ns.toastsSeen+1] = o return realToast(o) end
 
 -- Sider: 16 (fordelt på 5 faner), og Drilleri-siden findes
-check(#ns.pages == 16 and #ns.tabs == 5, "16 sider på 5 faner")
+check(#ns.pages == 17 and #ns.tabs == 5, "17 sider på 5 faner")
 ns.frame:Show()
-for i = 1, 16 do if ns.pages[i] then ns.ShowTab(i) end end
+for i = 1, 17 do if ns.pages[i] then ns.ShowTab(i) end end
 
 -- Dødsannonce: en vens død via netværket, med svagt mob
 SENT = {}
@@ -507,7 +507,7 @@ check(db.bank.Nick.wg == 2000000, "ældre BK ignoreres")
 Fire("CHAT_MSG_ADDON", "WCOAST", "BK;Nick;" .. (NOW + 5) .. ";x", "GUILD", "Nickchar")
 check(db.bank.Nick.wg == 2000000, "ødelagt BK ignoreres")
 ns.ShowTab(15)
-check(ns.subTabs[2][4].active, "Bank & repair under Rangliste")
+check(ns.subTabs[2][5].active, "Bank & repair under Rangliste")
 check(ns.bankUI.bankFacts:GetText():find("Bankrøveren:|r .*Nick"), "Nick er bankrøver: " .. ns.bankUI.bankFacts:GetText())
 check(ns.bankUI.repFacts:GetText():find("Rustbunken:|r .*Nick"), "Nick er rustbunke: " .. ns.bankUI.repFacts:GetText())
 check(ns.bankUI.bankRows[1].f[2]:GetText() == "Nick", "Nick øverst på 'Taget'")
@@ -586,6 +586,63 @@ check(ns.DuelStats("Nick") ~= nil, "demo-dueller kan tegnes")
 SlashCmdList.WASTEDCOAST("demo slut")
 for _, e in ipairs(db.needShame) do check(not e.demo, "demo fjernet") end
 for _, list in pairs(db.duels) do for _, d in ipairs(list) do check(not d.demo, "demo-dueller fjernet") end end
+
+-- Spilletid og deaths/hr (Played.lua)
+do
+    local shown, asked = 0, 0
+    RequestTimePlayed = function() asked = asked + 1 end
+    ChatFrame_DisplayTimePlayed = function() shown = shown + 1 end
+    ns.AskPlayed()
+    check(asked == 1, "addonet spørger om /played")
+    ChatFrame_DisplayTimePlayed(nil, 7200, 600)
+    check(shown == 0, "addonets egen /played skrives ikke i chatten")
+    SENT = {}
+    Fire("TIME_PLAYED_MSG", 7200, 600)
+    check(findSent("PT;Mathias;" .. PLAYER .. ";7200;600;"), "egen spilletid sendes: " .. tostring(findSent("PT;")))
+    CLOCK = CLOCK + 10
+    ChatFrame_DisplayTimePlayed(nil, 7200, 600)
+    check(shown == 1, "selv skrevet /played vises som altid")
+    local myDeaths = 0
+    for _, ev in ipairs(db.events) do if ns.core.EventFriend(ev) == "Mathias" and ev.name == PLAYER then myDeaths = myDeaths + 1 end end
+    local mt = ns.PlayedTotals("Mathias")
+    check(mt.secs >= 7200 and mt.secs < 7300 and mt.rated == myDeaths, "egen spilletid og dødsfald: " .. tostring(mt.secs) .. " " .. mt.rated)
+    check(math.abs(ns.DeathRate(myDeaths, 7200) - myDeaths / 2) < 1e-9, "deaths/hr = døde / timer")
+    CLOCK = CLOCK + 600
+    SENT = {}
+    ns.SendMyExtras(true)
+    check(findSent("PT;Mathias;" .. PLAYER .. ";78"), "spilletiden tæller videre: " .. tostring(findSent("PT;")))
+
+    -- Vennens karakterer
+    Fire("CHAT_MSG_ADDON", "WCOAST", "PT;Nick;Sigurd;36000;1200;" .. NOW, "GUILD", "Sigurd")
+    check(db.friends.Nick.chars.Sigurd.played.t == 36000, "vennens spilletid gemmes")
+    Fire("CHAT_MSG_ADDON", "WCOAST", "PT;Nick;Sigurd;100;5;" .. (NOW + 5), "GUILD", "Sigurd")
+    check(db.friends.Nick.chars.Sigurd.played.t == 36000, "lavere spilletid ignoreres")
+    Fire("CHAT_MSG_ADDON", "WCOAST", "PT;Nick;Sigurd;x;5;1", "GUILD", "Sigurd")
+    Fire("CHAT_MSG_ADDON", "WCOAST", "PT;Fremmed;Bob;500;5;1", "GUILD", "Bob")
+    check(db.friends.Nick.chars.Sigurd.played.t == 36000 and not (db.friends.Fremmed), "snyd ignoreres")
+    Fire("CHAT_MSG_ADDON", "WCOAST", "PT;Nick;Nickchar;3600;100;" .. NOW, "GUILD", "Nickchar")
+    local nt = ns.PlayedTotals("Nick")
+    check(nt.known == 2 and nt.secs >= 39600, "Nicks spilletid lægges sammen: " .. tostring(nt.secs))
+    local chars = ns.PlayedChars("Nick")
+    check(chars[1].name == "Sigurd" and chars[1].full == "Sigurd Jernhånd", "mest spillede karakter først med fuldt navn")
+    local g = ns.GroupPlayed()
+    check(g.secs >= nt.secs + 7200 and g.topFriend == "Nick", "hele gruppens spilletid")
+    check(ns.FormatPlayed(90061) == "1d 1t" and ns.FormatPlayed(3720) == "1t 2m" and ns.FormatPlayed(59) == "0m", "format af spilletid")
+    check(ns.DeathRate(3, 600) == nil, "under en halv time: ingen deaths/hr")
+
+    ns.ShowTab(17)
+    check(ns.tabs[2].active and ns.subTabs[2][2].active, "Spilletid under Rangliste")
+    local ui = ns.playedUI
+    check(ui.total:GetText():find("Hele gruppen"), "gruppens spilletid vises: " .. tostring(ui.total:GetText()))
+    check(ui.rows[1].f[2]:GetText() == "Nick", "mest spillet øverst: " .. tostring(ui.rows[1].f[2]:GetText()))
+    ui.rows[1].scripts.OnClick(ui.rows[1])
+    check(ui.rightHead:GetText() == "Nick" and ui.charRows[1].f[1]:GetText() == "Sigurd Jernhånd", "klik viser Nicks karakterer")
+    ui.rows[1].scripts.OnEnter(ui.rows[1])
+    ui.charRows[1].scripts.OnEnter(ui.charRows[1])
+    ns.ShowTab(16)
+    check(ns.deathStatText.text_:find("Deaths/hr"), "deaths/hr på dødsstatistikken")
+    ns.ShowTab(3)
+end
 ns.ShowTab(13)
 
 -- Level-toast: egen ding giver popup og XU med tid siden sidste level
