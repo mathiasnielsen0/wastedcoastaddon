@@ -998,6 +998,33 @@ ns.KickMember(bob, false)
 check(ns.core.ROSTER_SET[bob], "Bob er taget ind igen")
 ns.RefreshGroupWindow()
 
+-- v0.17: plads til 10 medlemmer (kort, rækker, knapper, dueller og guldgraf)
+check(ns.MAX_MEMBERS == 10, "max 10 medlemmer")
+local extra = {}
+for i = 1, 8 do
+  local id = "uX" .. ("ABCDEFGH"):sub(i, i) .. "XXXXXX"
+  extra[i] = id
+  Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", id, g.id, id, "Ven" .. i, NOW, NOW }, ";"), "CHANNEL", "Ven" .. i .. "char")
+  Fire("CHAT_MSG_ADDON", "WCOAST", "H;" .. id .. ";Ven" .. i .. "char;MAGE;" .. (10 + i) .. ";100;Goldshire;10", "CHANNEL", "Ven" .. i .. "char")
+end
+Fire("CHAT_MSG_ADDON", "WCOAST", "H;" .. bob .. ";Bobchar;MAGE;12;100;Goldshire;10", "CHANNEL", "Bobchar")
+check(#ns.core.ROSTER == 10 and (ns.groupOverflow or 0) == 0, "10 medlemmer vises, ingen overløb: " .. table.concat(ns.core.ROSTER, ","))
+for i = 1, #ns.pages do ns.ShowTab(i) end
+ns.ShowTab(1)
+check(#ns.cards == 10, "10 kort")
+check(ns.cards[1].narrow and ns.cards[1].w * 5 + 4 * 12 <= 732, "over 8 online: fem smalle kort pr. række")
+-- Den 11. vises ikke, men jeg er altid med
+local nr11 = "uYYYYYYYY"
+Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "GM", nr11, g.id, nr11, "Elleve", NOW, NOW }, ";"), "CHANNEL", "Ellevechar")
+check(#ns.core.ROSTER == 10 and ns.groupOverflow == 1 and ns.core.ROSTER_SET[me], "11. medlem giver overløb, jeg er stadig med")
+for i = 1, #ns.pages do ns.ShowTab(i) end
+NOW = NOW + 5
+for _, id in ipairs(extra) do ns.KickMember(id, true) end
+ns.KickMember(nr11, true)
+check(#ns.core.ROSTER == 2, "tilbage til mig og Bob")
+ns.ShowTab(1)
+check(not ns.cards[1].narrow, "store kort igen med få online")
+
 -- Som almindeligt medlem i en andens gruppe
 ns.LeaveGroup()
 check(db.group == nil and db.me == nil and #ns.core.ROSTER == 0, "har forladt gruppen")

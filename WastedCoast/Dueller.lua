@@ -228,7 +228,7 @@ local RANK_COLS = {
     { x = 240, w = 48,  j = "CENTER", label = "Venner" },
     { x = 290, w = 48,  j = "CENTER", label = "Stime" },
 }
-local CELL = 32
+local CELL = 26   -- 10 kolonner skal kunne være i det 362 px brede panel
 
 local function BuildPage(page)
     -- Venstre: rangliste
@@ -275,7 +275,7 @@ local function BuildPage(page)
                 end)
                 GameTooltip:AddLine(" ")
                 GameTooltip:AddLine("Modstandere", 1, 0.82, 0.2)
-                for k = 1, math.min(8, #opps) do
+                for k = 1, math.min(10, #opps) do
                     local o = opps[k]
                     local r, g, b = 0.8, 0.8, 0.8
                     if o.w > o.l then r, g, b = 0.4, 0.9, 0.5 elseif o.l > o.w then r, g, b = 1, 0.45, 0.45 end
@@ -303,7 +303,7 @@ local function BuildPage(page)
     right:SetWidth(362)
     Header(right, "Indbyrdes", "rækken mod kolonnen")
     ui.colHead, ui.rowHead, ui.cells = {}, {}, {}
-    local x0, y0 = 84, -40
+    local x0, y0 = 82, -40
     for j = 1, ns.MAX_MEMBERS do
         local fs = Txt(right, "GameFontHighlightSmall")
         fs:SetPoint("TOPLEFT", right, "TOPLEFT", x0 + (j - 1) * CELL, y0)

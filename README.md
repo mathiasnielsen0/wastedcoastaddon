@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.16.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.17.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -91,7 +91,7 @@ Første gang du logger ind, åbner addonet vinduet **"Kom i gang"**:
    dine venner. Koden står altid i gruppevinduet, klar til Ctrl+C.
 
 Navnet og gruppen gælder hele din konto, så alle dine karakterer bliver koblet til dig.
-Der er plads til 8 venner i vinduet. Man er med i én gruppe ad gangen; indsætter du en
+Der er plads til 10 venner i vinduet. Man er med i én gruppe ad gangen; indsætter du en
 ny kode, skifter du gruppe.
 
 **Admin** (den, der oprettede gruppen) kan fjerne medlemmer i gruppevinduet og tage
@@ -470,7 +470,7 @@ bruges til at uploade data til et website.
 
 Listen står øverst i `WastedCoast.lua`, i linjen der starter med
 `local ROSTER = {`. Navnene bestemmer rækkefølgen på kortene. Alle skal have
-samme liste, så del den ændrede fil med gruppen. Der er plads til otte venner
+samme liste, så del den ændrede fil med gruppen. Der er plads til ti venner
 i layoutet.
 
 ---

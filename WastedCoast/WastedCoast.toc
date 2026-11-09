@@ -2,7 +2,7 @@
 ## Title: Wasted Coast Forever (WC4ever)
 ## Notes: Venne-overblik, scoreboard, loot, dødsstatistik, rolls, guldgraf, professions, gear, reputation, drillerier, dueller, guild bank, repair, spilletid, deaths/hr, daglig sladder og toasts for rare/epic loot og rare mobs. Synkroniserer i party, raid, guild og en skjult kanal, så I ikke behøver samme guild.
 ## Author: Dig
-## Version: 0.16.0
+## Version: 0.17.0
 ## SavedVariables: WastedCoastDB
 
 Sounds.lua

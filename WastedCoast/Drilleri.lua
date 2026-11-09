@@ -707,7 +707,7 @@ local function BuildPage(page)
     -- Venstre øverst: held-rangering
     local luck = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
     luck:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
-    luck:SetSize(362, 252)
+    luck:SetSize(362, 44 + ns.MAX_MEMBERS * 26)
     SubText(luck, Header(luck, "Held-rangering"), "seneste " .. LUCK_KEEP .. " rolls")
     ui.luckRows = {}
     for i = 1, ns.MAX_MEMBERS do
@@ -775,7 +775,7 @@ local function BuildPage(page)
     -- Højre øverst: emote-angreb
     local emo = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
     emo:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
-    emo:SetSize(362, 174)
+    emo:SetSize(362, 62 + math.ceil(ns.MAX_MEMBERS / 2) * 28)
     SubText(emo, Header(emo, "Emote-angreb"), "en tilfældig fornærmelse")
     ui.emoteBtns = {}
     for i = 1, ns.MAX_MEMBERS do

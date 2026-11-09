@@ -32,6 +32,7 @@ local addonName, ns = ...
 --   * v0.14.0: XP-procent i det nuværende level på hver karakter (Venner, Rangliste og tooltips)
 --   * v0.15.0: dødsfald deles op i PvP (dræbt af en spiller) og PvE overalt, også i deaths/hr
 --   * v0.16.0: toast hos alle, når en ven får rare/epic loot eller dræber et rare mob (Rares.lua)
+--   * v0.17.0: plads til 10 medlemmer (højere vindue, fem smalle kort pr. række med over 8 online)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -41,7 +42,7 @@ local SCHEMA = 5          -- version af dataformatet i SavedVariables
 -- medlems faste ID. De 8 oprindelige venner har deres navn som ID, så gamle data og ældre
 -- versioner passer sammen. Tabellerne fyldes (og genfyldes) af Groups.lua.
 ns.LEGACY_ROSTER = { "Mikkel", "Mathias", "Nick", "Andreas", "Frode", "Søren", "Rasmus", "Jeppe" }
-ns.MAX_MEMBERS = 8   -- så mange kort, rækker og knapper har vinduet plads til
+ns.MAX_MEMBERS = 10  -- så mange kort, rækker og knapper har vinduet plads til
 local ROSTER = {}
 local ROSTER_SET = {}
 
@@ -3173,6 +3174,24 @@ end
 -- =============================================================================
 local CARD_W, CARD_H, GAP = 174, 158, 12
 local BAR_W = CARD_W - 20
+-- Med flere end 8 online er der ikke plads til tre rækker store kort, så de bliver
+-- smallere og står fem på en række (732 px bredt indhold)
+-- (ligger i ns, fordi hovedfilen har nået Luas grænse på 200 lokale variabler)
+ns.NARROW = { cols = 5 }
+ns.NARROW.w = math.floor((732 - (ns.NARROW.cols - 1) * GAP) / ns.NARROW.cols)
+
+function ns.NARROW.SetCardWidth(card, w)
+    if card.w == w then return end
+    card.w, card.barW, card.narrow = w, w - 20, w < CARD_W
+    card:SetWidth(w)
+    card.name:SetWidth(w - 80)
+    card.char:SetWidth(w - 66)
+    card.info1:SetWidth(card.barW)
+    card.info2:SetWidth(card.barW)
+    card.divider:SetWidth(card.barW)
+    card.barBG:SetWidth(card.barW)
+    card.titles:SetWidth(card.barW)
+end
 
 local function BuildCard(parent, index, friend)
     local card = MakeBox("Button", parent, COL_PANEL, COL_BORDER)
@@ -3204,9 +3223,13 @@ local function BuildCard(parent, index, friend)
 
     card.name = Txt(card, "GameFontNormalLarge")
     card.name:SetPoint("TOPLEFT", card.icon, "TOPRIGHT", 8, -2)
+    card.name:SetWordWrap(false)
+    card.name:SetJustifyH("LEFT")
 
     card.char = Txt(card, "GameFontHighlightSmall")
     card.char:SetPoint("TOPLEFT", card.name, "BOTTOMLEFT", 0, -3)
+    card.char:SetWordWrap(false)
+    card.char:SetJustifyH("LEFT")
     card.char:SetTextColor(0.7, 0.7, 0.76)
 
     card.hat = card:CreateTexture(nil, "OVERLAY")
@@ -3319,6 +3342,7 @@ local function BuildCard(parent, index, friend)
         self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
         GameTooltip:Hide()
     end)
+    ns.NARROW.SetCardWidth(card, CARD_W)
     return card
 end
 
@@ -3420,14 +3444,17 @@ function ns.LayoutOverview(on, off)
         ns.onEmpty:SetPoint("TOPLEFT", page, "TOPLEFT", 2, y - 2)
         y = y - 18
     end
+    local cols = #on > 8 and ns.NARROW.cols or 4
+    local w = cols == 4 and CARD_W or ns.NARROW.w
     for i, card in ipairs(ns.cards) do
         if i <= #on then
-            local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
+            local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
+            ns.NARROW.SetCardWidth(card, w)
             card:ClearAllPoints()
-            card:SetPoint("TOPLEFT", page, "TOPLEFT", col * (CARD_W + GAP), y - row * (CARD_H + GAP))
+            card:SetPoint("TOPLEFT", page, "TOPLEFT", col * (w + GAP), y - row * (CARD_H + GAP))
         end
     end
-    local rows = math.ceil(#on / 4)
+    local rows = math.ceil(#on / cols)
     if rows > 0 then y = y - rows * CARD_H - (rows - 1) * GAP end
 
     ns.offHead:SetShown(#off > 0)
@@ -3523,16 +3550,21 @@ local function RefreshOverview()
             card.info2:SetText("Offline - " .. FormatAgo(s.seen))
         end
 
-        card.deaths:SetText("Døde: " .. s.deaths .. ((s.pvp or 0) > 0 and (" |cff80b0ff(" .. s.pvp .. " PvP)|r") or ""))
+        -- På de smalle kort er der ikke plads til PvP-tallet (det står i tooltippen)
+        card.deaths:SetText("Døde: " .. s.deaths .. ((not card.narrow and (s.pvp or 0) > 0) and (" |cff80b0ff(" .. s.pvp .. " PvP)|r") or ""))
         card.lootText:SetText("|cffa335eeLoot: " .. s.loot .. "|r")
         if s.loot > 0 and maxLoot > 0 then
             BarFill(card.barFill, COL_EPIC[1], COL_EPIC[2], COL_EPIC[3], 1)
-            card.barFill:SetWidth(math.max(1, BAR_W * (s.loot / maxLoot)))
+            card.barFill:SetWidth(math.max(1, card.barW * (s.loot / maxLoot)))
             card.barFill:Show()
         else
             card.barFill:Hide()
         end
-        card.charsText:SetText(s.chars > 0 and Plural(s.chars, "karakter", "karakterer") or "Ingen karakterer endnu")
+        if card.narrow then
+            card.charsText:SetText(s.chars > 0 and (s.chars .. " chars") or "Ingen chars")
+        else
+            card.charsText:SetText(s.chars > 0 and Plural(s.chars, "karakter", "karakterer") or "Ingen karakterer endnu")
+        end
         card.legacy:SetText(ns.CardExtraText(s.name, true) or "")
         card.titles:SetText(TitleText(titles[s.name]))
         card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == "Skammens hat")
@@ -4698,8 +4730,8 @@ local function BuildRacePage(page)
     ns.raceRows = {}
     for i = 1, ns.MAX_MEMBERS do
         local row = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
-        row:SetSize(732, 38)
-        row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(18 + (i - 1) * 42))
+        row:SetSize(732, 36)
+        row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(18 + (i - 1) * 40))
         row.rank = Field(row, 0, 24, "CENTER")
         row.icon = row:CreateTexture(nil, "ARTWORK")
         row.icon:SetSize(24, 24)
@@ -4727,7 +4759,7 @@ local function BuildRacePage(page)
     end
 
     ns.raceNote = Txt(page, "GameFontHighlightSmall")
-    ns.raceNote:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(18 + ns.MAX_MEMBERS * 42 + 2))
+    ns.raceNote:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(18 + ns.MAX_MEMBERS * 40 + 2))
     ns.raceNote:SetWidth(732)
     ns.raceNote:SetTextColor(0.5, 0.5, 0.56)
 end
@@ -5052,6 +5084,7 @@ do
     local FRIEND_COLORS = {
         { 1.00, 0.82, 0.20 }, { 0.35, 0.70, 1.00 }, { 1.00, 0.40, 0.40 }, { 0.40, 0.90, 0.50 },
         { 0.75, 0.45, 1.00 }, { 1.00, 0.60, 0.25 }, { 0.30, 0.90, 0.90 }, { 0.95, 0.50, 0.80 },
+        { 0.70, 0.90, 0.30 }, { 0.85, 0.85, 0.90 },
     }
     local GRAPH_L, GRAPH_R, GRAPH_T, GRAPH_B = 58, 12, 12, 24
 
@@ -5107,12 +5140,14 @@ do
         ns.goldFriendBtns = {}
         for i = 1, ns.MAX_MEMBERS do
             local b
-            b = MakeButton(page, 87, 22, "", function()
+            b = MakeButton(page, 70, 22, "", function()
                 if not b.friend then return end
                 ns.goldHidden[b.friend] = not ns.goldHidden[b.friend] or nil
                 ns.RefreshUI()
             end)
-            b:SetPoint("TOPLEFT", page, "TOPLEFT", (i - 1) * 91, -30)
+            b:SetPoint("TOPLEFT", page, "TOPLEFT", (i - 1) * 73, -30)
+            b.text:SetWidth(64)
+            b.text:SetWordWrap(false)
             b:SetScript("OnEnter", function(self)
                 self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
                 local d = self.data
@@ -5220,7 +5255,7 @@ do
             b.data = { pts = pts }
             b.friend = name
             b.text:SetText(Name(name))
-            local col = FRIEND_COLORS[i]
+            local col = FRIEND_COLORS[(i - 1) % #FRIEND_COLORS + 1]
             if ns.goldHidden[name] then
                 b.text:SetTextColor(0.4, 0.4, 0.45)
                 b:SetBackdropColor(COL_BTN[1], COL_BTN[2], COL_BTN[3], 1)
@@ -6142,7 +6177,7 @@ local function BuildUI()
     end
 
     local f = MakeBox("Frame", UIParent, COL_BG, COL_BORDER, "WastedCoastFrame")
-    f:SetSize(760, 552)
+    f:SetSize(760, 612)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetMovable(true)
