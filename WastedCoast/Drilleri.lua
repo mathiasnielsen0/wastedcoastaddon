@@ -465,7 +465,13 @@ local function AddShame(e, fromNet)
 end
 
 local function SerializeShame(e)
-    return table.concat({ "XN", e.id, e.friend, e.char, e.class or "", e.item, e.quality, e.why, e.time, Clean(e.name) }, ";")
+    local function build(item)
+        return table.concat({ "XN", e.id, e.friend, e.char, e.class or "", item, e.quality, e.why, e.time, Clean(e.name) }, ";")
+    end
+    local s = build(e.item)
+    -- Højst 255 tegn i en addon-besked: lange item-strenge (nyere klienter) skæres ned til item-ID'et
+    if #s > 255 then s = build((e.item or ""):match("^item:%d+") or e.item) end
+    return s
 end
 
 -- Kaldes, når du vinder et item på need

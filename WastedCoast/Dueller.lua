@@ -165,6 +165,14 @@ local function OnSystemMessage(msg)
     end
 end
 
+-- En duel mellem to venner meldes af dem begge (hver sin side). Toasten vises kun én gang:
+-- samme par inden for et halvt minut er den samme duel.
+local pairToastAt = {}
+local function PairKey(a, b)
+    if a > b then a, b = b, a end
+    return a .. "|" .. b
+end
+
 -- En vens duel: XD;ven;id;karakter;modstander;vandt;flygtede;tid;zone
 function ns.HandleDuelMessage(t)
     local db = DB()
@@ -179,6 +187,9 @@ function ns.HandleDuelMessage(t)
         local winner = d.won and friend or (of or d.opp)
         local loser = d.won and (of or d.opp) or friend
         if of then
+            local key, now = PairKey(friend, of), GetTime()
+            if pairToastAt[key] and now - pairToastAt[key] < 30 then return end
+            pairToastAt[key] = now
             local w, l = HeadToHead(friend, of)
             ns.Toast({ kind = "duel", head = "DUEL", title = Name(winner) .. " slog " .. Name(loser) .. (d.fled and " (flygtede)" or ""),
                        text = string.format("Stillingen: %s %d - %d %s", Name(friend), w, l, Name(of)), icon = DUEL_ICON, friend = winner })

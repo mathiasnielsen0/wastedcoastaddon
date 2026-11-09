@@ -34,6 +34,8 @@ local addonName, ns = ...
 --   * v0.16.0: toast hos alle, når en ven får rare/epic loot eller dræber et rare mob (Rares.lua)
 --   * v0.17.0: plads til 10 medlemmer (højere vindue, fem smalle kort pr. række med over 8 online)
 --   * v0.17.1: "er online"-toasten kommer kun ved et rigtigt login (login-session i livstegnet), ikke igen og igen midt i en session
+--   * v0.17.2: fejlrettelser (bank-dato, item-værdier på Forever, dobbelt duel-toast, lange beskeder, BG-synk,
+--             fremtidige tidsstempler, nye link-farver) og flere tests (tests/test_robust.py)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -92,6 +94,13 @@ local ENV_NAMES = {
 -- Forever kører på den moderne (Midnight) motor: ingen combat log for addons,
 -- "secret values" og C_-udgaver af mange gamle API-funktioner.
 -- =============================================================================
+-- Combat loggens miljøtype ("Falling", eller "FALLING" i nogle klienter) som dansk tekst
+function ns.EnvName(kind)
+    local s = tostring(kind or "")
+    local key = s:sub(1, 1):upper() .. s:sub(2):lower()
+    return ENV_NAMES[key] or ENV_NAMES[s] or s
+end
+
 local GAME = {}
 do
     local toc = select(4, GetBuildInfo()) or 0
@@ -397,6 +406,8 @@ local function ParseLink(text)
     local name = text:match("|h%[(.-)%]|h")
     local color = text:match("|c%x%x(%x%x%x%x%x%x)")
     local quality = color and HEX_QUALITY[color:lower()]
+    -- Nyere klienter farver links med kvaliteten direkte: |cnIQ4:...|r
+    if not quality then quality = tonumber(text:match("|cnIQ(%d):")) end
     if not quality then
         local _, _, q = GAME.ItemInfo(itemString)
         quality = q
@@ -988,7 +999,9 @@ do
     -- så kun til venner, der ikke er hørt i kanalen (fx hvis deres kanal ikke virker).
     function route.Targets()
         local ch = {}
-        local groupType = (IsInRaid() and "RAID") or (IsInGroup() and "PARTY") or nil
+        -- Kun din egen gruppe: en battleground-gruppe kan ikke nås med PARTY/RAID (den skjulte kanal dækker den)
+        local home = LE_PARTY_CATEGORY_HOME
+        local groupType = (IsInRaid(home) and "RAID") or (IsInGroup(home) and "PARTY") or nil
         local inGuild = IsInGuild()
         local chanUp = ChannelId() > 0
         local needGroup, needGuild = not chanUp and groupType ~= nil, not chanUp and inGuild
@@ -1129,6 +1142,11 @@ do
 end
 
 local function Send(msg, priority)
+    -- Spillet afviser addon-beskeder over 255 tegn (og giver en fejl); dem sender vi ikke
+    if type(msg) ~= "string" or #msg > 255 then
+        route.stats.dropped = route.stats.dropped + 1
+        return
+    end
     for _, c in ipairs(route.Targets()) do
         local item = { msg, c[1], c[2] }
         if priority then table.insert(queue, 1, item) else queue[#queue + 1] = item end
@@ -1186,10 +1204,17 @@ local function DeserializeDeath(t)
 end
 
 local function SerializeLoot(ev)
-    return table.concat({
-        "L", ev.id, ev.friend or "", ev.char, ev.class or "", ev.item,
-        ev.quality, ev.how, ev.ctx, ev.zone, ev.time, ev.name,
-    }, ";")
+    local function build(item)
+        return table.concat({
+            "L", ev.id, ev.friend or "", ev.char, ev.class or "", item,
+            ev.quality, ev.how, ev.ctx, ev.zone, ev.time, ev.name,
+        }, ";")
+    end
+    local s = build(ev.item)
+    -- En addon-besked må højst være 255 tegn. Nyere klienter har lange item-strenge (bonus-ID'er),
+    -- så er beskeden for lang, sendes kun item-ID'et (navn og kvalitet står i beskeden alligevel).
+    if #s > 255 then s = build((ev.item or ""):match("^item:%d+") or ev.item) end
+    return s
 end
 
 local function DeserializeLoot(t)
@@ -1368,7 +1393,7 @@ local function OnCombatLog()
     elseif sub == "SPELL_DAMAGE" or sub == "RANGE_DAMAGE" or sub == "SPELL_PERIODIC_DAMAGE" then
         lastDamage = { t = GetTime(), source = sourceName or "Ukendt", ability = a13 or "", pvp = pvp }
     elseif sub == "ENVIRONMENTAL_DAMAGE" then
-        lastDamage = { t = GetTime(), source = "Omgivelserne", ability = ENV_NAMES[a12] or tostring(a12) }
+        lastDamage = { t = GetTime(), source = "Omgivelserne", ability = ns.EnvName(a12) }
     end
 end
 
@@ -2899,8 +2924,8 @@ local function OnAddonMessage(prefix, message, chatType, sender)
         local friend = t[2]
         if not ROSTER_SET[friend] then ns.UnknownMember(friend) end
         ns.NoteCharOwner(friend, t[3], sender)
-        if ROSTER_SET[friend] and friend ~= db.me then
-            local char = t[3]
+        local char = t[3]
+        if ROSTER_SET[friend] and friend ~= db.me and char and char ~= "" then
             local seen = LastSeen(friend)
             local session = tonumber(t[10])
             local prevSession = db.friends[friend] and db.friends[friend].session
@@ -2921,7 +2946,9 @@ local function OnAddonMessage(prefix, message, chatType, sender)
         -- En karakter (kan være offline): behold dens eget "sidst set"-tidspunkt
         local friend = t[2]
         if ROSTER_SET[friend] and friend ~= db.me then
+            -- Vennens ur kan gå forkert: et "sidst set" i fremtiden ville vise vennen online for længe
             local seen = tonumber(t[8])
+            if seen and seen > time() then seen = time() end
             UpdateChar(friend, t[3], {
                 class = t[4], level = tonumber(t[5]), gold = tonumber(t[6]), zone = t[7], xp = tonumber(t[9]),
                 surname = t[10],

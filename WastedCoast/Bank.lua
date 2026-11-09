@@ -89,7 +89,7 @@ end
 ns.BankTopItem = TopItem
 
 local function ItemName(id)
-    local name, _, q = GetItemInfo and GetItemInfo(id)
+    local name, _, q = C.GAME.ItemInfo(id)
     if not name then return "ting #" .. id end
     local hex = q and C.QUALITY_HEX and C.QUALITY_HEX[q]
     return hex and ("|cff" .. hex .. name .. "|r") or name
@@ -135,7 +135,7 @@ function ns.OnBankMessage(t)
     if not ROSTER_SET[friend] or friend == db.me or not at then return end
     local old = Entry(friend)
     if old and not old.demo and at < (old.t or 0) then return end
-    local e = { t = at, since = tonumber(t[17]) or at }
+    local e = { t = at, since = tonumber(t[16]) or at }
     for i, k in ipairs(FIELDS) do
         local v = tonumber(t[3 + i])
         if not v or v < 0 then return end
@@ -196,7 +196,7 @@ function ns.RecordBankItem(kind, id, count)
     local c = e.items[id]
     if not c then c = { d = 0, w = 0 }; e.items[id] = c end
     c[kind] = (c[kind] or 0) + count
-    local price = GetItemInfo and select(11, GetItemInfo(id))
+    local price = select(11, C.GAME.ItemInfo(id))
     local value = (tonumber(price) or 0) * count
     if kind == "d" then
         e.di, e.dv = e.di + count, e.dv + value

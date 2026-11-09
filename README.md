@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.17.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.17.2. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -540,3 +540,14 @@ Skriv `/console scriptErrors 1` og `/reload`, og send fejlteksten videre.
 
 **Den gamle demo "VennerneForever" kører stadig**
 Slet mappen `VennerneForever` fra AddOns.
+
+## Tests
+
+Testene kører addonet mod en lille attrap af WoW's API (kræver Python og `pip install lupa`):
+
+```
+python3 tests/test_drilleri.py WastedCoast          # hele addonet, klassisk stil
+python3 tests/test_drilleri.py WastedCoast native   # med spillets egne rammer (som på Forever)
+python3 tests/test_robust.py WastedCoast            # fejlrettelser, synk og ødelagte beskeder (TBC)
+python3 tests/test_robust.py WastedCoast forever    # det samme som WoW Forever (ingen combat log, kun C_Item)
+```
