@@ -30,6 +30,7 @@ local addonName, ns = ...
 --   * v0.12.0: samlet udgivelse af 0.10.2, 0.10.3 og 0.11.0; seneste dødsfald viser fornavn + efternavn
 --   * v0.13.0: spilletid (/played) pr. karakter, pr. ven og for hele gruppen, og deaths/hr (Played.lua)
 --   * v0.14.0: XP-procent i det nuværende level på hver karakter (Venner, Rangliste og tooltips)
+--   * v0.15.0: dødsfald deles op i PvP (dræbt af en spiller) og PvE overalt, også i deaths/hr
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -609,13 +610,20 @@ end
 -- =============================================================================
 -- Statistik og titler
 -- =============================================================================
+-- v0.15: PvP = dræbt af en anden spiller (eller dennes pet). Dødsfald fra ældre versioner tæller som PvE.
+function ns.IsPvP(ev) return ev ~= nil and ev.pvp == true end
+
+-- Antal dødsfald pr. ven, og hvor mange af dem der var PvP
 local function DeathsByFriend()
-    local counts = {}
+    local counts, pvp = {}, {}
     for _, ev in ipairs(db.events) do
         local f = EventFriend(ev)
-        if f then counts[f] = (counts[f] or 0) + 1 end
+        if f then
+            counts[f] = (counts[f] or 0) + 1
+            if ev.pvp == true then pvp[f] = (pvp[f] or 0) + 1 end
+        end
     end
-    return counts
+    return counts, pvp
 end
 
 local function LootByFriend()
@@ -665,9 +673,12 @@ local function CharList(friend)
     local info = db.friends[friend]
     if not info or not info.chars then return list end
 
-    local dBy, lBy = {}, {}
+    local dBy, lBy, pBy = {}, {}, {}
     for _, ev in ipairs(db.events) do
-        if EventFriend(ev) == friend then dBy[ev.name] = (dBy[ev.name] or 0) + 1 end
+        if EventFriend(ev) == friend then
+            dBy[ev.name] = (dBy[ev.name] or 0) + 1
+            if ev.pvp == true then pBy[ev.name] = (pBy[ev.name] or 0) + 1 end
+        end
     end
     for _, ev in ipairs(db.loot) do
         if LootFriend(ev) == friend then lBy[ev.char] = (lBy[ev.char] or 0) + 1 end
@@ -678,7 +689,7 @@ local function CharList(friend)
         list[#list + 1] = {
             name = name, full = ns.CharFull(friend, name, c.surname),
             class = c.class, level = c.level or 0, xp = c.xp, zone = c.zone, gold = c.gold or 0,
-            seen = c.seen, deaths = dBy[name] or 0, loot = lBy[name] or 0,
+            seen = c.seen, deaths = dBy[name] or 0, pvp = pBy[name] or 0, loot = lBy[name] or 0,
             online = (c.seen and (now - c.seen) < 150) and true or false,
         }
     end
@@ -752,7 +763,8 @@ do
     end
 
     local function DeathStats()
-        local mobs, zones, falls = {}, {}, {}
+        local mobs, zones, falls, players = {}, {}, {}, {}
+        local totals = { all = 0, pvp = 0, pve = 0 }
         local function bump(map, key, friend)
             local e = map[key]
             if not e then e = { n = 0, who = {} }; map[key] = e end
@@ -762,8 +774,10 @@ do
         for _, ev in ipairs(db.events) do
             local f = EventFriend(ev)
             if f then
+                totals.all = totals.all + 1
+                if ev.pvp == true then totals.pvp = totals.pvp + 1 else totals.pve = totals.pve + 1 end
                 if ev.killer and ev.killer ~= "" and ev.killer ~= "Ukendt" and not IsEnvironment(ev) then
-                    bump(mobs, ev.killer, f)
+                    bump(ev.pvp == true and players or mobs, ev.killer, f)
                 end
                 if ev.zone and ev.zone ~= "" then bump(zones, ev.zone, f) end
                 if IsFall(ev) then falls[f] = (falls[f] or 0) + 1 end
@@ -775,7 +789,7 @@ do
             if a.n ~= b.n then return a.n > b.n end
             return a.name < b.name
         end)
-        return RankCounts(mobs), RankCounts(zones), fallList, falls
+        return RankCounts(mobs), RankCounts(zones), fallList, falls, RankCounts(players), totals
     end
 
     -- "Nick 4, Mathias 3"
@@ -826,7 +840,7 @@ end
 
 -- Liste over alle venner i roster-rækkefølge
 local function BuildStats()
-    local deaths = DeathsByFriend()
+    local deaths, pvpDeaths = DeathsByFriend()
     local loot = LootByFriend()
     local _, _, _, falls = ns.DeathStats()
     local list = {}
@@ -847,6 +861,7 @@ local function BuildStats()
             if not last or IsNewer(cn, c, lastName, last) then lastName, last = cn, c end
         end
         local d, l = deaths[name] or 0, loot[name] or 0
+        local pv = pvpDeaths[name] or 0
         local rw, rc, rk = RunTotals(name)
         list[#list + 1] = {
             name = name, disp = Name(name), class = last and last.class, char = lastName,
@@ -854,7 +869,7 @@ local function BuildStats()
             level = last and last.level or 0, xp = last and last.xp, maxLevel = maxLevel, maxXP = maxXP,
             levelSort = maxLevel + (maxXP or 0) / 100,
             zone = last and last.zone, seen = last and last.seen,
-            chars = nChars, deaths = d, loot = l, gold = gold, wipes = rw, clears = rc, kills = rk,
+            chars = nChars, deaths = d, pvp = pv, pve = d - pv, loot = l, gold = gold, wipes = rw, clears = rc, kills = rk,
             falls = falls[name] or 0,
             unluck = math.floor((ns.LossRate(db.rolls[name]) or 0) * 100 + 0.5),
             luck = ns.LuckPercent and ns.LuckPercent(name),
@@ -882,6 +897,7 @@ local function ComputeTitles(list)
         end
     end
     award("deaths", "Klovnen")
+    award("pvp", "Gank-offeret")
     award("loot", "Lootgoblin")
     award("gold", "Rigmanden")
     award("levelSort", "Højest level")
@@ -1148,7 +1164,8 @@ local function SerializeDeath(ev)
     return table.concat({
         "D", ev.id, ev.name, ev.class or "", ev.killer, ev.ability,
         ev.level, ev.zone, ev.time, ev.friend or "", ev.klvl or "",
-    }, ";") .. ((ev.sur and ev.sur ~= "") and (";" .. ev.sur) or "")   -- felt 12: efternavn (Forever)
+    }, ";") .. ((ev.sur and ev.sur ~= "") and (";" .. ev.sur) or (ev.pvp and ";" or ""))   -- felt 12: efternavn (Forever)
+        .. (ev.pvp and ";1" or "")   -- felt 13: "1" = PvP (dræbt af en spiller); udeladt = PvE
 end
 
 local function DeserializeDeath(t)
@@ -1159,6 +1176,7 @@ local function DeserializeDeath(t)
         id = t[2], name = t[3], class = t[4], killer = t[5], ability = t[6],
         level = tonumber(t[7]) or 0, zone = t[8], time = tonumber(t[9]) or 0,
         friend = f, klvl = tonumber(t[11]), sur = (t[12] and t[12] ~= "") and t[12] or nil,
+        pvp = (t[13] == "1") or nil,
     }
 end
 
@@ -1292,6 +1310,7 @@ local function AddDeath(ev)
             local full = ns.CharFull(f, ev.name, ev.sur)
             local extra = (f and full ~= Name(f)) and (" (" .. full .. ")") or ""
             if not f then shown = full end
+            if ev.pvp then what = what .. " |cff80b0ff[PvP]|r" end
             Print(string.format("%s%s døde til %s i %s.", ColorName(shown, ev.class), extra, what, ev.zone))
         end
         PlayEventSound("death", f)
@@ -1304,17 +1323,25 @@ local function AddDeath(ev)
 end
 
 local function OnCombatLog()
-    local _, sub, _, _, sourceName, _, _, destGUID, destName, _, _, a12, a13 = CombatLogGetCurrentEventInfo()
+    local _, sub, _, sourceGUID, sourceName, sourceFlags, _, destGUID, destName, _, _, a12, a13 = CombatLogGetCurrentEventInfo()
     if sub == "UNIT_DIED" then
         if ns.CheckBossDeath then ns.CheckBossDeath(destName) end
         return
     end
     if destGUID ~= UnitGUID("player") then return end
 
+    -- v0.15: styres kilden af en spiller (spilleren selv eller dennes pet)? Så er det PvP
+    local pvp
+    if type(sourceFlags) == "number" and bit and bit.band then
+        pvp = bit.band(sourceFlags, 0x100) ~= 0   -- COMBATLOG_OBJECT_CONTROL_PLAYER
+    else
+        pvp = type(sourceGUID) == "string" and sourceGUID:find("^Player%-") ~= nil
+    end
+    if sourceGUID and sourceGUID == destGUID then pvp = false end   -- egen skade er ikke PvP
     if sub == "SWING_DAMAGE" then
-        lastDamage = { t = GetTime(), source = sourceName or "Ukendt", ability = "Nærkamp" }
+        lastDamage = { t = GetTime(), source = sourceName or "Ukendt", ability = "Nærkamp", pvp = pvp }
     elseif sub == "SPELL_DAMAGE" or sub == "RANGE_DAMAGE" or sub == "SPELL_PERIODIC_DAMAGE" then
-        lastDamage = { t = GetTime(), source = sourceName or "Ukendt", ability = a13 or "" }
+        lastDamage = { t = GetTime(), source = sourceName or "Ukendt", ability = a13 or "", pvp = pvp }
     elseif sub == "ENVIRONMENTAL_DAMAGE" then
         lastDamage = { t = GetTime(), source = "Omgivelserne", ability = ENV_NAMES[a12] or tostring(a12) }
     end
@@ -1329,7 +1356,7 @@ end
 -- -----------------------------------------------------------------------------
 local OnPlayerDead
 do
-local lastHostile     -- { name, t, prio (2 = har dig i target, 1 = dit target), lvl }
+local lastHostile     -- { name, t, prio (2 = har dig i target, 1 = dit target), lvl, pvp (en spiller eller dennes pet) }
 local lastFall = -100 -- GetTime(), sidst du faldt
 local KILLER_WINDOW = 8
 
@@ -1355,7 +1382,8 @@ local function NoteUnit(u)
     if lastHostile and lastHostile.t == now and lastHostile.prio > prio then return end
     if lastHostile and (now - lastHostile.t) < 1 and lastHostile.prio > prio then return end
     local l = GAME.Plain(UnitLevel(u))
-    lastHostile = { name = n, t = now, prio = prio, lvl = (type(l) == "number" and l ~= 0) and l or nil }
+    local pvp = (UnitIsPlayer and Yes(UnitIsPlayer(u))) or (UnitPlayerControlled and Yes(UnitPlayerControlled(u))) or false
+    lastHostile = { name = n, t = now, prio = prio, lvl = (type(l) == "number" and l ~= 0) and l or nil, pvp = pvp }
 end
 
 local function ScanAll()
@@ -1401,11 +1429,11 @@ local function MirrorDeath()
     return nil
 end
 
--- Returnerer dræber, evne og evt. dræberens level
+-- Returnerer dræber, evne, evt. dræberens level og om dræberen var en spiller (PvP)
 local function FindKiller()
     local now = GetTime()
     if lastDamage and (now - lastDamage.t) < 15 then
-        return lastDamage.source, lastDamage.ability, nil
+        return lastDamage.source, lastDamage.ability, nil, lastDamage.pvp == true
     end
     local env = MirrorDeath()
     if env then return "Omgivelserne", env, nil end
@@ -1413,15 +1441,15 @@ local function FindKiller()
     ScanHostiles()   -- et sidste kig, mens fjenderne stadig står der
     local h = lastHostile
     local fresh = h and (now - h.t) < KILLER_WINDOW
-    if fresh and h.prio == 2 then return h.name, "", h.lvl end
-    if (now - lastFall) < 3 then return "Omgivelserne", ENV_NAMES.Falling, nil end
-    if fresh then return h.name, "", h.lvl end
-    return "Ukendt", "", nil
+    if fresh and h.prio == 2 then return h.name, "", h.lvl, h.pvp == true end
+    if (now - lastFall) < 3 then return "Omgivelserne", ENV_NAMES.Falling, nil, false end
+    if fresh then return h.name, "", h.lvl, h.pvp == true end
+    return "Ukendt", "", nil, false
 end
 ns.FindKiller = FindKiller
 
 function OnPlayerDead()
-    local killer, ability, klvl = FindKiller()
+    local killer, ability, klvl, pvp = FindKiller()
     lastDamage, lastHostile = nil, nil
 
     local name = UnitName("player")
@@ -1438,6 +1466,7 @@ function OnPlayerDead()
         friend  = db.me,
         klvl    = klvl or (ns.KillerLevel and ns.KillerLevel(killer)) or nil,
         sur     = Clean(ns.MySurname() or ""),
+        pvp     = pvp or nil,
     }
     if ev.sur == "" then ev.sur = nil end
     if AddDeath(ev) then
@@ -2227,6 +2256,10 @@ local ACH = {
     { id = "deaths100", name = "Professionelt lig", desc = "Dø 100 gange. Respekt.", icon = IC("Ability_Rogue_FeignDeath"), pts = 50,
       test = function(S) return S.deaths >= 100 end },
     { id = "first_to_die", name = "Første til at dø", desc = "Vær den første i gruppen, der dør i en dungeon.", icon = IC("Spell_Shadow_AnimateDead"), pts = 10 },
+    { id = "pvp1", name = "Ganket", desc = "Bliv slået ihjel af en anden spiller.", icon = IC("Ability_Rogue_Ambush"), pts = 5,
+      test = function(S) return S.pvp >= 1 end },
+    { id = "pvp10", name = "Kanonføde", desc = "Bliv slået ihjel af andre spillere 10 gange.", icon = IC("INV_Sword_48"), pts = 15,
+      test = function(S) return S.pvp >= 10 end },
     { id = "fall", name = "Tyngdekraften vinder", desc = "Dø af at falde ned fra en klippe.", icon = IC("Ability_Rogue_FeignDeath"), pts = 10 },
     { id = "lava", name = "Gulvet er lava", desc = "Dø i lava, ild eller slim.", icon = IC("Spell_Fire_Fire"), pts = 10 },
     { id = "drown", name = "Glemte at svømme", desc = "Drukn eller dø af udmattelse.", icon = IC("Spell_Frost_FrostBolt02"), pts = 10 },
@@ -2278,7 +2311,7 @@ local ACH_BY_ID = {}
 for _, a in ipairs(ACH) do ACH_BY_ID[a.id] = a end
 
 local function AchStats()
-    local S = { deaths = 0, loot = 0, epic = 0, legend = 0, need = 0, wipes = 0, clears = 0, kills = 0,
+    local S = { deaths = 0, pvp = 0, loot = 0, epic = 0, legend = 0, need = 0, wipes = 0, clears = 0, kills = 0,
                 chars = 0, maxLevel = 0, gold = 0, nemesis = 0 }
     local me = db.me
     if not me then return S end
@@ -2286,6 +2319,7 @@ local function AchStats()
     for _, ev in ipairs(db.events) do
         if EventFriend(ev) == me and not IsLocalOnly(ev.id) then
             S.deaths = S.deaths + 1
+            if ev.pvp == true then S.pvp = S.pvp + 1 end
             local k = ev.killer
             if k and k ~= "" and k ~= "Ukendt" and k ~= "Omgivelserne" then
                 killers[k] = (killers[k] or 0) + 1
@@ -3217,9 +3251,15 @@ local function BuildCard(parent, index, friend)
             if #chars > 8 then GameTooltip:AddLine("... og " .. (#chars - 8) .. " flere", 0.5, 0.5, 0.56) end
         end
 
+        local dAll, dPvp = DeathsByFriend()
+        local nd, np = dAll[self.friend] or 0, dPvp[self.friend] or 0
+        if nd > 0 then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(string.format("Dødsfald: %d  (%d PvE, %d PvP)", nd, nd - np, np), 1, 0.5, 0.5)
+        end
         local killer, n = TopKiller(self.friend)
         if killer then
-            GameTooltip:AddLine(" ")
+            if nd == 0 then GameTooltip:AddLine(" ") end
             GameTooltip:AddLine("Værste fjende: " .. killer .. " (" .. n .. "x)", 1, 0.5, 0.5)
         end
         local last = LatestLoot(self.friend)
@@ -3449,7 +3489,7 @@ local function RefreshOverview()
             card.info2:SetText("Offline - " .. FormatAgo(s.seen))
         end
 
-        card.deaths:SetText("Døde: " .. s.deaths)
+        card.deaths:SetText("Døde: " .. s.deaths .. ((s.pvp or 0) > 0 and (" |cff80b0ff(" .. s.pvp .. " PvP)|r") or ""))
         card.lootText:SetText("|cffa335eeLoot: " .. s.loot .. "|r")
         if s.loot > 0 and maxLoot > 0 then
             BarFill(card.barFill, COL_EPIC[1], COL_EPIC[2], COL_EPIC[3], 1)
@@ -3478,6 +3518,7 @@ local function RefreshOverview()
             local who = EventFriend(ev) or ev.name
             local what = ev.killer
             if ev.ability ~= "" then what = what .. " (" .. ev.ability .. ")" end
+            if ev.pvp then what = what .. " |cff80b0ff[PvP]|r" end
             lines[#lines + 1] = string.format("%s døde til %s - %s", ColorName(who, ev.class), what, FormatAgo(ev.time))
         end
     end
@@ -3513,14 +3554,15 @@ end
 -- =============================================================================
 local SCORE_COLS = {
     { label = "#",      w = 36 },
-    { label = "Navn",   w = 140, sort = "name" },
+    { label = "Navn",   w = 130, sort = "name" },
     { label = "Level",  w = 80,  sort = "levelSort" },
     { label = "Chars",  w = 60,  sort = "chars" },
-    { label = "Døde",   w = 60,  sort = "deaths" },
+    { label = "PvE",    w = 45,  sort = "pve" },
+    { label = "PvP",    w = 45,  sort = "pvp" },
     { label = "Loot",   w = 60,  sort = "loot" },
     { label = "Point",  w = 70,  sort = "points" },
-    { label = "Guld",   w = 110, sort = "gold" },
-    { label = "Status", w = 116 },
+    { label = "Guld",   w = 100, sort = "gold" },
+    { label = "Status", w = 106 },
 }
 
 local function BuildScoreboard(page)
@@ -3558,10 +3600,11 @@ local function BuildScoreboard(page)
         row.level = Field(row, c[3].x, c[3].w - 6, "CENTER")
         row.chars = Field(row, c[4].x, c[4].w - 6, "CENTER")
         row.deaths = Field(row, c[5].x, c[5].w - 6, "CENTER")
-        row.loot = Field(row, c[6].x, c[6].w - 6, "CENTER")
-        row.points = Field(row, c[7].x, c[7].w - 6, "CENTER")
-        row.gold = Field(row, c[8].x, c[8].w - 6, "CENTER")
-        row.status = Field(row, c[9].x + 6, c[9].w - 8, "LEFT")
+        row.pvp = Field(row, c[6].x, c[6].w - 6, "CENTER")
+        row.loot = Field(row, c[7].x, c[7].w - 6, "CENTER")
+        row.points = Field(row, c[8].x, c[8].w - 6, "CENTER")
+        row.gold = Field(row, c[9].x, c[9].w - 6, "CENTER")
+        row.status = Field(row, c[10].x + 6, c[10].w - 8, "LEFT")
         ns.scoreRows[i] = row
     end
 
@@ -3572,7 +3615,7 @@ local function BuildScoreboard(page)
     local note = Txt(page, "GameFontHighlightSmall")
     note:SetPoint("TOPLEFT", ns.scoreInfo, "BOTTOMLEFT", 0, -4)
     note:SetTextColor(0.5, 0.5, 0.56)
-    note:SetText("Point = loot x 5 + højeste level - døde x 3.  Klik på en kolonne for at sortere.")
+    note:SetText("PvE/PvP = døde til mobs og omgivelserne / til andre spillere.  Point = loot x 5 + højeste level - døde x 3.  Klik for at sortere.")
 end
 
 local function RefreshScoreboard()
@@ -3596,8 +3639,11 @@ local function RefreshScoreboard()
         ns.headers[i].text:SetText(col.label .. arrow)
     end
 
-    local maxDeaths = 0
-    for _, s in ipairs(list) do if s.deaths > maxDeaths then maxDeaths = s.deaths end end
+    local maxPve, maxPvp = 0, 0
+    for _, s in ipairs(list) do
+        if s.pve > maxPve then maxPve = s.pve end
+        if s.pvp > maxPvp then maxPvp = s.pvp end
+    end
 
     ns.ShowFirst(ns.scoreRows, #list)
     for i, s in ipairs(list) do
@@ -3610,11 +3656,19 @@ local function RefreshScoreboard()
         row.level:SetText(ns.LevelText(s.maxLevel, s.maxXP))
         row.chars:SetText(s.chars > 0 and tostring(s.chars) or "-")
 
-        row.deaths:SetText(tostring(s.deaths))
-        if s.deaths > 0 and s.deaths == maxDeaths then
+        row.deaths:SetText(tostring(s.pve))
+        if s.pve > 0 and s.pve == maxPve then
             row.deaths:SetTextColor(1, 0.35, 0.35)
         else
             row.deaths:SetTextColor(1, 1, 1)
+        end
+        row.pvp:SetText(tostring(s.pvp))
+        if s.pvp > 0 and s.pvp == maxPvp then
+            row.pvp:SetTextColor(0.5, 0.7, 1)
+        elseif s.pvp > 0 then
+            row.pvp:SetTextColor(1, 1, 1)
+        else
+            row.pvp:SetTextColor(0.6, 0.6, 0.66)
         end
 
         row.loot:SetText(tostring(s.loot))
@@ -3736,12 +3790,15 @@ local function BuildCharsPage(page)
             if d.zone then GameTooltip:AddLine(d.zone, 0.6, 0.6, 0.66) end
             GameTooltip:AddLine(" ")
             GameTooltip:AddDoubleLine("Guld", d.gold > 0 and FormatGold(d.gold) or "-", 0.8, 0.8, 0.8, 1, 1, 1)
-            GameTooltip:AddDoubleLine("Dødsfald", tostring(d.deaths), 0.8, 0.8, 0.8, 1, 1, 1)
+            GameTooltip:AddDoubleLine("Dødsfald", string.format("%d  (%d PvE, %d PvP)", d.deaths, d.deaths - (d.pvp or 0), d.pvp or 0),
+                0.8, 0.8, 0.8, 1, 1, 1)
             local info = ns.target and db.friends[ns.target]
             local secs = ns.PlayedNow and ns.PlayedNow(ns.target, d.name, info and info.chars and info.chars[d.name])
             if secs then
                 GameTooltip:AddDoubleLine("Spilletid", ns.FormatPlayed(secs), 0.8, 0.8, 0.8, 1, 1, 1)
                 GameTooltip:AddDoubleLine("Deaths/hr", ns.FormatDPH(ns.DeathRate(d.deaths, secs)), 0.8, 0.8, 0.8, 1, 0.5, 0.5)
+                GameTooltip:AddDoubleLine("  PvE / PvP pr. time", ns.FormatDPH(ns.DeathRate(d.deaths - (d.pvp or 0), secs)) .. " / "
+                    .. ns.FormatDPH(ns.DeathRate(d.pvp or 0, secs)), 0.6, 0.6, 0.66, 0.8, 0.8, 0.8)
             end
             GameTooltip:AddDoubleLine("Rare+ loot", tostring(d.loot), 0.8, 0.8, 0.8, 0.75, 0.4, 1)
             GameTooltip:AddDoubleLine("Sidst set", d.online and "Online nu" or FormatAgo(d.seen), 0.8, 0.8, 0.8, 1, 1, 1)
@@ -3801,8 +3858,9 @@ local function RefreshChars()
     if pt and pt.secs then
         extra = (extra and (extra .. "  -  ") or "") .. ns.FormatPlayed(pt.secs) .. " spilletid"
     end
-    panel.sub:SetText(string.format("%s  -  %d dødsfald  -  %d rare+ loot%s",
-        Plural(cur.chars, "karakter", "karakterer"), cur.deaths, cur.loot, extra and ("  -  " .. extra) or ""))
+    panel.sub:SetText(string.format("%s  -  %d dødsfald%s  -  %d rare+ loot%s",
+        Plural(cur.chars, "karakter", "karakterer"), cur.deaths, cur.pvp > 0 and (" (" .. cur.pvp .. " PvP)") or "",
+        cur.loot, extra and ("  -  " .. extra) or ""))
     panel.big:SetText(tostring(cur.chars))
     panel.big:SetTextColor(1, 1, 1)
 
@@ -3821,7 +3879,8 @@ local function RefreshChars()
             row.name:SetText(d.full or d.name)
             row.name:SetTextColor(cr, cg, cb)
             row.level:SetText(ns.LevelText(d.level, d.xp))
-            row.deaths:SetText(tostring(d.deaths))
+            -- PvE i hvidt/rødt, PvP bagefter i blåt: "9+3"
+            row.deaths:SetText(d.pvp > 0 and (tostring(d.deaths - d.pvp) .. "|cff80b0ff+" .. d.pvp .. "|r") or tostring(d.deaths))
             row.deaths:SetTextColor(d.deaths > 0 and 1 or 0.6, d.deaths > 0 and 0.5 or 0.6, d.deaths > 0 and 0.5 or 0.66)
             row.loot:SetText(tostring(d.loot))
             if d.loot > 0 then row.loot:SetTextColor(0.75, 0.4, 1) else row.loot:SetTextColor(0.6, 0.6, 0.66) end
@@ -4860,6 +4919,9 @@ do
         lt:SetPoint("TOPLEFT", left, "TOPLEFT", 12, -10)
         lt:SetText("Dødsstatistik")
         lt:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+        ns.deathSplitText = Txt(left, "GameFontHighlight")
+        ns.deathSplitText:SetPoint("TOPRIGHT", left, "TOPRIGHT", -12, -13)
+        ns.deathSplitText:SetJustifyH("RIGHT")
         ns.deathStatText = Txt(left, "GameFontHighlightSmall")
         ns.deathStatText:SetPoint("TOPLEFT", lt, "BOTTOMLEFT", 0, -10)
         ns.deathStatText:SetWidth(338)
@@ -4882,8 +4944,9 @@ do
     end
 
     local function RefreshDeathPage()
-        local mobs, zones, falls = ns.DeathStats()
+        local mobs, zones, falls, _, players, totals = ns.DeathStats()
         local lines = {}
+        ns.deathSplitText:SetText(string.format("|cffff8080%d|r PvE  -  |cff80b0ff%d|r PvP", totals.pve, totals.pvp))
         local function section(title, list, empty, max, fmt)
             lines[#lines + 1] = "|cffffd100" .. title .. "|r"
             if #list == 0 then
@@ -4896,13 +4959,16 @@ do
         local function withWho(i, e)
             return string.format("%d. %s  |cffff8080%d|r  |cff888888(%s)|r", i, e.name, e.n, ns.WhoText(e.who, 3))
         end
-        section("Farligste mob", mobs, "Ingen er blevet slået ihjel af et mob endnu.", 5, withWho)
+        section("Farligste mob (PvE)", mobs, "Ingen er blevet slået ihjel af et mob endnu.", 3, withWho)
+        section("Farligste spiller (PvP)", players, "Ingen er blevet ganket endnu.", 3, function(i, e)
+            return string.format("%d. %s  |cff80b0ff%d|r  |cff888888(%s)|r", i, e.name, e.n, ns.WhoText(e.who, 3))
+        end)
         section("Farligste zone", zones, "Ingen dødsfald endnu.", 3, withWho)
         if ns.DeathRateRanking then
             section("Deaths/hr (døde pr. times spilletid)", ns.DeathRateRanking(), "Ingen spilletid kendt endnu.", 3,
                 function(i, e)
-                    return string.format("%d. %s  |cffff8080%s|r  |cff888888(%d døde på %s)|r", i, Name(e.name),
-                        ns.FormatDPH(e.dph), e.deaths, ns.FormatPlayed(e.secs))
+                    return string.format("%d. %s  |cffff8080%s|r  |cff888888(%d PvE + %d PvP på %s)|r", i, Name(e.name),
+                        ns.FormatDPH(e.dph), e.deaths - (e.pvp or 0), e.pvp or 0, ns.FormatPlayed(e.secs))
                 end)
         end
         section("Faldskade-konge", falls, "Ingen er faldet ihjel endnu. Endnu.", 3, function(i, e)
@@ -4923,6 +4989,7 @@ do
             local ev = recent[i]
             local what = (ev.killer and ev.killer ~= "") and ev.killer or "Ukendt"
             if what == "Omgivelserne" and ev.ability and ev.ability ~= "" then what = ev.ability end
+            if ev.pvp then what = "|cff80b0ff" .. what .. " (PvP)|r" end
             local fr = EventFriend(ev)
             local full = ns.CharFull(fr, ev.name, ev.sur)
             local who = ColorName(fr, ev.class)
@@ -6314,7 +6381,7 @@ do
     local DEMO_KILLERS = {
         { "Bonechewer Ravager", "Nærkamp" }, { "Fel Reaver", "Stomp" }, { "Faldskade", "" },
         { "Omgivelserne", "Lava" }, { "En meget vred kylling", "Næbhug" }, { "Marsh Lurker", "Nærkamp" },
-        { "Omgivelserne", "Faldskade" },
+        { "Omgivelserne", "Faldskade" }, { "Grimgor", "Mortal Strike", true }, { "Zugzug", "", true },
     }
     local DEMO_EXALTED = { "Stormwind", "Darnassus", "Timbermaw Hold", "Argent Dawn", "The Aldor", "The Consortium", "Sporeggar" }
 
@@ -6436,7 +6503,7 @@ do
                     local id = "demo-" .. name .. "-" .. d
                     db.seen[id] = true
                     table.insert(db.events, {
-                        id = id, name = ch.name, class = ch.class, killer = k[1], ability = k[2],
+                        id = id, name = ch.name, class = ch.class, killer = k[1], ability = k[2], pvp = k[3],
                         level = math.random(8, MAX_LEVEL), zone = DEMO_ZONES[math.random(#DEMO_ZONES)],
                         time = now - math.random(60, 90000), friend = name,
                     })

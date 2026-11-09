@@ -332,6 +332,13 @@ local OBITS = {
         "{K} sagde nej. {N} lyttede ikke.",
         "{N} var lidt for modig over for en level {KL} {K}.",
     },
+    pvp = {
+        "{N} blev ganket af {K} i {Z}. Det var PvP-dødsfald nummer {P}.",
+        "{K} kom forbi {Z} og tog {N} med som trofæ.",
+        "{N} mødte en rigtig spiller i {Z}: {K}. Det var ikke et venskabeligt møde.",
+        "Breaking: {K} fra den anden faction har sendt {N} hjem i en kiste.",
+        "{N} (level {L}) blev lagt ned af {K}{AB}. Hævnen planlægges allerede.",
+    },
     unknown = {
         "{N} døde i {Z}. Ingen ved hvordan. Mistænkeligt.",
         "{N} faldt bare om i {Z}. Obduktionen er i gang.",
@@ -354,16 +361,17 @@ local function ObitKind(ev)
     if what == env.Fatigue then return "fatigue" end
     if what == env.Lava or what == env.Fire or what == env.Slime then return "lava" end
     if ev.killer == "Omgivelserne" or not ev.killer or ev.killer == "" or ev.killer == "Ukendt" then return "unknown" end
+    if ev.pvp == true then return "pvp" end
     local kl, l = tonumber(ev.klvl), tonumber(ev.level) or 0
     if kl and kl > 0 and kl <= l - 3 then return "weak" end
     if kl and (kl == -1 or kl >= l + 3) then return "strong" end
     return "generic"
 end
 
-local function DeathCount(friend)
+local function DeathCount(friend, pvpOnly)
     local n = 0
     for _, ev in ipairs(WastedCoastDB.events) do
-        if C.EventFriend(ev) == friend then n = n + 1 end
+        if C.EventFriend(ev) == friend and (not pvpOnly or ev.pvp == true) then n = n + 1 end
     end
     return n
 end
@@ -382,6 +390,7 @@ function ns.Obituary(ev, friend)
         L = tostring(ev.level or "?"),
         KL = (kl == -1) and "??" or tostring(kl or "?"),
         D = tostring(friend and DeathCount(friend) or 1),
+        P = tostring(friend and DeathCount(friend, true) or 1),
     }
     return (text:gsub("{(%u+)}", vars))
 end

@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.14.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.15.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -132,11 +132,20 @@ dødsfald og det seneste loot, når der er plads.
 
 ### Scoreboard
 Alle venner i en rangliste. Klik på en kolonne for at sortere (klik igen for at
-vende rækkefølgen): navn, højeste level, antal karakterer, døde, loot, point og
-guld. Guld er summen af alle vennens karakterer. Førstepladsen får guldkant, og
+vende rækkefølgen): navn, højeste level, antal karakterer, døde (delt i **PvE** og
+**PvP**), loot, point og guld. Guld er summen af alle vennens karakterer. Førstepladsen får guldkant, og
 din egen række er markeret.
 
 **Point = loot x 5 + højeste level - døde x 3.**
+
+### PvP- og PvE-dødsfald
+Alle dødsfald deles op i **PvP** (slået ihjel af en anden spiller eller dennes pet)
+og **PvE** (mobs, bosser, fald, lava og alt andet). Opdelingen sendes med til
+vennerne og står på kortene ("Døde: 12 (3 PvP)"), i Ranglisten (kolonnerne PvE og
+PvP), under Karakterer og Spilletid (fx "9+3" = 9 PvE og 3 PvP), i deaths/hr
+(PvE og PvP pr. time i tooltippen), i dødsstatistikken ("Farligste spiller") og i
+seneste dødsfald. PvP-dødsfald får deres egne dødsannoncer, trofæerne *Ganket* og
+*Kanonføde* og titlen **Gank-offeret**. Dødsfald fra før 0.15 tæller som PvE.
 
 ### Karakterer
 Vælg en ven til venstre og se **alle karakterer vedkommende har været logget ind
@@ -200,8 +209,8 @@ Deaths/hr regnes kun på karakterer med kendt spilletid og mindst en halv times
 spil. Spilletiden kan også ses i karakter-tooltippen under Venner > Karakterer.
 
 ### Statistik (under Død)
-**Dødsstatistik:** de fem mobs, der har slået flest af jer ihjel, de tre farligste
-zoner, de tre med flest **deaths/hr** og **faldskade-kongen** (flest dødsfald af fald). Ud for hver står, hvem der
+**Dødsstatistik:** fordelingen mellem PvE og PvP, de tre mobs, der har slået flest af jer ihjel,
+de tre spillere, der har ganket jer mest, de tre farligste zoner, de tre med flest **deaths/hr** og **faldskade-kongen** (flest dødsfald af fald). Ud for hver står, hvem der
 er døde til den. Til højre står **seneste dødsfald**: hvem (med karakterens fornavn og efternavn), hvornår, hvad der
 slog dem ihjel og hvor.
 
@@ -333,6 +342,7 @@ kun `/reload`).
 ### Titler
 Uddeles automatisk og vises på kortene og under scoreboardet:
 - **Klovnen**: flest dødsfald
+- **Gank-offeret**: flest PvP-dødsfald
 - **Lootgoblin**: flest rare+ loot
 - **Rigmanden**: mest guld i alt
 - **Højest level**
@@ -497,6 +507,7 @@ indlæses). Forever kører på Blizzards nye motor, og det betyder:
   og ved et dødsfald er den seneste af dem dræberen. Fald, drukning og udmattelse
   genkendes også. Slå nameplates til for fjender (tasten V), så rammer det oftest
   rigtigt. Kun hvis der slet ikke er noget at gå efter, står der "Ukendt".
+  Er dræberen en spiller (eller en spillers pet), tæller dødsfaldet som PvP.
 - Karakterer har fornavn og efternavn. Addonet prøver selv at finde efternavnet;
   lykkes det ikke, skriver det det i chatten, og så sætter du det med
   `/wc4ever efternavn Ditefternavn`. Efternavnet sendes til vennerne og vises i

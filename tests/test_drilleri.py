@@ -652,6 +652,86 @@ do
 end
 ns.ShowTab(13)
 
+-- v0.15: PvP- og PvE-dødsfald
+do
+    -- Uden combat log (Forever): en fjendtlig spiller på en nameplate, der har dig i target
+    local oldName, oldExists, oldLevel = UnitName, UnitExists, UnitLevel
+    UnitCanAttack = function(_, u) return u == "nameplate5" end
+    UnitIsDead = function() return false end
+    UnitIsUnit = function(a, b) return a == "nameplate5target" and b == "player" end
+    UnitExists = function(u) return u == "nameplate5" end
+    UnitIsPlayer = function(u) return u == "nameplate5" end
+    UnitName = function(u) if u == "nameplate5" then return "Grimgor" end return oldName(u) end
+    UnitLevel = function(u) if u == "nameplate5" then return 41 end return oldLevel(u) end
+    CLOCK = CLOCK + 60
+    local k, _, lvl, pvp = ns.FindKiller()
+    check(k == "Grimgor" and lvl == 41 and pvp == true, "spiller på nameplate er PvP: " .. tostring(k) .. " " .. tostring(pvp))
+    SENT = {}
+    NOW = NOW + 60
+    Fire("PLAYER_DEAD")
+    local d = findSent("D;")
+    check(d and d:match(";1$"), "PvP sendes som felt 13: " .. tostring(d))
+    local ev = db.events[#db.events]
+    check(ev.killer == "Grimgor" and ev.pvp == true, "eget PvP-dødsfald gemmes")
+    ns.CheckAchievements(true)
+    check(db.ach[db.me] and db.ach[db.me].pvp1, "trofæet Ganket")
+    check(ns.Obituary(ev, "Mathias"):find("Grimgor") and not ns.Obituary(ev, "Mathias"):find("{"), "PvP-dødsannonce: " .. ns.Obituary(ev, "Mathias"))
+    -- Et mob er ikke PvP
+    UnitIsPlayer = function() return false end
+    CLOCK = CLOCK + 60
+    k, _, _, pvp = ns.FindKiller()
+    check(k == "Grimgor" and pvp == false, "et mob er PvE")
+    UnitName, UnitExists, UnitLevel = oldName, oldExists, oldLevel
+    UnitCanAttack, UnitIsDead, UnitIsUnit, UnitIsPlayer = nil, nil, nil, nil
+
+    -- Med combat log: kildens flag afgør det (0x100 = styret af en spiller)
+    bit = { band = function(a, b) return (math.floor(a / b) % 2 == 1) and b or 0 end }
+    CLOCK = CLOCK + 60
+    CombatLogGetCurrentEventInfo = function() return 0, "SWING_DAMAGE", nil, "Player-1-01", "Zugzug", 0x548, nil, "guid", PLAYER end
+    Fire("COMBAT_LOG_EVENT_UNFILTERED")
+    k, _, _, pvp = ns.FindKiller()
+    check(k == "Zugzug" and pvp == true, "combat log: spiller er PvP")
+    CombatLogGetCurrentEventInfo = function() return 0, "SPELL_DAMAGE", nil, "Creature-0-1", "Defias Mage", 0xa48, nil, "guid", PLAYER, nil, nil, 133, "Fireball" end
+    Fire("COMBAT_LOG_EVENT_UNFILTERED")
+    k, _, _, pvp = ns.FindKiller()
+    check(k == "Defias Mage" and pvp == false, "combat log: mob er PvE")
+    bit = nil
+    CLOCK = CLOCK + 60
+
+    -- Fra en ven: felt 13 = "1" (felt 12 tomt uden efternavn); gamle beskeder er PvE
+    NOW = NOW + 30
+    Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "D", "Nickchar-" .. NOW, "Nickchar", "WARRIOR", "Zugzug", "Nærkamp", 30, "Hillsbrad Foothills", NOW, "Nick", 32, "", "1" }, ";"), "GUILD", "Nickchar")
+    local nev = db.events[#db.events]
+    check(nev.pvp == true and nev.sur == nil, "vennens PvP-dødsfald modtages")
+    local pvpLine
+    for i = #PRINTS, math.max(1, #PRINTS - 5), -1 do if PRINTS[i]:find("døde til") then pvpLine = PRINTS[i] break end end
+    check(pvpLine and pvpLine:find("Zugzug") and pvpLine:find("PvP"), "PvP i chatbeskeden: " .. tostring(pvpLine))
+    NOW = NOW + 1
+    Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "D", "Nickchar-" .. NOW, "Nickchar", "WARRIOR", "Murloc", "Nærkamp", 30, "Westfall", NOW, "Nick", 12 }, ";"), "GUILD", "Nickchar")
+    check(db.events[#db.events].pvp == nil, "gammelt format er PvE")
+
+    local nick
+    for _, s in ipairs(ns.core.BuildStats()) do if s.name == "Nick" then nick = s end end
+    check(nick.pvp == 1 and nick.pve == nick.deaths - 1, "Nick: PvP og PvE tælles hver for sig: " .. nick.pvp .. "/" .. nick.pve)
+    local nt = ns.PlayedTotals("Nick")
+    check(nt.ratedPvp == 1 and nt.pvpDph and nt.pveDph and math.abs(nt.pvpDph + nt.pveDph - nt.dph) < 1e-9, "deaths/hr deles i PvE og PvP")
+
+    ns.ShowTab(2)
+    local heads = {}
+    for _, h in ipairs(ns.headers) do heads[#heads + 1] = h.text:GetText() end
+    local hs = table.concat(heads, ",")
+    check(hs:find("PvE") and hs:find("PvP"), "Ranglisten har PvE og PvP: " .. hs)
+    ns.ShowTab(16)
+    check(ns.deathStatText.text_:find("Farligste spiller") and ns.deathStatText.text_:find("Zugzug"), "farligste spiller: " .. ns.deathStatText.text_)
+    check(ns.deathSplitText:GetText():find("PvP"), "PvE/PvP-fordeling på Død")
+    check(ns.deathRecentText.text_:find("(PvP)", 1, true), "PvP markeres i seneste dødsfald")
+    ns.ShowTab(17)
+    check(ns.playedUI.total:GetText():find("PvP"), "PvP pr. time for hele gruppen")
+    ns.ShowTab(1)
+    check(CardOf("Nick").deaths:GetText():find("1 PvP"), "PvP på kortet: " .. CardOf("Nick").deaths:GetText())
+    CardOf("Nick").scripts.OnEnter(CardOf("Nick"))
+end
+
 -- Level-toast: egen ding giver popup og XU med tid siden sidste level
 local nT = #ns.toastsSeen
 SENT = {}

@@ -129,6 +129,7 @@ local function Collect(since, snapOverride)
 
     -- Dødsfald
     local deaths, killers, total = {}, {}, 0
+    local ganked, gankers = {}, {}   -- v0.15: PvP-dødsfald pr. ven, og hvem der stod bag
     local worst, worstGap
     for _, ev in ipairs(db.events) do
         if (ev.time or 0) > since then
@@ -136,6 +137,11 @@ local function Collect(since, snapOverride)
             if f then
                 total = total + 1
                 deaths[f] = (deaths[f] or 0) + 1
+                if ev.pvp == true then
+                    ganked[f] = (ganked[f] or 0) + 1
+                    gankers[f] = gankers[f] or {}
+                    if ev.killer and ev.killer ~= "" then gankers[f][ev.killer] = (gankers[f][ev.killer] or 0) + 1 end
+                end
                 killers[f] = killers[f] or {}
                 if ev.killer and ev.killer ~= "" and ev.killer ~= "Ukendt" then
                     killers[f][ev.killer] = (killers[f][ev.killer] or 0) + 1
@@ -158,6 +164,19 @@ local function Collect(since, snapOverride)
         local tail = (killer and kn >= 2) and string.format(" %d af dem til %s.", kn, killer) or ""
         add(45 + topN, string.format("%s døde |cffff5050%d gange|r.%s %s", Who(topF), topN, tail,
             Pick({ "Spirit healeren kender navnet nu.", "Repair-regningen er ikke for sarte sjæle.", "Kirkegården overvejer at give stamkundekort." })))
+    end
+    -- PvP: hvem blev ganket mest?
+    local gF, gN = nil, 0
+    for f, n in pairs(ganked) do
+        if n > gN or (n == gN and f < gF) then gF, gN = f, n end
+    end
+    if gF then
+        local who, wn = nil, 0
+        for k, n in pairs(gankers[gF]) do if n > wn or (n == wn and k < who) then who, wn = k, n end end
+        local by = who and string.format(" %s stod bag %s.", who, wn == gN and (gN == 1 and "det" or "dem alle") or (wn .. " af dem")) or ""
+        add(33 + math.min(10, gN), string.format("%s blev ganket af andre spillere |cff80b0ff%s|r.%s %s", Who(gF),
+            gN == 1 and "én gang" or (gN .. " gange"), by,
+            Pick({ "Hævnen er sød.", "Måske på tide at kigge sig over skulderen.", "Den anden faction siger tak for kampen." })))
     end
     if worst then
         local ev, w = worst.ev, Who(worst.f)

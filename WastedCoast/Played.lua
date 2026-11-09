@@ -65,12 +65,16 @@ local function PlayedNow(friend, char, c)
 end
 ns.PlayedNow = PlayedNow
 
+-- Dødsfald pr. karakter, og hvor mange af dem der var PvP
 local function DeathsByChar(friend)
-    local by = {}
+    local by, pvp = {}, {}
     for _, ev in ipairs(DB().events or {}) do
-        if ev.name and C.EventFriend(ev) == friend then by[ev.name] = (by[ev.name] or 0) + 1 end
+        if ev.name and C.EventFriend(ev) == friend then
+            by[ev.name] = (by[ev.name] or 0) + 1
+            if ev.pvp == true then pvp[ev.name] = (pvp[ev.name] or 0) + 1 end
+        end
     end
-    return by
+    return by, pvp
 end
 
 local function Rate(deaths, secs)
@@ -83,15 +87,15 @@ ns.DeathRate = Rate
 function ns.PlayedChars(friend)
     local db = DB()
     local info = db.friends[friend]
-    local deaths = DeathsByChar(friend)
+    local deaths, pvpDeaths = DeathsByChar(friend)
     local list = {}
     for name, c in pairs((info and info.chars) or {}) do
         local secs = PlayedNow(friend, name, c)
-        local d = deaths[name] or 0
+        local d, pv = deaths[name] or 0, pvpDeaths[name] or 0
         list[#list + 1] = {
             name = name, full = C.CharFull(friend, name, c.surname), class = c.class, level = c.level or 0,
             secs = secs, levelSecs = c.played and c.played.l, at = c.played and c.played.at,
-            deaths = d, dph = Rate(d, secs), online = c.seen and (time() - c.seen) < 150,
+            deaths = d, pvp = pv, dph = Rate(d, secs), pveDph = Rate(d - pv, secs), pvpDph = Rate(pv, secs), online = c.seen and (time() - c.seen) < 150,
         }
     end
     table.sort(list, function(a, b)
@@ -106,34 +110,42 @@ end
 -- før addonet (eller fra en ældre version uden spilletid) ikke trækker tallet op.
 function ns.PlayedTotals(friend)
     local secs, deaths, allDeaths, known, top = 0, 0, 0, 0, nil
+    local pvp, allPvp = 0, 0
     for _, ch in ipairs(ns.PlayedChars(friend)) do
         allDeaths = allDeaths + ch.deaths
+        allPvp = allPvp + ch.pvp
         if ch.secs then
             secs = secs + ch.secs
             deaths = deaths + ch.deaths
+            pvp = pvp + ch.pvp
             known = known + 1
             if not top then top = ch end
         end
     end
     return {
         secs = known > 0 and secs or nil, deaths = allDeaths, rated = deaths,
+        pvp = allPvp, ratedPvp = pvp,   -- rated/ratedPvp = kun karakterer med kendt spilletid
         dph = known > 0 and Rate(deaths, secs) or nil, known = known, top = top,
+        pveDph = known > 0 and Rate(deaths - pvp, secs) or nil, pvpDph = known > 0 and Rate(pvp, secs) or nil,
     }
 end
 
 -- Hele gruppen
 function ns.GroupPlayed()
     local secs, deaths, known, topChar, topFriend = 0, 0, 0, nil, nil
+    local pvp = 0
     for _, friend in ipairs(ROSTER) do
         local t = ns.PlayedTotals(friend)
         if t.secs then
             secs = secs + t.secs
             deaths = deaths + t.rated
+            pvp = pvp + t.ratedPvp
             known = known + 1
             if t.top and (not topChar or t.top.secs > topChar.secs) then topChar, topFriend = t.top, friend end
         end
     end
     return { secs = known > 0 and secs or nil, deaths = deaths, dph = known > 0 and Rate(deaths, secs) or nil,
+             pvp = pvp, pveDph = known > 0 and Rate(deaths - pvp, secs) or nil, pvpDph = known > 0 and Rate(pvp, secs) or nil,
              known = known, topChar = topChar, topFriend = topFriend }
 end
 
@@ -142,7 +154,10 @@ function ns.DeathRateRanking()
     local list = {}
     for _, friend in ipairs(ROSTER) do
         local t = ns.PlayedTotals(friend)
-        if t.dph then list[#list + 1] = { name = friend, dph = t.dph, deaths = t.rated, secs = t.secs } end
+        if t.dph then
+            list[#list + 1] = { name = friend, dph = t.dph, deaths = t.rated, pvp = t.ratedPvp, secs = t.secs,
+                                pveDph = t.pveDph, pvpDph = t.pvpDph }
+        end
     end
     table.sort(list, function(a, b)
         if a.dph ~= b.dph then return a.dph > b.dph end
@@ -339,8 +354,11 @@ local function BuildPage(page)
             else
                 GameTooltip:AddDoubleLine("Spilletid i alt", ns.FormatPlayed(t.secs), 0.8, 0.8, 0.8, 1, 1, 1)
                 GameTooltip:AddDoubleLine("Timer", string.format("%.1f", t.secs / 3600), 0.8, 0.8, 0.8, 1, 1, 1)
-                GameTooltip:AddDoubleLine("Dødsfald", tostring(t.rated), 0.8, 0.8, 0.8, 1, 0.5, 0.5)
+                GameTooltip:AddDoubleLine("Dødsfald", string.format("%d  (%d PvE, %d PvP)", t.rated, t.rated - t.ratedPvp, t.ratedPvp),
+                    0.8, 0.8, 0.8, 1, 0.5, 0.5)
                 GameTooltip:AddDoubleLine("Deaths/hr", ns.FormatDPH(t.dph), 0.8, 0.8, 0.8, DphColor(t.dph))
+                GameTooltip:AddDoubleLine("  PvE pr. time", ns.FormatDPH(t.pveDph), 0.6, 0.6, 0.66, DphColor(t.pveDph))
+                GameTooltip:AddDoubleLine("  PvP pr. time", ns.FormatDPH(t.pvpDph), 0.6, 0.6, 0.66, 0.5, 0.7, 1)
                 if t.top then
                     GameTooltip:AddDoubleLine("Mest spillet", t.top.full or t.top.name, 0.8, 0.8, 0.8, C.ClassColor(t.top.class))
                 end
@@ -396,8 +414,11 @@ local function BuildPage(page)
                 if d.levelSecs and d.levelSecs > 0 then
                     GameTooltip:AddDoubleLine("På dette level", ns.FormatPlayed(d.levelSecs), 0.8, 0.8, 0.8, 1, 1, 1)
                 end
-                GameTooltip:AddDoubleLine("Dødsfald", tostring(d.deaths), 0.8, 0.8, 0.8, 1, 0.5, 0.5)
+                GameTooltip:AddDoubleLine("Dødsfald", string.format("%d  (%d PvE, %d PvP)", d.deaths, d.deaths - d.pvp, d.pvp),
+                    0.8, 0.8, 0.8, 1, 0.5, 0.5)
                 GameTooltip:AddDoubleLine("Deaths/hr", ns.FormatDPH(d.dph), 0.8, 0.8, 0.8, DphColor(d.dph))
+                GameTooltip:AddDoubleLine("  PvE pr. time", ns.FormatDPH(d.pveDph), 0.6, 0.6, 0.66, DphColor(d.pveDph))
+                GameTooltip:AddDoubleLine("  PvP pr. time", ns.FormatDPH(d.pvpDph), 0.6, 0.6, 0.66, 0.5, 0.7, 1)
                 if d.online then
                     GameTooltip:AddLine("Online nu: tæller med", 0.25, 0.88, 0.38)
                 elseif d.at then
@@ -441,7 +462,7 @@ local function RefreshPage()
         row.f[2]:SetText(Name(d.name) .. (d.name == db.me and " (dig)" or ""))
         row.f[2]:SetTextColor(C.ClassColor(classOf[d.name]))
         row.f[3]:SetText(ns.FormatPlayed(t.secs))
-        row.f[4]:SetText(t.secs and tostring(t.rated) or "-")
+        row.f[4]:SetText(t.secs and (t.ratedPvp > 0 and ((t.rated - t.ratedPvp) .. "|cff80b0ff+" .. t.ratedPvp .. "|r") or tostring(t.rated)) or "-")
         row.f[5]:SetText(ns.FormatDPH(t.dph))
         row.f[5]:SetTextColor(DphColor(t.dph))
         row.f[6]:SetText(t.known > 0 and tostring(t.known) or "-")
@@ -459,7 +480,8 @@ local function RefreshPage()
     if g.secs then
         lines[1] = string.format("|cffffd100Hele gruppen:|r %s  |cff888888(%s timer)|r",
             ns.FormatPlayed(g.secs), math.floor(g.secs / 3600 + 0.5))
-        lines[2] = string.format("|cffffd100Deaths/hr:|r %s  |cff888888(%d dødsfald)|r", ns.FormatDPH(g.dph), g.deaths)
+        lines[2] = string.format("|cffffd100Deaths/hr:|r %s  |cff888888(PvE %s, |r|cff80b0ffPvP %s|r|cff888888)|r", ns.FormatDPH(g.dph),
+            ns.FormatDPH(g.pveDph), ns.FormatDPH(g.pvpDph))
         if g.topChar then
             local r, gg, b = C.ClassColor(g.topChar.class)
             lines[3] = string.format("|cffffd100Mest spillede karakter:|r |cff%02x%02x%02x%s|r  |cff888888(%s, %s)|r",
@@ -494,7 +516,7 @@ local function RefreshPage()
             row.f[1]:SetTextColor(C.ClassColor(d.class))
             row.f[2]:SetText(d.level > 0 and tostring(d.level) or "-")
             row.f[3]:SetText((d.online and d.secs) and ("|cff40e060" .. ns.FormatPlayed(d.secs) .. "|r") or ns.FormatPlayed(d.secs))
-            row.f[4]:SetText(tostring(d.deaths))
+            row.f[4]:SetText(d.pvp > 0 and ((d.deaths - d.pvp) .. "|cff80b0ff+" .. d.pvp .. "|r") or tostring(d.deaths))
             row.f[5]:SetText(ns.FormatDPH(d.dph))
             row.f[5]:SetTextColor(DphColor(d.dph))
             row:Show()
