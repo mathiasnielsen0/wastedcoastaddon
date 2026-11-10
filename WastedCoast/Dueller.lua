@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- =============================================================================
 -- Dueller (v0.9): vundet/tabt og mod hvem, både mellem vennerne og mod andre.
@@ -155,11 +156,11 @@ local function OnSystemMessage(msg)
         if db.settings.announce then
             local w, l = 0, 0
             if of then w, l = HeadToHead(db.me, of) end
-            local score = of and string.format(" Stillingen mod %s: |cffffd100%d-%d|r.", Name(of), w, l) or ""
+            local score = of and string.format(L(" Stillingen mod %s: |cffffd100%d-%d|r."), Name(of), w, l) or ""
             if won then
-                Print(string.format("Du vandt en duel mod %s%s.%s", opp, fled and " (vedkommende flygtede)" or "", score))
+                Print(string.format(L("Du vandt en duel mod %s%s.%s"), opp, fled and L(" (vedkommende flygtede)") or "", score))
             else
-                Print(string.format("Du tabte en duel til %s%s.%s", opp, fled and " (du flygtede)" or "", score))
+                Print(string.format(L("Du tabte en duel til %s%s.%s"), opp, fled and L(" (du flygtede)") or "", score))
             end
         end
     end
@@ -191,10 +192,10 @@ function ns.HandleDuelMessage(t)
             if pairToastAt[key] and now - pairToastAt[key] < 30 then return end
             pairToastAt[key] = now
             local w, l = HeadToHead(friend, of)
-            ns.Toast({ kind = "duel", head = "DUEL", title = Name(winner) .. " slog " .. Name(loser) .. (d.fled and " (flygtede)" or ""),
-                       text = string.format("Stillingen: %s %d - %d %s", Name(friend), w, l, Name(of)), icon = DUEL_ICON, friend = winner })
+            ns.Toast({ kind = "duel", head = "DUEL", title = Name(winner) .. L(" slog ") .. Name(loser) .. (d.fled and L(" (flygtede)") or ""),
+                       text = string.format(L("Stillingen: %s %d - %d %s"), Name(friend), w, l, Name(of)), icon = DUEL_ICON, friend = winner })
         elseif db.settings.announce then
-            Print(string.format("%s %s en duel %s %s.", Name(friend), d.won and "vandt" or "tabte", d.won and "mod" or "til", d.opp))
+            Print(string.format(d.won and L("%s vandt en duel mod %s.") or L("%s tabte en duel til %s."), Name(friend), d.opp))
         end
     end
 end
@@ -230,7 +231,7 @@ local function Header(box, text, sub)
     return h
 end
 
-local RANK_COLS = {
+local RANK_COLS = ns.LT({
     { x = 4,   w = 18,  j = "CENTER", label = "#" },
     { x = 24,  w = 96,  j = "LEFT",   label = "Ven" },
     { x = 122, w = 34,  j = "CENTER", label = "V" },
@@ -238,7 +239,7 @@ local RANK_COLS = {
     { x = 194, w = 44,  j = "CENTER", label = "Sejr" },
     { x = 240, w = 48,  j = "CENTER", label = "Venner" },
     { x = 290, w = 48,  j = "CENTER", label = "Stime" },
-}
+})
 local CELL = 26   -- 10 kolonner skal kunne være i det 362 px brede panel
 
 local function BuildPage(page)
@@ -247,7 +248,7 @@ local function BuildPage(page)
     left:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
     left:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
     left:SetWidth(362)
-    Header(left, "Dueller", "vundet og tabt")
+    Header(left, L("Dueller"), L("vundet og tabt"))
     for _, c in ipairs(RANK_COLS) do
         local fs = Txt(left, "GameFontHighlightSmall")
         fs:SetPoint("TOPLEFT", left, "TOPLEFT", 10 + c.x, -38)
@@ -273,11 +274,11 @@ local function BuildPage(page)
             GameTooltip:AddLine(Name(d.name), 1, 1, 1)
             local st = d.st
             if st.w + st.l == 0 then
-                GameTooltip:AddLine("Ingen dueller endnu", 0.6, 0.6, 0.66)
+                GameTooltip:AddLine(L("Ingen dueller endnu"), 0.6, 0.6, 0.66)
             else
-                GameTooltip:AddDoubleLine("Mod venner", string.format("%d-%d", st.fw, st.fl), 0.8, 0.8, 0.8, 1, 1, 1)
-                GameTooltip:AddDoubleLine("Mod andre", string.format("%d-%d", st.ow, st.ol), 0.8, 0.8, 0.8, 1, 1, 1)
-                if st.fled > 0 then GameTooltip:AddDoubleLine("Flygtet", tostring(st.fled), 0.8, 0.8, 0.8, 1, 0.45, 0.45) end
+                GameTooltip:AddDoubleLine(L("Mod venner"), string.format("%d-%d", st.fw, st.fl), 0.8, 0.8, 0.8, 1, 1, 1)
+                GameTooltip:AddDoubleLine(L("Mod andre"), string.format("%d-%d", st.ow, st.ol), 0.8, 0.8, 0.8, 1, 1, 1)
+                if st.fled > 0 then GameTooltip:AddDoubleLine(L("Flygtet"), tostring(st.fled), 0.8, 0.8, 0.8, 1, 0.45, 0.45) end
                 local opps = {}
                 for name, o in pairs(st.opp) do opps[#opps + 1] = { name = name, w = o.w, l = o.l, friend = o.friend } end
                 table.sort(opps, function(a, b)
@@ -285,12 +286,12 @@ local function BuildPage(page)
                     return a.name < b.name
                 end)
                 GameTooltip:AddLine(" ")
-                GameTooltip:AddLine("Modstandere", 1, 0.82, 0.2)
+                GameTooltip:AddLine(L("Modstandere"), 1, 0.82, 0.2)
                 for k = 1, math.min(10, #opps) do
                     local o = opps[k]
                     local r, g, b = 0.8, 0.8, 0.8
                     if o.w > o.l then r, g, b = 0.4, 0.9, 0.5 elseif o.l > o.w then r, g, b = 1, 0.45, 0.45 end
-                    GameTooltip:AddDoubleLine(Name(o.name) .. (o.friend and "" or "  |cff888888(ikke ven)|r"), string.format("%d-%d", o.w, o.l), 0.9, 0.9, 0.9, r, g, b)
+                    GameTooltip:AddDoubleLine(Name(o.name) .. (o.friend and "" or L("  |cff888888(ikke ven)|r")), string.format("%d-%d", o.w, o.l), 0.9, 0.9, 0.9, r, g, b)
                 end
             end
             GameTooltip:Show()
@@ -305,14 +306,14 @@ local function BuildPage(page)
     ui.note:SetPoint("BOTTOMLEFT", left, "BOTTOMLEFT", 12, 10)
     ui.note:SetWidth(338)
     ui.note:SetTextColor(0.5, 0.5, 0.56)
-    ui.note:SetText("Sejr = andel vundne. Venner = stilling mod vennerne. Stime: +3 = tre sejre i træk. Hold musen over en ven for at se alle modstandere.")
+    ui.note:SetText(L("Sejr = andel vundne. Venner = stilling mod vennerne. Stime: +3 = tre sejre i træk. Hold musen over en ven for at se alle modstandere."))
 
     -- Højre: head-to-head mellem vennerne og de seneste dueller
     local right = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
     right:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
     right:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 0)
     right:SetWidth(362)
-    Header(right, "Indbyrdes", "rækken mod kolonnen")
+    Header(right, L("Indbyrdes"), L("rækken mod kolonnen"))
     ui.colHead, ui.rowHead, ui.cells = {}, {}, {}
     local x0, y0 = 82, -40
     for j = 1, ns.MAX_MEMBERS do
@@ -341,7 +342,7 @@ local function BuildPage(page)
     end
     local lh = Txt(right, "GameFontNormal")
     lh:SetPoint("TOPLEFT", right, "TOPLEFT", 12, y0 - 16 - ns.MAX_MEMBERS * 22 - 4)
-    lh:SetText("Seneste dueller")
+    lh:SetText(L("Seneste dueller"))
     lh:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
     ui.recent = Txt(right, "GameFontHighlightSmall")
     ui.recent:SetPoint("TOPLEFT", lh, "BOTTOMLEFT", 0, -6)
@@ -373,7 +374,7 @@ local function RefreshPage()
         local st = d.st
         local r, g, b = C.ClassColor(classOf[d.name])
         row.f[1]:SetText(d.n > 0 and tostring(i) or "-")
-        row.f[2]:SetText(Name(d.name) .. (d.name == db.me and " (dig)" or ""))
+        row.f[2]:SetText(Name(d.name) .. (d.name == db.me and L(" (dig)") or ""))
         row.f[2]:SetTextColor(r, g, b)
         row.f[3]:SetText(d.n > 0 and ("|cff66e080" .. st.w .. "|r") or "-")
         row.f[4]:SetText(d.n > 0 and ("|cffff7070" .. st.l .. "|r") or "-")
@@ -452,11 +453,11 @@ local function RefreshPage()
             if key then shown[key] = true end
             local winner = d.won and e.friend or (of or d.opp)
             local loser = d.won and (of or d.opp) or e.friend
-            lines[#lines + 1] = string.format("%s slog %s%s |cff888888- %s|r", C.ColorName(winner, classOf[winner]),
-                C.ColorName(loser, classOf[loser]), d.fled and " |cffff7070(flygtede)|r" or "", C.FormatAgo(d.t))
+            lines[#lines + 1] = string.format(L("%s slog %s%s |cff888888- %s|r"), C.ColorName(winner, classOf[winner]),
+                C.ColorName(loser, classOf[loser]), d.fled and L(" |cffff7070(flygtede)|r") or "", C.FormatAgo(d.t))
         end
     end
-    if #lines == 0 then lines[1] = "|cff888888Ingen dueller endnu. Udfordr en ven (højreklik > Duel).|r" end
+    if #lines == 0 then lines[1] = L("|cff888888Ingen dueller endnu. Udfordr en ven (højreklik > Duel).|r") end
     ui.recent:SetText(table.concat(lines, "\n"))
 end
 

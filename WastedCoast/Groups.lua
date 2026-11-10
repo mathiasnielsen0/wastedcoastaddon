@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- =============================================================================
 -- Grupper (v0.10)
@@ -132,7 +133,7 @@ function ns.GroupName(g)
     if not g then return nil end
     if g.legacy then return LEGACY.name end
     local admin = ns.MemberName(g.admin)
-    return admin and (admin .. "s gruppe") or "Jeres gruppe"
+    return admin and (admin .. L("s gruppe")) or L("Jeres gruppe")
 end
 
 -- =============================================================================
@@ -410,7 +411,7 @@ end
 local function Removed(byWhom)
     local db = DB()
     local g = Group()
-    Print("|cffff6060Du er blevet fjernet fra " .. (ns.GroupName(g) or "gruppen") .. "|r" .. (byWhom and (" af " .. byWhom) or "") .. ".")
+    Print(L("|cffff6060Du er blevet fjernet fra ") .. (ns.GroupName(g) or L("gruppen")) .. "|r" .. (byWhom and (L(" af ") .. byWhom) or "") .. ".")
     db.group, db.me = nil, nil
     UseChannel(nil)
     Rebuild()
@@ -434,16 +435,16 @@ function ns.OnGroupMessage(kind, t, sender)
         if not m then
             g.members[id] = { n = name, nt = nt, j = (j > 0) and j or time() }
             Rebuild()
-            if from == id then Print("|cffffd100" .. name .. "|r er kommet med i " .. ns.GroupName(g) .. ".") end
+            if from == id then Print("|cffffd100" .. name .. L("|r er kommet med i ") .. ns.GroupName(g) .. ".") end
             if ns.groupOverflow and ns.groupOverflow > 0 and ROSTER_SET[db.me] then
-                Print("Gruppen har nu flere end " .. ns.MAX_MEMBERS .. " medlemmer. Kun de første " .. ns.MAX_MEMBERS .. " vises.")
+                Print(L("Gruppen har nu flere end ") .. ns.MAX_MEMBERS .. L(" medlemmer. Kun de første ") .. ns.MAX_MEMBERS .. L(" vises."))
             end
             Refresh()
         elseif nt > (m.nt or 0) then
             local old = m.n
             m.n, m.nt = name, nt
             if (m.j or 0) == 0 and j > 0 then m.j = j end
-            if old ~= name and from == id then Print((old or id) .. " hedder nu |cffffd100" .. name .. "|r.") end
+            if old ~= name and from == id then Print((old or id) .. L(" hedder nu |cffffd100") .. name .. "|r.") end
             Refresh()
         end
 
@@ -466,7 +467,7 @@ function ns.OnGroupMessage(kind, t, sender)
             return
         end
         Rebuild()
-        if on and g.members[id] then Print(Name(id) .. " er fjernet fra gruppen af " .. Name(g.admin) .. ".") end
+        if on and g.members[id] then Print(Name(id) .. L(" er fjernet fra gruppen af ") .. Name(g.admin) .. ".") end
         Refresh()
     end
 end
@@ -496,7 +497,7 @@ function ns.SetMyName(text)
     local db = DB()
     local name = CleanName(text)
     if not name then
-        Print("Skriv et navn (højst " .. MAX_NAME .. " tegn, uden ; og |).")
+        Print(L("Skriv et navn (højst ") .. MAX_NAME .. L(" tegn, uden ; og |)."))
         return false
     end
     db.myName = name
@@ -506,7 +507,7 @@ function ns.SetMyName(text)
         if m.n ~= name then
             m.n, m.nt = name, time()
             ns.SendGroupInfo(true)
-            Print("Du hedder nu |cffffd100" .. name .. "|r.")
+            Print(L("Du hedder nu |cffffd100") .. name .. "|r.")
         end
     end
     Refresh()
@@ -515,25 +516,25 @@ end
 
 function ns.CreateGroup()
     local db = DB()
-    if not db.myName then Print("Skriv først dit navn.") return false end
+    if not db.myName then Print(L("Skriv først dit navn.")) return false end
     local myId = (db.myId and not LEGACY_SET[db.myId]) and db.myId or NewId()
     local key = RandomChars(8)
     local info = { id = key, admin = myId, code = FormatCode(key, myId:sub(2)) }
     Start(NewGroupRecord(info), myId)
-    Print("Ny gruppe oprettet. Del koden med dine venner: |cffffd100" .. info.code .. "|r")
+    Print(L("Ny gruppe oprettet. Del koden med dine venner: |cffffd100") .. info.code .. "|r")
     return true
 end
 
 function ns.JoinGroup(text)
     local db = DB()
-    if not db.myName then Print("Skriv først dit navn.") return false end
+    if not db.myName then Print(L("Skriv først dit navn.")) return false end
     local info = ParseCode(text)
     if not info then
-        Print("Koden ser forkert ud. Den ligner |cffffd100WC-ABCD-EFGH-JKLM-NPQR|r.")
+        Print(L("Koden ser forkert ud. Den ligner |cffffd100WC-ABCD-EFGH-JKLM-NPQR|r."))
         return false
     end
     local g = Group()
-    if g and g.id == info.id then Print("Du er allerede med i den gruppe.") return false end
+    if g and g.id == info.id then Print(L("Du er allerede med i den gruppe.")) return false end
     local myId
     if info.legacy then
         -- En af de oprindelige venner? Så får du dit gamle ID og al din historik tilbage.
@@ -541,7 +542,7 @@ function ns.JoinGroup(text)
             if n:lower() == db.myName:lower() then myId = n end
         end
         if not myId then
-            Print("Tip: Er du en af de oprindelige venner, så skriv dit navn præcis som før (fx Nick), og deltag igen.")
+            Print(L("Tip: Er du en af de oprindelige venner, så skriv dit navn præcis som før (fx Nick), og deltag igen."))
         end
     end
     if not myId then
@@ -550,7 +551,7 @@ function ns.JoinGroup(text)
     local rec = NewGroupRecord(info)
     if info.legacy then rec = MigrateLegacy(db) end
     Start(rec, myId)
-    Print("Du er med i " .. ns.GroupName(rec) .. ". Det tager et øjeblik, før de andre dukker op.")
+    Print(L("Du er med i ") .. ns.GroupName(rec) .. L(". Det tager et øjeblik, før de andre dukker op."))
     return true
 end
 
@@ -561,7 +562,7 @@ function ns.LeaveGroup()
     UseChannel(nil)
     db.group, db.me = nil, nil
     Rebuild()
-    Print("Du har forladt " .. name .. ". Du kan komme med igen med koden.")
+    Print(L("Du har forladt ") .. name .. L(". Du kan komme med igen med koden."))
     Refresh()
 end
 
@@ -575,9 +576,9 @@ function ns.KickMember(id, on)
     C.Send(table.concat({ "GK", db.me, g.id, id, at, on and 1 or 0 }, ";"), true)
     Rebuild()
     if on then
-        Print(Name(id) .. " er fjernet fra gruppen.")
+        Print(Name(id) .. L(" er fjernet fra gruppen."))
     else
-        Print(Name(id) .. " kan komme med igen (med koden).")
+        Print(Name(id) .. L(" kan komme med igen (med koden)."))
     end
     Refresh()
 end
@@ -585,10 +586,10 @@ end
 function ns.GroupStatusText()
     local db, g = DB(), Group()
     if not g or not db.me then
-        return "|cffff6060Du er ikke med i en gruppe endnu.|r Opret en, eller indsæt en vens kode."
+        return L("|cffff6060Du er ikke med i en gruppe endnu.|r Opret en, eller indsæt en vens kode.")
     end
-    local admin = (g.admin == db.me) and "dig" or (Name(g.admin) or "?")
-    return string.format("Du er |cffffd100%s|r i |cffffd100%s|r (admin: %s).  Kode: |cffffd100%s|r",
+    local admin = (g.admin == db.me) and L("dig") or (Name(g.admin) or "?")
+    return string.format(L("Du er |cffffd100%s|r i |cffffd100%s|r (admin: %s).  Kode: |cffffd100%s|r"),
         Name(db.me), ns.GroupName(g), admin, g.code or "?")
 end
 
@@ -640,17 +641,17 @@ local function BuildWindow()
     ui.sub:SetTextColor(0.6, 0.6, 0.66)
 
     -- Dit navn
-    local nh = Label(p, "Dit navn")
+    local nh = Label(p, L("Dit navn"))
     nh:SetPoint("TOPLEFT", p, "TOPLEFT", 20, -62)
     ui.nameEdit = MakeEdit(p, 240, 40)
     ui.nameEdit:SetPoint("TOPLEFT", nh, "BOTTOMLEFT", 6, -4)
     local function SaveName()
         if ns.SetMyName(ui.nameEdit:GetText()) then ui.nameEdit:ClearFocus() end
     end
-    local saveName = C.MakeButton(p, 120, 22, "Gem navn", SaveName)
+    local saveName = C.MakeButton(p, 120, 22, L("Gem navn"), SaveName)
     saveName:SetPoint("LEFT", ui.nameEdit, "RIGHT", 10, 0)
     ui.nameEdit:SetScript("OnEnterPressed", SaveName)
-    local nn = Label(p, "Det navn, vennerne ser. Du kan altid ændre det. Bag navnet har du et fast ID.", "GameFontHighlightSmall")
+    local nn = Label(p, L("Det navn, vennerne ser. Du kan altid ændre det. Bag navnet har du et fast ID."), "GameFontHighlightSmall")
     nn:SetPoint("TOPLEFT", ui.nameEdit, "BOTTOMLEFT", -6, -4)
     nn:SetTextColor(0.5, 0.5, 0.56)
 
@@ -659,9 +660,9 @@ local function BuildWindow()
     join:SetPoint("TOPLEFT", p, "TOPLEFT", 0, -140)
     join:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", 0, 0)
     ui.join = join
-    local jh = Label(join, "Deltag i en vens gruppe")
+    local jh = Label(join, L("Deltag i en vens gruppe"))
     jh:SetPoint("TOPLEFT", join, "TOPLEFT", 20, 0)
-    local js = Label(join, "Indsæt koden, du har fået (Ctrl+V):", "GameFontHighlightSmall")
+    local js = Label(join, L("Indsæt koden, du har fået (Ctrl+V):"), "GameFontHighlightSmall")
     js:SetPoint("TOPLEFT", jh, "BOTTOMLEFT", 0, -4)
     js:SetTextColor(0.6, 0.6, 0.66)
     ui.codeIn = MakeEdit(join, 240, 40)
@@ -672,16 +673,16 @@ local function BuildWindow()
             ui.codeIn:ClearFocus()
         end
     end
-    local joinBtn = C.MakeButton(join, 120, 22, "Deltag", Join)
+    local joinBtn = C.MakeButton(join, 120, 22, L("Deltag"), Join)
     joinBtn:SetPoint("LEFT", ui.codeIn, "RIGHT", 10, 0)
     ui.codeIn:SetScript("OnEnterPressed", Join)
 
-    local ch = Label(join, "Eller start en ny gruppe")
+    local ch = Label(join, L("Eller start en ny gruppe"))
     ch:SetPoint("TOPLEFT", jh, "BOTTOMLEFT", 0, -70)
-    local cs = Label(join, "Du bliver admin og får en kode, du sender til dine venner.", "GameFontHighlightSmall")
+    local cs = Label(join, L("Du bliver admin og får en kode, du sender til dine venner."), "GameFontHighlightSmall")
     cs:SetPoint("TOPLEFT", ch, "BOTTOMLEFT", 0, -4)
     cs:SetTextColor(0.6, 0.6, 0.66)
-    local createBtn = C.MakeButton(join, 160, 24, "Opret gruppe", function()
+    local createBtn = C.MakeButton(join, 160, 24, L("Opret gruppe"), function()
         if ns.SetMyName(ui.nameEdit:GetText()) then ns.CreateGroup() end
     end)
     createBtn:SetPoint("TOPLEFT", cs, "BOTTOMLEFT", 0, -8)
@@ -691,9 +692,9 @@ local function BuildWindow()
     inG:SetPoint("TOPLEFT", p, "TOPLEFT", 0, -140)
     inG:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", 0, 0)
     ui.inGroup = inG
-    local kh = Label(inG, "Gruppens kode")
+    local kh = Label(inG, L("Gruppens kode"))
     kh:SetPoint("TOPLEFT", inG, "TOPLEFT", 20, 0)
-    local ks = Label(inG, "Send den til dine venner. Klik i feltet og tryk Ctrl+C for at kopiere.", "GameFontHighlightSmall")
+    local ks = Label(inG, L("Send den til dine venner. Klik i feltet og tryk Ctrl+C for at kopiere."), "GameFontHighlightSmall")
     ks:SetPoint("TOPLEFT", kh, "BOTTOMLEFT", 0, -4)
     ks:SetTextColor(0.6, 0.6, 0.66)
     ui.codeOut = MakeEdit(inG, 260, 40)
@@ -706,7 +707,7 @@ local function BuildWindow()
     ui.codeOut:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
     ui.codeOut:SetScript("OnMouseUp", function(self) self:HighlightText() end)
 
-    local mh = Label(inG, "Medlemmer")
+    local mh = Label(inG, L("Medlemmer"))
     mh:SetPoint("TOPLEFT", kh, "BOTTOMLEFT", 0, -56)
     ui.memberHead = mh
     ui.rows = {}
@@ -722,7 +723,7 @@ local function BuildWindow()
         row.btn:SetPoint("RIGHT", row, "RIGHT", -2, 0)
         ui.rows[i] = row
     end
-    ui.leave = C.MakeButton(inG, 140, 22, "Forlad gruppen", function() ns.LeaveGroup() end)
+    ui.leave = C.MakeButton(inG, 140, 22, L("Forlad gruppen"), function() ns.LeaveGroup() end)
     ui.leave:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 20, 14)
     ui.adminNote = Label(inG, "", "GameFontHighlightSmall")
     ui.adminNote:SetPoint("LEFT", ui.leave, "RIGHT", 12, 0)
@@ -745,14 +746,14 @@ function ns.RefreshGroupWindow(fillName)
     ui.join:SetShown(not inGroup)
     ui.inGroup:SetShown(inGroup)
     if not inGroup then
-        ui.title:SetText("Kom i gang")
-        ui.sub:SetText("Skriv dit navn, og deltag i en vens gruppe eller start din egen.")
+        ui.title:SetText(L("Kom i gang"))
+        ui.sub:SetText(L("Skriv dit navn, og deltag i en vens gruppe eller start din egen."))
         return
     end
 
     local isAdmin = g.admin == db.me
     ui.title:SetText(ns.GroupName(g))
-    ui.sub:SetText(isAdmin and "Du er admin: du kan fjerne medlemmer." or ("Admin: " .. (Name(g.admin) or "?")))
+    ui.sub:SetText(isAdmin and L("Du er admin: du kan fjerne medlemmer.") or ("Admin: " .. (Name(g.admin) or "?")))
     ui.codeOut:SetText(g.code or "")
 
     local list = {}
@@ -765,7 +766,7 @@ function ns.RefreshGroupWindow(fillName)
     end)
     local active = 0
     for _, e in ipairs(list) do if not e.kicked then active = active + 1 end end
-    ui.memberHead:SetText(string.format("Medlemmer (%d)", active))
+    ui.memberHead:SetText(string.format(L("Medlemmer (%d)"), active))
     for i, row in ipairs(ui.rows) do
         local e = list[i]
         row.id = e and e.id or false
@@ -773,22 +774,22 @@ function ns.RefreshGroupWindow(fillName)
             local online = C.IsOnline(e.id) and ROSTER_SET[e.id]
             row.name:SetText((e.kicked and "|cff777777" or "") .. (e.m.n or e.id) .. (e.kicked and "|r" or ""))
             local note = {}
-            if e.id == db.me then note[#note + 1] = "dig" end
+            if e.id == db.me then note[#note + 1] = L("dig") end
             if e.id == g.admin then note[#note + 1] = "admin" end
-            if e.kicked then note[#note + 1] = "fjernet" elseif online and e.id ~= db.me then note[#note + 1] = "|cff40e060online|r" end
-            if not e.kicked and ns.memberAlias[e.id] then note[#note + 1] = "dublet"
-            elseif not e.kicked and not ROSTER_SET[e.id] then note[#note + 1] = "skjult" end
+            if e.kicked then note[#note + 1] = L("fjernet") elseif online and e.id ~= db.me then note[#note + 1] = "|cff40e060online|r" end
+            if not e.kicked and ns.memberAlias[e.id] then note[#note + 1] = L("dublet")
+            elseif not e.kicked and not ROSTER_SET[e.id] then note[#note + 1] = L("skjult") end
             row.note:SetText(table.concat(note, ", "))
             local canKick = isAdmin and e.id ~= db.me
             row.btn:SetShown(canKick)
-            row.btn.text:SetText(e.kicked and "Genoptag" or "Fjern")
+            row.btn.text:SetText(e.kicked and L("Genoptag") or L("Fjern"))
             row:Show()
         else
             row:Hide()
         end
     end
-    ui.adminNote:SetText(isAdmin and "Forlader du gruppen, kan du komme med igen med koden og er stadig admin."
-        or "Du kan komme med igen med koden.")
+    ui.adminNote:SetText(isAdmin and L("Forlader du gruppen, kan du komme med igen med koden og er stadig admin.")
+        or L("Du kan komme med igen med koden."))
 end
 
 function ns.ShowGroupWindow()

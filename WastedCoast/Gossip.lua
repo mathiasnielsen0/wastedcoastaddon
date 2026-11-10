@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- =============================================================================
 -- Daglig sladder (v0.11)
@@ -46,7 +47,7 @@ end
 
 -- "Du" om dig selv, ellers vennens navn i klassefarve
 local function Who(friend)
-    if friend == WastedCoastDB.me then return "Du" end
+    if friend == WastedCoastDB.me then return L("Du") end
     return C.ColorName(Name(friend), ClassOf(friend))
 end
 
@@ -73,18 +74,18 @@ local function SaveSnapshot()
 end
 
 local function Duration(secs)
-    if secs < 3600 then return math.max(1, math.floor(secs / 60)) .. " min" end
-    if secs < 86400 then return math.floor(secs / 3600) .. " timer" end
+    if secs < 3600 then return math.max(1, math.floor(secs / 60)) .. L(" min") end
+    if secs < 86400 then return math.floor(secs / 3600) .. L(" timer") end
     local d = math.floor(secs / 86400)
-    return d .. (d == 1 and " dag" or " dage")
+    return d .. (d == 1 and L(" dag") or L(" dage"))
 end
 
-local EPIC_TAILS = {
+local EPIC_TAILS = ns.LT({
     "Misundelse er en grim ting. Vi er alle misundelige.",
     "Ingen siger det højt, men alle tænker det: hvorfor ikke mig?",
     "Lootgoblin-alarm!",
     "RNG-guderne har en favorit, og det er ikke resten af os.",
-}
+})
 
 local function IsEnvDeath(ev)
     for _, v in pairs(C.ENV_NAMES) do
@@ -115,15 +116,15 @@ local function Collect(since, snapOverride)
     for i, g in ipairs(gains) do
         local n = g.to - g.from
         if g.to >= C.MAX_LEVEL then
-            add(100, string.format("%s ramte |cffffd100MAX LEVEL %d|r! Nu begynder det rigtige spil.", Who(g.name), g.to))
+            add(100, string.format(L("%s ramte |cffffd100MAX LEVEL %d|r! Nu begynder det rigtige spil."), Who(g.name), g.to))
         elseif n >= 3 and i == 1 then
-            add(70, string.format("%s %s |cffffd100%d levels|r (%d til %d). %s", Who(g.name),
-                Pick({ "grindede sig", "pløjede sig", "tæskede sig" }) .. " gennem", n, g.from, g.to,
-                Pick({ "Har personen overhovedet sovet?", "Græsset blev ikke slået i dag.", "Respekt. Og lidt bekymring." })))
+            add(70, string.format(L("%s %s |cffffd100%d levels|r (%d til %d). %s"), Who(g.name),
+                Pick({ L("grindede sig"), L("pløjede sig"), L("tæskede sig") }) .. L(" gennem"), n, g.from, g.to,
+                Pick({ L("Har personen overhovedet sovet?"), L("Græsset blev ikke slået i dag."), L("Respekt. Og lidt bekymring.") })))
         elseif n >= 2 then
-            add(50 + n, string.format("%s tog %d levels og er nu level %d.", Who(g.name), n, g.to))
+            add(50 + n, string.format(L("%s tog %d levels og er nu level %d."), Who(g.name), n, g.to))
         else
-            add(40, string.format("%s nåede level %d.", Who(g.name), g.to))
+            add(40, string.format(L("%s nåede level %d."), Who(g.name), g.to))
         end
     end
 
@@ -161,9 +162,9 @@ local function Collect(since, snapOverride)
     if topF and topN >= 2 then
         local killer, kn = nil, 0
         for k, n in pairs(killers[topF]) do if n > kn then killer, kn = k, n end end
-        local tail = (killer and kn >= 2) and string.format(" %d af dem til %s.", kn, killer) or ""
-        add(45 + topN, string.format("%s døde |cffff5050%d gange|r.%s %s", Who(topF), topN, tail,
-            Pick({ "Spirit healeren kender navnet nu.", "Repair-regningen er ikke for sarte sjæle.", "Kirkegården overvejer at give stamkundekort." })))
+        local tail = (killer and kn >= 2) and string.format(L(" %d af dem til %s."), kn, L(killer)) or ""
+        add(45 + topN, string.format(L("%s døde |cffff5050%d gange|r.%s %s"), Who(topF), topN, tail,
+            Pick({ L("Spirit healeren kender navnet nu."), L("Repair-regningen er ikke for sarte sjæle."), L("Kirkegården overvejer at give stamkundekort.") })))
     end
     -- PvP: hvem blev ganket mest?
     local gF, gN = nil, 0
@@ -173,27 +174,27 @@ local function Collect(since, snapOverride)
     if gF then
         local who, wn = nil, 0
         for k, n in pairs(gankers[gF]) do if n > wn or (n == wn and k < who) then who, wn = k, n end end
-        local by = who and string.format(" %s stod bag %s.", who, wn == gN and (gN == 1 and "det" or "dem alle") or (wn .. " af dem")) or ""
-        add(33 + math.min(10, gN), string.format("%s blev ganket af andre spillere |cff80b0ff%s|r.%s %s", Who(gF),
-            gN == 1 and "én gang" or (gN .. " gange"), by,
-            Pick({ "Hævnen er sød.", "Måske på tide at kigge sig over skulderen.", "Den anden faction siger tak for kampen." })))
+        local by = who and string.format(L(" %s stod bag %s."), who, wn == gN and (gN == 1 and L("det") or L("dem alle")) or (wn .. L(" af dem"))) or ""
+        add(33 + math.min(10, gN), string.format(L("%s blev ganket af andre spillere |cff80b0ff%s|r.%s %s"), Who(gF),
+            gN == 1 and L("én gang") or (gN .. L(" gange")), by,
+            Pick({ L("Hævnen er sød."), L("Måske på tide at kigge sig over skulderen."), L("Den anden faction siger tak for kampen.") })))
     end
     if worst then
         local ev, w = worst.ev, Who(worst.f)
         local text
         if worst.env == C.ENV_NAMES.Falling then
-            text = string.format("%s faldt ned og døde i %s. Tyngdekraften: 1, %s: 0.", w, ev.zone or "?", worst.f == db.me and "dig" or Name(worst.f))
+            text = string.format(L("%s faldt ned og døde i %s. Tyngdekraften: 1, %s: 0."), w, ev.zone or "?", worst.f == db.me and L("dig") or Name(worst.f))
         elseif worst.env then
-            text = string.format("%s døde af %s i %s. Ingen mob, bare naturen.", w, worst.env:lower(), ev.zone or "?")
+            text = string.format(L("%s døde af %s i %s. Ingen mob, bare naturen."), w, L(worst.env):lower(), ev.zone or "?")
         else
-            text = string.format("%s (level %d) blev slået ihjel af en level %d %s i %s. Pinligt.", w, ev.level or 0, tonumber(ev.klvl) or 0, ev.killer or "?", ev.zone or "?")
+            text = string.format(L("%s (level %d) blev slået ihjel af en level %d %s i %s. Pinligt."), w, ev.level or 0, tonumber(ev.klvl) or 0, L(ev.killer) or "?", ev.zone or "?")
         end
         add(55, text)
     end
     if total == 0 and #db.events > 0 then
-        add(10, "Ingen døde. Ikke én. Hvem er I, og hvad har I gjort ved Wasted Coast?")
+        add(10, L("Ingen døde. Ikke én. Hvem er I, og hvad har I gjort ved Wasted Coast?"))
     elseif total >= 5 and not (topF and topN == total) then
-        add(25, string.format("I alt %d dødsfald i gruppen. Spirit healerne har haft travlt.", total))
+        add(25, string.format(L("I alt %d dødsfald i gruppen. Spirit healerne har haft travlt."), total))
     end
 
     -- Loot: epic og bedre nævnes én for én, ellers en optælling
@@ -211,14 +212,14 @@ local function Collect(since, snapOverride)
     local epicStart = math.random(#EPIC_TAILS)
     for i, e in ipairs(epics) do
         if i > 3 then break end
-        add(60 - i, string.format("%s fik %s%s. %s", Who(e.f), C.LootLink(e.ev),
-            (e.ev.zone and e.ev.zone ~= "") and (" i " .. e.ev.zone) or "",
+        add(60 - i, string.format(L("%s fik %s%s. %s"), Who(e.f), C.LootLink(e.ev),
+            (e.ev.zone and e.ev.zone ~= "") and (L(" i ") .. e.ev.zone) or "",
             EPIC_TAILS[(epicStart + i) % #EPIC_TAILS + 1]))
     end
     local rf, rn = nil, 0
     for f, n in pairs(rares) do if n > rn then rf, rn = f, n end end
     if rf and rn >= 3 then
-        add(30, string.format("%s samlede %d rare items op. Tasken er snart fuld.", Who(rf), rn))
+        add(30, string.format(L("%s samlede %d rare items op. Tasken er snart fuld."), Who(rf), rn))
     end
 
     -- Trofæer
@@ -234,9 +235,9 @@ local function Collect(since, snapOverride)
     table.sort(achs, function(x, y) return (x.a.pts or 0) > (y.a.pts or 0) end)
     for i, x in ipairs(achs) do
         if i > 2 then break end
-        add(38 + math.min(10, (x.a.pts or 0) / 5), string.format("%s låste trofæet |cffffd100%s|r op: %s", Who(x.f), x.a.name, x.a.desc or ""))
+        add(38 + math.min(10, (x.a.pts or 0) / 5), string.format(L("%s låste trofæet |cffffd100%s|r op: %s"), Who(x.f), x.a.name, x.a.desc or ""))
     end
-    if #achs > 2 then add(20, string.format("Og %d trofæer mere. Se dem under Sjov > Trofæer.", #achs - 2)) end
+    if #achs > 2 then add(20, string.format(L("Og %d trofæer mere. Se dem under Sjov > Trofæer."), #achs - 2)) end
 
     -- Dueller: hvem vandt flest
     local duelW, duelL = {}, {}
@@ -252,8 +253,8 @@ local function Collect(since, snapOverride)
     local dk, dn = nil, 0
     for f, n in pairs(duelW) do if n > dn then dk, dn = f, n end end
     if dk then
-        add(35, string.format("%s vandt %d %s og tabte %d. %s", Who(dk), dn, dn == 1 and "duel" or "dueller", duelL[dk] or 0,
-            Pick({ "Nogen skulle lære at holde kæft.", "Kongen af Goldshire.", "Der blev ikke givet hånd bagefter." })))
+        add(35, string.format(L("%s vandt %d %s og tabte %d. %s"), Who(dk), dn, dn == 1 and L("duel") or L("dueller"), duelL[dk] or 0,
+            Pick({ L("Nogen skulle lære at holde kæft."), L("Kongen af Goldshire."), L("Der blev ikke givet hånd bagefter.") })))
     end
 
     -- Need-politiet
@@ -264,9 +265,9 @@ local function Collect(since, snapOverride)
     if #cops > 0 then
         local e = cops[#cops]
         local link = C.LootLink({ quality = e.quality, item = e.item, name = e.name or "?" })
-        add(42, string.format("Need-politiet har anholdt %s for %s, der %s.%s", Who(e.friend), link,
-            e.why == "gone" and "blev solgt uden at være brugt" or "aldrig er blevet taget på",
-            #cops > 1 and string.format(" Og der er %s mere.", C.Plural(#cops - 1, "sag", "sager")) or ""))
+        add(42, string.format(L("Need-politiet har anholdt %s for %s, der %s.%s"), Who(e.friend), link,
+            e.why == "gone" and L("blev solgt uden at være brugt") or L("aldrig er blevet taget på"),
+            #cops > 1 and string.format(L(" Og der er %s mere."), C.Plural(#cops - 1, L("sag"), L("sager"))) or ""))
     end
 
     -- Guld: største op- og nedtur (efter logout-målingerne)
@@ -287,17 +288,17 @@ local function Collect(since, snapOverride)
         end
     end
     if up and upN >= GOLD_MIN then
-        add(32, string.format("%s tjente |cffffd100%s|r. %s", Who(up), C.FormatGold(upN),
-            Pick({ "Hvem skal give en omgang?", "Auktionshuset græder.", "Lån ud til en flyvende mount?" })))
+        add(32, string.format(L("%s tjente |cffffd100%s|r. %s"), Who(up), C.FormatGold(upN),
+            Pick({ L("Hvem skal give en omgang?"), L("Auktionshuset græder."), L("Lån ud til en flyvende mount?") })))
     end
     if down and downN >= GOLD_MIN then
-        add(31, string.format("%s brugte |cffffd100%s|r. Det må have været noget vigtigt. Eller repairs.", Who(down), C.FormatGold(downN)))
+        add(31, string.format(L("%s brugte |cffffd100%s|r. Det må have været noget vigtigt. Eller repairs."), Who(down), C.FormatGold(downN)))
     end
 
     -- Skammens hat
     local hat = ns.HatHolder and ns.HatHolder()
     if hat and deaths[hat] then
-        add(18, string.format("%s bærer nu Skammens hat.", Who(hat)))
+        add(18, string.format(L("%s bærer nu Skammens hat."), Who(hat)))
     end
 
     -- Savnede venner (kun dem, vi har set før)
@@ -305,7 +306,7 @@ local function Collect(since, snapOverride)
         if name ~= db.me then
             local seen = C.LastSeen(name)
             if seen and time() - seen > MISSING_DAYS * 86400 and time() - seen < 60 * 86400 then
-                add(12, string.format("Har nogen hørt fra %s? Ikke set i %s.", Who(name), Duration(time() - seen)))
+                add(12, string.format(L("Har nogen hørt fra %s? Ikke set i %s."), Who(name), Duration(time() - seen)))
                 break
             end
         end
@@ -351,7 +352,7 @@ local function BuildWindow()
 
     ui.title = C.Txt(p, "GameFontNormalLarge")
     ui.title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 10, 0)
-    ui.title:SetText("Dagens sladder fra Wasted Coast")
+    ui.title:SetText(L("Dagens sladder fra Wasted Coast"))
     ui.title:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
     ui.sub = C.Txt(p, "GameFontHighlightSmall")
     ui.sub:SetPoint("TOPLEFT", ui.title, "BOTTOMLEFT", 0, -3)
@@ -371,17 +372,17 @@ local function BuildWindow()
         ui.lines[i] = fs
     end
 
-    local open = C.MakeButton(p, 130, 22, "Åbn WC4ever", function()
+    local open = C.MakeButton(p, 130, 22, L("Åbn WC4ever"), function()
         p:Hide()
         if ns.frame then ns.frame:Show() end
     end)
     open:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -12, 10)
-    local ok = C.MakeButton(p, 90, 22, "Fedt", function() p:Hide() end)
+    local ok = C.MakeButton(p, 90, 22, L("Fedt"), function() p:Hide() end)
     ok:SetPoint("RIGHT", open, "LEFT", -6, 0)
     ui.hint = C.Txt(p, "GameFontHighlightSmall")
     ui.hint:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 16, 14)
     ui.hint:SetTextColor(0.45, 0.45, 0.5)
-    ui.hint:SetText("/wc4ever sladder viser den igen")
+    ui.hint:SetText(L("/wc4ever sladder viser den igen"))
 
     ui.frame = p
     return p
@@ -393,7 +394,7 @@ end
 
 function ns.ShowGossip(lines, since)
     local p = ui.frame or BuildWindow()
-    ui.sub:SetText("Siden du sidst var her, for " .. Duration(math.max(60, time() - since)) .. " siden")
+    ui.sub:SetText(L("Siden du sidst var her, for ") .. Duration(math.max(60, time() - since)) .. L(" siden"))
     local h = 58
     for i, fs in ipairs(ui.lines) do
         if lines[i] then
@@ -418,13 +419,13 @@ function ns.Gossip(auto)
     local lines = Collect(since)
     ns.lastGossip = lines
     if #lines == 0 then
-        if not auto then Print("Ingen sladder siden sidst. Gå ud og dø lidt, så der er noget at snakke om.") end
+        if not auto then Print(L("Ingen sladder siden sidst. Gå ud og dø lidt, så der er noget at snakke om.")) end
         return
     end
     db.gossip.shown = time()
     ns.ShowGossip(lines, since)
     if db.settings.announce then
-        Print("|cffffd100Dagens sladder:|r")
+        Print(L("|cffffd100Dagens sladder:|r"))
         for _, l in ipairs(lines) do print("  " .. l) end
     end
 end
@@ -434,10 +435,10 @@ function ns.GossipSlash(cmd, arg)
     local db = DB()
     if arg == "fra" or arg == "off" then
         db.settings.gossip = false
-        Print("Sladder ved login: fra. |cffffd100/wc4ever sladder|r virker stadig.")
+        Print(L("Sladder ved login: fra. |cffffd100/wc4ever sladder|r virker stadig."))
     elseif arg == "til" or arg == "on" then
         db.settings.gossip = true
-        Print("Sladder ved login: til.")
+        Print(L("Sladder ved login: til."))
     else
         ns.Gossip(false)
     end

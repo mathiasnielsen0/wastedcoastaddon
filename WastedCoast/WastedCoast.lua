@@ -38,6 +38,7 @@ local addonName, ns = ...
 --             fremtidige tidsstempler, nye link-farver) og flere tests (tests/test_robust.py)
 --   * v0.17.3: samme ven med to ID'er (fx nyt ID efter geninstallation) vises kun én gang; data flettes sammen
 --   * v0.17.4: Karakterer-fanen: honor, legacy points og spilletid på egen linje (overlappede det store tal)
+--   * v0.18.0: sprogvalg i indstillingerne: dansk (standard) eller engelsk (Locale.lua og Locale_en.lua)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -71,14 +72,14 @@ for q, h in pairs(QUALITY_HEX) do HEX_QUALITY[h] = q end
 local QUALITY_NAME = { [2] = "Uncommon", [3] = "Rare", [4] = "Epic", [5] = "Legendary" }
 
 -- Loot: hvor og hvordan
-local LOOT_CONTEXTS = {
+local LOOT_CONTEXTS = ns.LT({
     { key = "all",     label = "Alle" },
     { key = "dungeon", label = "Dungeon" },
     { key = "raid",    label = "Raid" },
     { key = "world",   label = "Verden" },
     { key = "bg",      label = "PvP" },
-}
-local CTX_LABEL = { dungeon = "Dungeon", raid = "Raid", world = "Verden", bg = "PvP" }
+})
+local CTX_LABEL = ns.LT({ dungeon = "Dungeon", raid = "Raid", world = "Verden", bg = "PvP" })
 local CTX_COLOR = { dungeon = "5ab0ff", raid = "ff8040", world = "9aa0a6", bg = "ff5050" }
 local HOW_LABEL = { need = "Need", greed = "Greed", de = "Disenchant", roll = "Roll", drop = "Drop" }
 
@@ -321,20 +322,20 @@ local function ClassName(class)
 end
 
 local function FormatAgo(t)
-    if not t then return "aldrig set" end
+    if not t then return ns.L("aldrig set") end
     local d = time() - t
-    if d < 60 then return "lige nu" end
-    if d < 3600 then return string.format("%d min siden", math.floor(d / 60)) end
-    if d < 86400 then return string.format("%d t siden", math.floor(d / 3600)) end
-    return string.format("%d d siden", math.floor(d / 86400))
+    if d < 60 then return ns.L("lige nu") end
+    if d < 3600 then return string.format(ns.L("%d min siden"), math.floor(d / 60)) end
+    if d < 86400 then return string.format(ns.L("%d t siden"), math.floor(d / 3600)) end
+    return string.format(ns.L("%d d siden"), math.floor(d / 86400))
 end
 
 local function FormatAgoShort(t)
     if not t then return "-" end
     local d = time() - t
-    if d < 60 then return "nu" end
+    if d < 60 then return ns.L("nu") end
     if d < 3600 then return string.format("%dm", math.floor(d / 60)) end
-    if d < 86400 then return string.format("%dt", math.floor(d / 3600)) end
+    if d < 86400 then return string.format(ns.L("%dt"), math.floor(d / 3600)) end
     return string.format("%dd", math.floor(d / 86400))
 end
 
@@ -379,22 +380,22 @@ end
 
 -- Afspiller lyden til et event. Returnerer ok, beskrivelse (bruges af /wc4ever sound <event>)
 local function PlayEventSound(event, friend, force)
-    if not db or (not db.settings.sound and not force) then return false, "lyd er slået fra" end
+    if not db or (not db.settings.sound and not force) then return false, ns.L("lyd er slået fra") end
     local note
     local file = PickSound(event, friend)
     if file then
         local ok, willPlay = pcall(PlaySoundFile, SOUND_DIR .. tostring(file), "Master")
         if ok and willPlay then return true, file end
-        note = "filen " .. tostring(file) .. " kunne ikke afspilles (findes den i sounds-mappen? Har du genstartet spillet?)"
+        note = ns.L("filen ") .. tostring(file) .. ns.L(" kunne ikke afspilles (findes den i sounds-mappen? Har du genstartet spillet?)")
     end
     for _, key in ipairs(FALLBACK_SOUND[event] or {}) do
         local id = type(key) == "number" and key or (SOUNDKIT and SOUNDKIT[key])
         if id then
             pcall(PlaySound, id)
-            return true, "Blizzards egen lyd" .. (note and (" (" .. note .. ")") or "")
+            return true, ns.L("Blizzards egen lyd") .. (note and (" (" .. note .. ")") or "")
         end
     end
-    return false, note or "ingen lyd valgt til dette event"
+    return false, note or ns.L("ingen lyd valgt til dette event")
 end
 
 -- =============================================================================
@@ -510,8 +511,11 @@ local function LooksLikeSurname(s, first)
     return s
 end
 
-local SURNAME_FUNCS = { "UnitSurname", "UnitLastName", "GetUnitSurname" }
-local SURNAME_CFUNCS = { "GetSurname", "GetLastName", "GetPlayerSurname", "GetPlayerLastName" }
+-- (én tabel, så hovedfilen holder sig under Luas grænse på 200 lokale variabler)
+local SURNAME_FN = {
+    unit = { "UnitSurname", "UnitLastName", "GetUnitSurname" },
+    c = { "GetSurname", "GetLastName", "GetPlayerSurname", "GetPlayerLastName" },
+}
 
 local function DetectSurname(first)
     if not GAME.isForever then return nil end
@@ -521,12 +525,12 @@ local function DetectSurname(first)
         if not ok then return nil end
         return LooksLikeSurname(a, first) and a or nil, b
     end
-    for _, n in ipairs(SURNAME_FUNCS) do
+    for _, n in ipairs(SURNAME_FN.unit) do
         local s = try(_G[n], "player")
         if s then return s end
     end
     if C_PlayerInfo then
-        for _, n in ipairs(SURNAME_CFUNCS) do
+        for _, n in ipairs(SURNAME_FN.c) do
             local s = try(C_PlayerInfo[n], "player")
             if s then return s end
         end
@@ -914,35 +918,35 @@ local function ComputeTitles(list)
             holders[title] = best
         end
     end
-    award("deaths", "Klovnen")
-    award("pvp", "Gank-offeret")
+    award("deaths", ns.L("Klovnen"))
+    award("pvp", ns.L("Gank-offeret"))
     award("loot", "Lootgoblin")
-    award("gold", "Rigmanden")
-    award("levelSort", "Højest level")
+    award("gold", ns.L("Rigmanden"))
+    award("levelSort", ns.L("Højest level"))
     award("chars", "Alt-junkie", 2)
-    award("wipes", "Wipe-konge")
-    award("falls", "Faldskade-konge")
-    award("unluck", "Uheldsfuglen")
-    award("luck", "Fætter Højben", 51)
+    award("wipes", ns.L("Wipe-konge"))
+    award("falls", ns.L("Faldskade-konge"))
+    award("unluck", ns.L("Uheldsfuglen"))
+    award("luck", ns.L("Fætter Højben"), 51)
     -- Skammens hat: den, der døde sidst, indtil en anden dør
     local hat = ns.HatHolder and ns.HatHolder()
     if hat then
         titles[hat] = titles[hat] or {}
-        table.insert(titles[hat], 1, "Skammens hat")
-        holders["Skammens hat"] = hat
+        table.insert(titles[hat], 1, ns.L("Skammens hat"))
+        holders[ns.L("Skammens hat")] = hat
     end
     -- Level-snegl: den, der er længst bagud i level
     local snail = ns.Snail and ns.Snail(list)
     if snail then
         titles[snail] = titles[snail] or {}
-        table.insert(titles[snail], "Level-snegl")
-        holders["Level-snegl"] = snail
+        table.insert(titles[snail], ns.L("Level-snegl"))
+        holders[ns.L("Level-snegl")] = snail
     end
     return titles, holders
 end
 
-local TITLE_ORDER = { "Klovnen", "Lootgoblin", "Rigmanden", "Højest level", "Alt-junkie", "Wipe-konge",
-                      "Faldskade-konge", "Uheldsfuglen", "Fætter Højben", "Skammens hat", "Level-snegl" }
+local TITLE_ORDER = ns.LT({ "Klovnen", "Lootgoblin", "Rigmanden", "Højest level", "Alt-junkie", "Wipe-konge",
+                      "Faldskade-konge", "Uheldsfuglen", "Fætter Højben", "Skammens hat", "Level-snegl" })
 
 -- =============================================================================
 -- Netværk: kø, beskeder og synkronisering
@@ -1356,13 +1360,13 @@ local function AddDeath(ev)
     if (time() - (ev.time or 0)) < 120 then
         if db.settings.announce then
             local shown = f or ev.name
-            local what = ev.killer
-            if ev.ability ~= "" then what = what .. " (" .. ev.ability .. ")" end
+            local what = ns.L(ev.killer)
+            if ev.ability ~= "" then what = what .. " (" .. ns.L(ev.ability) .. ")" end
             local full = ns.CharFull(f, ev.name, ev.sur)
             local extra = (f and full ~= Name(f)) and (" (" .. full .. ")") or ""
             if not f then shown = full end
             if ev.pvp then what = what .. " |cff80b0ff[PvP]|r" end
-            Print(string.format("%s%s døde til %s i %s.", ColorName(shown, ev.class), extra, what, ev.zone))
+            Print(string.format(ns.L("%s%s døde til %s i %s."), ColorName(shown, ev.class), extra, what, ev.zone))
         end
         PlayEventSound("death", f)
         if ns.OnFreshDeath then ns.OnFreshDeath(ev, f) end
@@ -1544,7 +1548,7 @@ local function AddLoot(ev)
     if db.settings.announce and (time() - (ev.time or 0)) < 120 then
         local who = ColorName(f or ev.char, ev.class)
         if f and ev.char ~= Name(f) then who = who .. " (" .. ev.char .. ")" end
-        Print(string.format("%s vandt %s (%s) - %s.", who, LootLink(ev), HOW_LABEL[ev.how] or ev.how, ev.zone))
+        Print(string.format(ns.L("%s vandt %s (%s) - %s."), who, LootLink(ev), HOW_LABEL[ev.how] or ev.how, ev.zone))
     end
     if (time() - (ev.time or 0)) < 120 then
         PlayEventSound("loot", f)
@@ -1817,14 +1821,14 @@ local function RecordBossKill(raw)
 
     PlayEventSound("bosskill", db.me)
     if cleared then
-        ns.Toast({ kind = "boss", title = inst .. " klaret!", text = string.format("%s er død. Det er din %d. clear her.", boss, e.clears),
+        ns.Toast({ kind = "boss", title = inst .. ns.L(" klaret!"), text = string.format(ns.L("%s er død. Det er din %d. clear her."), boss, e.clears),
                    icon = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01", friend = db.me })
     else
-        ns.Toast({ kind = "boss", title = boss .. " er død", text = string.format("%s - %d. gang.", inst, e.boss[boss]),
+        ns.Toast({ kind = "boss", title = boss .. ns.L(" er død"), text = string.format(ns.L("%s - %d. gang."), inst, e.boss[boss]),
                    icon = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01", friend = db.me })
     end
     if db.settings.announce then
-        Print(string.format("%s nedlagt i %s (%d. gang)%s", boss, inst, e.boss[boss], cleared and " - |cffffd100instance klaret!|r" or ""))
+        Print(string.format(ns.L("%s nedlagt i %s (%d. gang)%s"), boss, inst, e.boss[boss], cleared and ns.L(" - |cffffd100instance klaret!|r") or ""))
     end
     ns.AfterEvent()
     if ns.RefreshUI then ns.RefreshUI() end
@@ -1862,7 +1866,7 @@ local function ShowWipeToast(friend, inst, t)
     wipeToastAt[inst] = t
     ns.Toast({
         kind = "wipe", title = "WIPE",
-        text = string.format("Hvad FAaanden laver healer mand, kraftedme hele %s party er død i %s", Name(friend), inst),
+        text = string.format(ns.L("Hvad FAaanden laver healer mand, kraftedme hele %s party er død i %s"), Name(friend), inst),
         icon = "Interface\\Icons\\Spell_Holy_Heal", sound = "wipe", friend = friend,
     })
 end
@@ -2078,11 +2082,11 @@ do
     -- =============================================================================
     -- Gear: c.gear = { il = snit item level, me = "1,7" (slots uden enchant), mg = manglende gems, t }
     -- =============================================================================
-    local SLOT_NAME = {
+    local SLOT_NAME = ns.LT({
         [1] = "Hoved", [2] = "Hals", [3] = "Skuldre", [5] = "Bryst", [6] = "Bælte", [7] = "Ben", [8] = "Fødder",
         [9] = "Håndled", [10] = "Hænder", [11] = "Ring", [12] = "Ring", [13] = "Trinket", [14] = "Trinket",
         [15] = "Kappe", [16] = "Våben", [17] = "Off-hand", [18] = "Ranged",
-    }
+    })
     local GEAR_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 }
     -- Slots der kan enchantes for alle (ringe kun for enchantere, så dem tæller vi ikke)
     local ENCHANT_SLOTS = { [1] = true, [3] = true, [5] = true, [7] = true, [8] = true, [9] = true,
@@ -2323,7 +2327,7 @@ end
 -- =============================================================================
 local function IC(name) return "Interface\\Icons\\" .. name end
 
-local ACH = {
+local ACH = ns.LT({
     -- Døden
     { id = "first_death", name = "Første blod", desc = "Dø for første gang.", icon = IC("Spell_Shadow_AnimateDead"), pts = 5,
       test = function(S) return S.deaths >= 1 end },
@@ -2380,7 +2384,7 @@ local ACH = {
     { id = "gold1000", name = "Rigmanden", desc = "Eje 1000 guld på tværs af dine karakterer.", icon = IC("INV_Misc_Coin_01"), pts = 15,
       test = function(S) return S.gold >= 1000 * 10000 end },
     { id = "night", name = "Nattergalen", desc = "Log ind mellem klokken 02 og 05 om natten.", icon = IC("INV_Misc_PocketWatch_01"), pts = 10 },
-}
+})
 -- Trofæer over max level (fx level 70 på Forever) giver ingen mening i denne spilversion
 for i = #ACH, 1, -1 do
     if ACH[i].minMax and MAX_LEVEL < ACH[i].minMax then table.remove(ACH, i) end
@@ -2442,8 +2446,8 @@ function ns.Unlock(id, silent)
     db.ach[db.me][id] = t
     Send(string.format("A;%s;%s;%d", db.me, id, t), true)
     if not silent then
-        if db.settings.announce then Print("Trofæ låst op: |cffffd100" .. a.name .. "|r - " .. a.desc) end
-        ns.Toast({ kind = "achievement", head = "TROFÆ LÅST OP", title = a.name, text = a.desc, icon = a.icon,
+        if db.settings.announce then Print(ns.L("Trofæ låst op: |cffffd100") .. a.name .. "|r - " .. a.desc) end
+        ns.Toast({ kind = "achievement", head = ns.L("TROFÆ LÅST OP"), title = a.name, text = a.desc, icon = a.icon,
                    pts = a.pts, sound = "achievement", friend = db.me, force = true })
     end
     if ns.RefreshUI then ns.RefreshUI() end
@@ -2553,14 +2557,14 @@ function ns.OnFriendHeartbeat(friend, char, class, level, zone, cameOnline, prev
         if not toastedAt[friend] or now - toastedAt[friend] > 600 then
             toastedAt[friend] = now
             ns.Toast({
-                kind = "online", title = Name(friend) .. " er online",
-                text = string.format("%s (level %s) - %s", char or "?", tostring(level or "?"), (zone and zone ~= "") and zone or "ukendt sted"),
+                kind = "online", title = Name(friend) .. ns.L(" er online"),
+                text = string.format("%s (level %s) - %s", char or "?", tostring(level or "?"), (zone and zone ~= "") and zone or ns.L("ukendt sted")),
                 class = class, sound = "online", friend = friend,
             })
         end
     elseif prevLevel and level and level == prevLevel + 1
         and not (ns.LevelToasted and ns.LevelToasted(friend, char, level)) then
-        ns.Toast({ kind = "levelup", title = Name(friend) .. " nåede level " .. level, text = char, class = class,
+        ns.Toast({ kind = "levelup", title = Name(friend) .. ns.L(" nåede level ") .. level, text = char, class = class,
                    sound = "levelup", friend = friend })
     end
 end
@@ -2625,7 +2629,7 @@ do
         local e = db.legacy[friend]
         if e and at < (e.t or 0) then return end
         if e and points > (e.p or 0) and db.settings.announce and (time() - at) < 300 then
-            Print(string.format("%s har nu |cffffd100%d legacy points|r.", Name(friend), points))
+            Print(string.format(ns.L("%s har nu |cffffd100%d legacy points|r."), Name(friend), points))
         end
         db.legacy[friend] = { p = points, c = done, t = at }
         if ns.RefreshUI then ns.RefreshUI() end
@@ -2766,7 +2770,7 @@ local function HandleExtraMessage(kind, t)
                 db.ach[friend][id] = at > 0 and at or time()
                 local a = ACH_BY_ID[id]
                 if at > 0 and (time() - at) < 120 then
-                    ns.Toast({ kind = "trophy", head = Name(friend) .. " låste et trofæ op", title = a.name, text = a.desc,
+                    ns.Toast({ kind = "trophy", head = Name(friend) .. ns.L(" låste et trofæ op"), title = a.name, text = a.desc,
                                icon = a.icon, sound = "achievement", friend = friend })
                 end
                 if ns.RefreshUI then ns.RefreshUI() end
@@ -3024,11 +3028,11 @@ end
 local lastRefreshNow = -100
 function ns.RefreshNow()
     if not db.me then
-        Print("Opret eller deltag først i en gruppe (|cffffd100/wc4ever gruppe|r).")
+        Print(ns.L("Opret eller deltag først i en gruppe (|cffffd100/wc4ever gruppe|r)."))
         return
     end
     if GetTime() - lastRefreshNow < 15 then
-        Print("Opdaterer allerede. Vent et øjeblik.")
+        Print(ns.L("Opdaterer allerede. Vent et øjeblik."))
         return
     end
     lastRefreshNow = GetTime()
@@ -3038,7 +3042,7 @@ function ns.RefreshNow()
     ns.ScheduleScan("gear", 1)
     ns.ScheduleScan("rep", 1)
     RequestSync(true)
-    Print("Henter friske data fra vennerne. Det tager op til et halvt minut.")
+    Print(ns.L("Henter friske data fra vennerne. Det tager op til et halvt minut."))
 end
 
 local function SetMe(friend)
@@ -3059,7 +3063,7 @@ local function SetMe(friend)
     RequestSync()
     ns.InitAchievements()
     ns.AfterIdentity()
-    Print("Du er nu registreret som |cffffd100" .. Name(friend) .. "|r.")
+    Print(ns.L("Du er nu registreret som |cffffd100") .. Name(friend) .. "|r.")
     if ns.RefreshUI then ns.RefreshUI() end
 end
 ns.SetMe = SetMe
@@ -3227,7 +3231,7 @@ local function SetItemIcon(tex, ev)
 end
 
 local function AgoOrOnline(s)
-    return s.online and "|cff40e060Online|r" or ("|cff888888" .. (s.seen and FormatAgo(s.seen) or "aldrig set") .. "|r")
+    return s.online and "|cff40e060Online|r" or ("|cff888888" .. (s.seen and FormatAgo(s.seen) or ns.L("aldrig set")) .. "|r")
 end
 
 -- =============================================================================
@@ -3358,31 +3362,31 @@ local function BuildCard(parent, index, friend)
 
         local chars = CharList(self.friend)
         if #chars == 0 then
-            GameTooltip:AddLine("Ingen karakterer set endnu", 0.7, 0.7, 0.76)
+            GameTooltip:AddLine(ns.L("Ingen karakterer set endnu"), 0.7, 0.7, 0.76)
         else
-            GameTooltip:AddLine(Plural(#chars, "karakter", "karakterer"), 0.7, 0.7, 0.76)
+            GameTooltip:AddLine(Plural(#chars, ns.L("karakter"), ns.L("karakterer")), 0.7, 0.7, 0.76)
             for i = 1, math.min(#chars, 8) do
                 local c = chars[i]
                 local r, g, b = ClassColor(c.class)
                 GameTooltip:AddDoubleLine(c.full or c.name, ns.LevelText(c.level, c.xp, "Level "), r, g, b, 0.8, 0.8, 0.8)
             end
-            if #chars > 8 then GameTooltip:AddLine("... og " .. (#chars - 8) .. " flere", 0.5, 0.5, 0.56) end
+            if #chars > 8 then GameTooltip:AddLine(ns.L("... og ") .. (#chars - 8) .. ns.L(" flere"), 0.5, 0.5, 0.56) end
         end
 
         local dAll, dPvp = DeathsByFriend()
         local nd, np = dAll[self.friend] or 0, dPvp[self.friend] or 0
         if nd > 0 then
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine(string.format("Dødsfald: %d  (%d PvE, %d PvP)", nd, nd - np, np), 1, 0.5, 0.5)
+            GameTooltip:AddLine(string.format(ns.L("Dødsfald: %d  (%d PvE, %d PvP)"), nd, nd - np, np), 1, 0.5, 0.5)
         end
         local killer, n = TopKiller(self.friend)
         if killer then
             if nd == 0 then GameTooltip:AddLine(" ") end
-            GameTooltip:AddLine("Værste fjende: " .. killer .. " (" .. n .. "x)", 1, 0.5, 0.5)
+            GameTooltip:AddLine(ns.L("Værste fjende: ") .. ns.L(killer) .. " (" .. n .. "x)", 1, 0.5, 0.5)
         end
         local last = LatestLoot(self.friend)
         if last then
-            GameTooltip:AddLine("Seneste loot: " .. LootLink(last), 1, 1, 1)
+            GameTooltip:AddLine(ns.L("Seneste loot: ") .. LootLink(last), 1, 1, 1)
         end
         local snail = ns.SnailText and ns.SnailText(self.friend)
         if snail then GameTooltip:AddLine(snail, 0.9, 0.8, 0.4) end
@@ -3396,7 +3400,7 @@ local function BuildCard(parent, index, friend)
                 COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
         end
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Klik for at se alle karakterer", 0.5, 0.8, 1)
+        GameTooltip:AddLine(ns.L("Klik for at se alle karakterer"), 0.5, 0.8, 1)
         GameTooltip:Show()
     end)
     card:SetScript("OnLeave", function(self)
@@ -3474,7 +3478,7 @@ function BuildOverview(page)
     ns.offHead = GroupHead(page, { 0.55, 0.55, 0.6 })
     ns.onEmpty = Txt(page, "GameFontHighlightSmall")
     ns.onEmpty:SetTextColor(0.5, 0.5, 0.56)
-    ns.onEmpty:SetText("Ingen af vennerne er online lige nu.")
+    ns.onEmpty:SetText(ns.L("Ingen af vennerne er online lige nu."))
 
     ns.deathTicker = Txt(page, "GameFontHighlightSmall")
     ns.deathTicker:SetWidth(360)
@@ -3580,9 +3584,9 @@ local function RefreshOverview()
         if s.class then
             card.sub:SetText(string.format("%s - %s", s.charFull or s.char or "?", FormatAgo(s.seen)))
         else
-            card.sub:SetText("Ikke set endnu")
+            card.sub:SetText(ns.L("Ikke set endnu"))
         end
-        card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == "Skammens hat")
+        card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == ns.L("Skammens hat"))
     end
 
     ns.ShowFirst(ns.cards, #on)
@@ -3596,14 +3600,14 @@ local function RefreshOverview()
         card.name:SetTextColor(r, g, b)
         card.name:SetText(s.disp .. ((ns.snailHolder == s.name) and (" " .. ns.SNAIL_ICON) or ""))
         SetClassIcon(card.icon, s.class)
-        card.char:SetText(s.charFull or s.char or "ukendt karakter")
+        card.char:SetText(s.charFull or s.char or ns.L("ukendt karakter"))
 
         if s.online then card.dot:SetColorTexture(0.25, 0.9, 0.35, 1) else card.dot:SetColorTexture(0.35, 0.35, 0.4, 1) end
 
         if s.class then
             card.info1:SetText(ns.LevelText(s.level, s.xp, "Level ") .. "  " .. ClassName(s.class))
         else
-            card.info1:SetText("Ikke set endnu")
+            card.info1:SetText(ns.L("Ikke set endnu"))
         end
         if s.online then
             card.info2:SetText(s.zone or "")
@@ -3612,7 +3616,7 @@ local function RefreshOverview()
         end
 
         -- På de smalle kort er der ikke plads til PvP-tallet (det står i tooltippen)
-        card.deaths:SetText("Døde: " .. s.deaths .. ((not card.narrow and (s.pvp or 0) > 0) and (" |cff80b0ff(" .. s.pvp .. " PvP)|r") or ""))
+        card.deaths:SetText(ns.L("Døde: ") .. s.deaths .. ((not card.narrow and (s.pvp or 0) > 0) and (" |cff80b0ff(" .. s.pvp .. " PvP)|r") or ""))
         card.lootText:SetText("|cffa335eeLoot: " .. s.loot .. "|r")
         if s.loot > 0 and maxLoot > 0 then
             BarFill(card.barFill, COL_EPIC[1], COL_EPIC[2], COL_EPIC[3], 1)
@@ -3622,20 +3626,20 @@ local function RefreshOverview()
             card.barFill:Hide()
         end
         if card.narrow then
-            card.charsText:SetText(s.chars > 0 and (s.chars .. " chars") or "Ingen chars")
+            card.charsText:SetText(s.chars > 0 and (s.chars .. " chars") or ns.L("Ingen chars"))
         else
-            card.charsText:SetText(s.chars > 0 and Plural(s.chars, "karakter", "karakterer") or "Ingen karakterer endnu")
+            card.charsText:SetText(s.chars > 0 and Plural(s.chars, ns.L("karakter"), ns.L("karakterer")) or ns.L("Ingen karakterer endnu"))
         end
         card.legacy:SetText(ns.CardExtraText(s.name, true) or "")
         card.titles:SetText(TitleText(titles[s.name]))
-        card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == "Skammens hat")
+        card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == ns.L("Skammens hat"))
     end
 
     -- Seneste dødsfald
-    local lines = { "|cffffd100Seneste dødsfald|r" }
+    local lines = { ns.L("|cffffd100Seneste dødsfald|r") }
     local total = #db.events
     if total == 0 then
-        lines[#lines + 1] = "Ingen er døde endnu. Det varer ikke ved."
+        lines[#lines + 1] = ns.L("Ingen er døde endnu. Det varer ikke ved.")
     else
         local sorted = {}
         for _, ev in ipairs(db.events) do sorted[#sorted + 1] = ev end
@@ -3643,10 +3647,10 @@ local function RefreshOverview()
         for i = 1, math.min(2, #sorted) do
             local ev = sorted[i]
             local who = EventFriend(ev) or ev.name
-            local what = ev.killer
-            if ev.ability ~= "" then what = what .. " (" .. ev.ability .. ")" end
+            local what = ns.L(ev.killer)
+            if ev.ability ~= "" then what = what .. " (" .. ns.L(ev.ability) .. ")" end
             if ev.pvp then what = what .. " |cff80b0ff[PvP]|r" end
-            lines[#lines + 1] = string.format("%s døde til %s - %s", ColorName(who, ev.class), what, FormatAgo(ev.time))
+            lines[#lines + 1] = string.format(ns.L("%s døde til %s - %s"), ColorName(who, ev.class), what, FormatAgo(ev.time))
         end
     end
     ns.deathTicker:SetText(table.concat(lines, "\n"))
@@ -3660,9 +3664,9 @@ local function RefreshOverview()
     ns.lootTicker:SetShown(room)
 
     -- Seneste loot
-    local ll = { "|cffffd100Seneste loot|r" }
+    local ll = { ns.L("|cffffd100Seneste loot|r") }
     if #db.loot == 0 then
-        ll[#ll + 1] = "Ingen " .. (QUALITY_NAME[db.settings.minQuality or 3] or "rare"):lower() .. " loot endnu."
+        ll[#ll + 1] = ns.L("Ingen ") .. (QUALITY_NAME[db.settings.minQuality or 3] or "rare"):lower() .. ns.L(" loot endnu.")
     else
         local sorted = {}
         for _, ev in ipairs(db.loot) do sorted[#sorted + 1] = ev end
@@ -3679,7 +3683,7 @@ end
 -- =============================================================================
 -- UI: side 2 - scoreboard
 -- =============================================================================
-local SCORE_COLS = {
+local SCORE_COLS = ns.LT({
     { label = "#",      w = 36 },
     { label = "Navn",   w = 130, sort = "name" },
     { label = "Level",  w = 80,  sort = "levelSort" },
@@ -3690,7 +3694,7 @@ local SCORE_COLS = {
     { label = "Point",  w = 70,  sort = "points" },
     { label = "Guld",   w = 100, sort = "gold" },
     { label = "Status", w = 106 },
-}
+})
 
 local function BuildScoreboard(page)
     local x = 0
@@ -3742,7 +3746,7 @@ local function BuildScoreboard(page)
     local note = Txt(page, "GameFontHighlightSmall")
     note:SetPoint("TOPLEFT", ns.scoreInfo, "BOTTOMLEFT", 0, -4)
     note:SetTextColor(0.5, 0.5, 0.56)
-    note:SetText("PvE/PvP = døde til mobs og omgivelserne / til andre spillere.  Point = loot x 5 + højeste level - døde x 3.  Klik for at sortere.")
+    note:SetText(ns.L("PvE/PvP = døde til mobs og omgivelserne / til andre spillere.  Point = loot x 5 + højeste level - døde x 3.  Klik for at sortere."))
 end
 
 local function RefreshScoreboard()
@@ -3778,7 +3782,7 @@ local function RefreshScoreboard()
         local r, g, b = ClassColor(s.class)
         row.rank:SetText(tostring(i))
         SetClassIcon(row.icon, s.class)
-        row.name:SetText(s.disp .. (s.isMe and "  (dig)" or ""))
+        row.name:SetText(s.disp .. (s.isMe and ns.L("  (dig)") or ""))
         row.name:SetTextColor(r, g, b)
         row.level:SetText(ns.LevelText(s.maxLevel, s.maxXP))
         row.chars:SetText(s.chars > 0 and tostring(s.chars) or "-")
@@ -3824,7 +3828,7 @@ local function RefreshScoreboard()
             parts[#parts + 1] = "|cffffd100" .. title .. ":|r " .. Name(holders[title])
         end
     end
-    ns.scoreInfo:SetText(#parts > 0 and table.concat(parts, "     ") or "Ingen titler endnu - dø lidt og vind noget loot.")
+    ns.scoreInfo:SetText(#parts > 0 and table.concat(parts, "     ") or ns.L("Ingen titler endnu - dø lidt og vind noget loot."))
 end
 
 -- =============================================================================
@@ -3881,11 +3885,11 @@ local function BuildCharsPage(page)
     panel.bigLabel:SetPoint("TOPRIGHT", panel.big, "BOTTOMRIGHT", 0, -2)
     panel.bigLabel:SetJustifyH("RIGHT")
     panel.bigLabel:SetTextColor(0.6, 0.6, 0.66)
-    panel.bigLabel:SetText("karakterer")
+    panel.bigLabel:SetText(ns.L("karakterer"))
 
     -- Kolonneoverskrifter
-    local heads = { { "Karakter", 44, 176, "LEFT" }, { "Lvl (XP)", 220, 70, "CENTER" }, { "Døde", 292, 42, "CENTER" },
-                    { "Loot", 336, 42, "CENTER" }, { "Sidst set", 384, 146, "LEFT" } }
+    local heads = { { ns.L("Karakter"), 44, 176, "LEFT" }, { "Lvl (XP)", 220, 70, "CENTER" }, { ns.L("Døde"), 292, 42, "CENTER" },
+                    { "Loot", 336, 42, "CENTER" }, { ns.L("Sidst set"), 384, 146, "LEFT" } }
     for _, h in ipairs(heads) do
         local fs = Txt(panel, "GameFontHighlightSmall")
         fs:SetPoint("TOPLEFT", panel, "TOPLEFT", h[2], -80)
@@ -3917,22 +3921,22 @@ local function BuildCharsPage(page)
             GameTooltip:AddLine(d.full or d.name, r, g, b)
             GameTooltip:AddLine(ns.LevelText(d.level, d.xp, "Level ") .. " " .. ClassName(d.class), 0.8, 0.8, 0.8)
             local pct = ns.XPPct(d.level, d.xp)
-            if pct then GameTooltip:AddDoubleLine("XP i level", pct .. "%", 0.8, 0.8, 0.8, 0.5, 0.75, 1) end
+            if pct then GameTooltip:AddDoubleLine(ns.L("XP i level"), pct .. "%", 0.8, 0.8, 0.8, 0.5, 0.75, 1) end
             if d.zone then GameTooltip:AddLine(d.zone, 0.6, 0.6, 0.66) end
             GameTooltip:AddLine(" ")
-            GameTooltip:AddDoubleLine("Guld", d.gold > 0 and FormatGold(d.gold) or "-", 0.8, 0.8, 0.8, 1, 1, 1)
-            GameTooltip:AddDoubleLine("Dødsfald", string.format("%d  (%d PvE, %d PvP)", d.deaths, d.deaths - (d.pvp or 0), d.pvp or 0),
+            GameTooltip:AddDoubleLine(ns.L("Guld"), d.gold > 0 and FormatGold(d.gold) or "-", 0.8, 0.8, 0.8, 1, 1, 1)
+            GameTooltip:AddDoubleLine(ns.L("Dødsfald"), string.format("%d  (%d PvE, %d PvP)", d.deaths, d.deaths - (d.pvp or 0), d.pvp or 0),
                 0.8, 0.8, 0.8, 1, 1, 1)
             local info = ns.target and db.friends[ns.target]
             local secs = ns.PlayedNow and ns.PlayedNow(ns.target, d.name, info and info.chars and info.chars[d.name])
             if secs then
-                GameTooltip:AddDoubleLine("Spilletid", ns.FormatPlayed(secs), 0.8, 0.8, 0.8, 1, 1, 1)
+                GameTooltip:AddDoubleLine(ns.L("Spilletid"), ns.FormatPlayed(secs), 0.8, 0.8, 0.8, 1, 1, 1)
                 GameTooltip:AddDoubleLine("Deaths/hr", ns.FormatDPH(ns.DeathRate(d.deaths, secs)), 0.8, 0.8, 0.8, 1, 0.5, 0.5)
-                GameTooltip:AddDoubleLine("  PvE / PvP pr. time", ns.FormatDPH(ns.DeathRate(d.deaths - (d.pvp or 0), secs)) .. " / "
+                GameTooltip:AddDoubleLine(ns.L("  PvE / PvP pr. time"), ns.FormatDPH(ns.DeathRate(d.deaths - (d.pvp or 0), secs)) .. " / "
                     .. ns.FormatDPH(ns.DeathRate(d.pvp or 0, secs)), 0.6, 0.6, 0.66, 0.8, 0.8, 0.8)
             end
             GameTooltip:AddDoubleLine("Rare+ loot", tostring(d.loot), 0.8, 0.8, 0.8, 0.75, 0.4, 1)
-            GameTooltip:AddDoubleLine("Sidst set", d.online and "Online nu" or FormatAgo(d.seen), 0.8, 0.8, 0.8, 1, 1, 1)
+            GameTooltip:AddDoubleLine(ns.L("Sidst set"), d.online and ns.L("Online nu") or FormatAgo(d.seen), 0.8, 0.8, 0.8, 1, 1, 1)
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", function(self)
@@ -3951,7 +3955,7 @@ local function BuildCharsPage(page)
     panel.legend:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 14, 12)
     panel.legend:SetTextColor(0.5, 0.5, 0.56)
 
-    panel.lootBtn = MakeButton(panel, 110, 22, "Se loot >", function()
+    panel.lootBtn = MakeButton(panel, 110, 22, ns.L("Se loot >"), function()
         ns.lootFriend = ns.target
         ns.lootOffset = 0
         ns.ShowTab(4)
@@ -3967,7 +3971,7 @@ local function RefreshChars()
     for i, s in ipairs(list) do
         local btn = ns.charList[i]
         local r, g, b = ClassColor(s.class)
-        btn.text:SetText(s.disp .. (s.isMe and "  (dig)" or ""))
+        btn.text:SetText(s.disp .. (s.isMe and ns.L("  (dig)") or ""))
         btn.text:SetTextColor(r, g, b)
         btn.score:SetText(s.chars > 0 and tostring(s.chars) or "-")
         if s.name == ns.target then
@@ -3987,13 +3991,13 @@ local function RefreshChars()
     local extra = ns.CardExtraText(cur.name)
     local pt = ns.PlayedTotals and ns.PlayedTotals(cur.name)
     if pt and pt.secs then
-        extra = (extra and (extra .. "  -  ") or "") .. ns.FormatPlayed(pt.secs) .. " spilletid"
+        extra = (extra and (extra .. "  -  ") or "") .. ns.FormatPlayed(pt.secs) .. ns.L(" spilletid")
     end
     -- Honor, legacy points og spilletid på en linje for sig, så teksten ikke løber ind i det store tal
     local pw = panel:GetWidth() or 0
     if pw > 200 then panel.sub:SetWidth(pw - 68 - 100) end
-    panel.sub:SetText(string.format("%s  -  %d dødsfald%s  -  %d rare+ loot%s",
-        Plural(cur.chars, "karakter", "karakterer"), cur.deaths, cur.pvp > 0 and (" (" .. cur.pvp .. " PvP)") or "",
+    panel.sub:SetText(string.format(ns.L("%s  -  %d dødsfald%s  -  %d rare+ loot%s"),
+        Plural(cur.chars, ns.L("karakter"), ns.L("karakterer")), cur.deaths, cur.pvp > 0 and (" (" .. cur.pvp .. " PvP)") or "",
         cur.loot, extra and ("\n" .. extra) or ""))
     panel.big:SetText(tostring(cur.chars))
     panel.big:SetTextColor(1, 1, 1)
@@ -4031,16 +4035,16 @@ local function RefreshChars()
     end
 
     if total == 0 then
-        panel.empty:SetText(cur.disp .. " er ikke set endnu. Karakterer dukker op, når " .. cur.disp ..
-            " logger ind med addonet, og du er i samme guild eller gruppe.")
+        panel.empty:SetText(cur.disp .. ns.L(" er ikke set endnu. Karakterer dukker op, når ") .. cur.disp ..
+            ns.L(" logger ind med addonet, og du er i samme guild eller gruppe."))
         panel.legend:SetText("")
     else
         panel.empty:SetText("")
         if total > CHAR_ROWS then
-            panel.legend:SetText(string.format("Viser %d-%d af %d  -  rul med musehjulet", offset + 1,
+            panel.legend:SetText(string.format(ns.L("Viser %d-%d af %d  -  rul med musehjulet"), offset + 1,
                 math.min(offset + CHAR_ROWS, total), total))
         else
-            panel.legend:SetText("Alle karakterer " .. cur.disp .. " har været logget ind med")
+            panel.legend:SetText(ns.L("Alle karakterer ") .. cur.disp .. ns.L(" har været logget ind med"))
         end
     end
 end
@@ -4082,7 +4086,7 @@ local function BuildLootPage(page)
         ns.ctxButtons[i] = btn
     end
 
-    ns.friendFilter = MakeButton(page, 180, 26, "Ven: Alle", function()
+    ns.friendFilter = MakeButton(page, 180, 26, ns.L("Ven: Alle"), function()
         local idx = 0
         for i, n in ipairs(ROSTER) do if n == ns.lootFriend then idx = i end end
         ns.lootFriend = ROSTER[idx + 1]   -- efter sidste ven kommer "Alle" (nil)
@@ -4102,8 +4106,8 @@ local function BuildLootPage(page)
     end)
     nxt:SetPoint("TOPLEFT", page, "TOPLEFT", 702, 0)
 
-    local heads = { { "Item", LC.item, 220 }, { "Vinder", LC.winner, 140 }, { "Hvordan", LC.how, 70 },
-                    { "Type", LC.ctx, 62 }, { "Hvor", LC.zone, 140 }, { "Tid", LC.time, 56 } }
+    local heads = { { "Item", LC.item, 220 }, { ns.L("Vinder"), LC.winner, 140 }, { ns.L("Hvordan"), LC.how, 70 },
+                    { "Type", LC.ctx, 62 }, { ns.L("Hvor"), LC.zone, 140 }, { ns.L("Tid"), LC.time, 56 } }
     for _, h in ipairs(heads) do
         local fs = Txt(page, "GameFontHighlightSmall")
         fs:SetPoint("TOPLEFT", page, "TOPLEFT", h[2], -34)
@@ -4136,11 +4140,11 @@ local function BuildLootPage(page)
             GameTooltip:AddLine(" ")
             local f = LootFriend(ev)
             local r, g, b = ClassColor(ev.class)
-            GameTooltip:AddDoubleLine("Vundet af", (f and (Name(f) .. " (" .. ev.char .. ")")) or ev.char, 0.8, 0.8, 0.8, r, g, b)
-            GameTooltip:AddDoubleLine("Hvordan", HOW_LABEL[ev.how] or ev.how, 0.8, 0.8, 0.8, 1, 1, 1)
-            GameTooltip:AddDoubleLine("Hvor", (CTX_LABEL[ev.ctx] or "") .. " - " .. ev.zone, 0.8, 0.8, 0.8, 1, 1, 1)
-            GameTooltip:AddDoubleLine("Hvornår", FormatAgo(ev.time) .. "  (" .. date("%d/%m %H:%M", ev.time) .. ")", 0.8, 0.8, 0.8, 1, 1, 1)
-            GameTooltip:AddLine("Shift-klik for at sende linket i chatten", 0.5, 0.8, 1)
+            GameTooltip:AddDoubleLine(ns.L("Vundet af"), (f and (Name(f) .. " (" .. ev.char .. ")")) or ev.char, 0.8, 0.8, 0.8, r, g, b)
+            GameTooltip:AddDoubleLine(ns.L("Hvordan"), HOW_LABEL[ev.how] or ev.how, 0.8, 0.8, 0.8, 1, 1, 1)
+            GameTooltip:AddDoubleLine(ns.L("Hvor"), (CTX_LABEL[ev.ctx] or "") .. " - " .. ev.zone, 0.8, 0.8, 0.8, 1, 1, 1)
+            GameTooltip:AddDoubleLine(ns.L("Hvornår"), FormatAgo(ev.time) .. "  (" .. date("%d/%m %H:%M", ev.time) .. ")", 0.8, 0.8, 0.8, 1, 1, 1)
+            GameTooltip:AddLine(ns.L("Shift-klik for at sende linket i chatten"), 0.5, 0.8, 1)
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", function(self)
@@ -4180,7 +4184,7 @@ local function RefreshLoot()
         btn:SetBackdropColor(col[1], col[2], col[3], 1)
     end
     if ns.lootFriend and not ROSTER_SET[ns.lootFriend] then ns.lootFriend = nil end
-    ns.friendFilter.text:SetText("Ven: " .. (Name(ns.lootFriend) or "Alle"))
+    ns.friendFilter.text:SetText(ns.L("Ven: ") .. (Name(ns.lootFriend) or ns.L("Alle")))
 
     local list = FilteredLoot()
     local total = #list
@@ -4211,14 +4215,14 @@ local function RefreshLoot()
     local minName = QUALITY_NAME[db.settings.minQuality or 3] or "Rare"
     if total == 0 then
         if #db.loot == 0 then
-            ns.lootEmpty:SetText("Ingen loot endnu. Vind noget " .. minName:lower() .. " eller bedre, så dukker det op her.")
+            ns.lootEmpty:SetText(ns.L("Ingen loot endnu. Vind noget ") .. minName:lower() .. ns.L(" eller bedre, så dukker det op her."))
         else
-            ns.lootEmpty:SetText("Intet loot matcher filteret.")
+            ns.lootEmpty:SetText(ns.L("Intet loot matcher filteret."))
         end
-        ns.lootInfo:SetText(minName .. " eller bedre registreres  -  /wc4ever loot uncommon|rare|epic|legendary ændrer grænsen")
+        ns.lootInfo:SetText(minName .. ns.L(" eller bedre registreres  -  /wc4ever loot uncommon|rare|epic|legendary ændrer grænsen"))
     else
         ns.lootEmpty:SetText("")
-        ns.lootInfo:SetText(string.format("Viser %d-%d af %d  -  %s eller bedre  -  rul med musehjulet  -  /wc4ever loot uncommon|rare|epic|legendary",
+        ns.lootInfo:SetText(string.format(ns.L("Viser %d-%d af %d  -  %s eller bedre  -  rul med musehjulet  -  /wc4ever loot uncommon|rare|epic|legendary"),
             offset + 1, math.min(offset + LOOT_ROWS, total), total, minName))
     end
 end
@@ -4523,7 +4527,7 @@ local function BuildRunsPage(page)
                 GameTooltip:AddDoubleLine(b.name, tostring(b.kills), 0.8, 0.8, 0.8, b.kills > 0 and 1 or 0.5, b.kills > 0 and 1 or 0.5, b.kills > 0 and 1 or 0.5)
             end
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("Klik for at se alle bosser", 0.5, 0.5, 0.56)
+            GameTooltip:AddLine(ns.L("Klik for at se alle bosser"), 0.5, 0.5, 0.56)
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", function(self)
@@ -4542,7 +4546,7 @@ local function BuildRunsPage(page)
     panel.legend:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 14, 12)
     panel.legend:SetTextColor(0.5, 0.5, 0.56)
 
-    panel.back = MakeButton(panel, 110, 22, "< Tilbage", function()
+    panel.back = MakeButton(panel, 110, 22, ns.L("< Tilbage"), function()
         ns.runInst = nil
         ns.runOffset = 0
         ns.RefreshUI()
@@ -4558,7 +4562,7 @@ local function RefreshRuns()
     for i, s in ipairs(list) do
         local btn = ns.runList[i]
         local r, g, b = ClassColor(s.class)
-        btn.text:SetText(s.disp .. (s.isMe and "  (dig)" or ""))
+        btn.text:SetText(s.disp .. (s.isMe and ns.L("  (dig)") or ""))
         btn.text:SetTextColor(r, g, b)
         btn.score:SetText(s.clears > 0 and tostring(s.clears) or "-")
         if s.name == ns.runTarget then
@@ -4579,7 +4583,7 @@ local function RefreshRuns()
         Plural(cur.wipes, "wipe", "wipes"), Plural(cur.kills, "bosskill", "bosskills")))
     panel.big:SetText(tostring(cur.clears))
     panel.big:SetTextColor(1, 1, 1)
-    panel.bigLabel:SetText("instances klaret")
+    panel.bigLabel:SetText(ns.L("instances klaret"))
 
     local runs = RunList(cur.name)
     local selected
@@ -4592,7 +4596,7 @@ local function RefreshRuns()
     if selected then
         rows = BossRows(selected.name, selected.e)
         panel.heads[1]:SetText(selected.name)
-        panel.heads[2]:SetText("Dræbt")
+        panel.heads[2]:SetText(ns.L("Dræbt"))
         panel.heads[3]:SetText("")
         panel.heads[4]:SetText("")
         panel.heads[5]:SetText("")
@@ -4601,8 +4605,8 @@ local function RefreshRuns()
         panel.heads[1]:SetText("Instance")
         panel.heads[2]:SetText("Clear")
         panel.heads[3]:SetText("Wipes")
-        panel.heads[4]:SetText("Bosser")
-        panel.heads[5]:SetText("Sidst")
+        panel.heads[4]:SetText(ns.L("Bosser"))
+        panel.heads[5]:SetText(ns.L("Sidst"))
     end
     total = #rows
     local offset = math.max(0, math.min(ns.runOffset or 0, math.max(0, total - RUN_ROWS)))
@@ -4639,14 +4643,14 @@ local function RefreshRuns()
 
     panel.back:SetShown(selected and true or false)
     if total == 0 then
-        panel.empty:SetText(cur.disp .. " har ikke været i en dungeon eller raid med addonet endnu. " ..
-            "Wipes, bosser og clears tæller fra den nye version.")
+        panel.empty:SetText(cur.disp .. ns.L(" har ikke været i en dungeon eller raid med addonet endnu. ") ..
+            ns.L("Wipes, bosser og clears tæller fra den nye version."))
         panel.legend:SetText("")
     else
         panel.empty:SetText("")
-        local hint = selected and "* = slutboss (den der giver en clear)" or "Klik på en instance for at se hver boss"
+        local hint = selected and ns.L("* = slutboss (den der giver en clear)") or ns.L("Klik på en instance for at se hver boss")
         if total > RUN_ROWS then
-            hint = string.format("Viser %d-%d af %d  -  rul med musehjulet", offset + 1, math.min(offset + RUN_ROWS, total), total)
+            hint = string.format(ns.L("Viser %d-%d af %d  -  rul med musehjulet"), offset + 1, math.min(offset + RUN_ROWS, total), total)
         end
         panel.legend:SetText(hint)
     end
@@ -4719,9 +4723,9 @@ local function BuildTrophyPage(page)
                 if db.ach[n] and db.ach[n][a.id] then who[#who + 1] = Name(n) end
             end
             if #who == 0 then
-                GameTooltip:AddLine("Ingen har låst det op endnu", 0.5, 0.5, 0.56)
+                GameTooltip:AddLine(ns.L("Ingen har låst det op endnu"), 0.5, 0.5, 0.56)
             else
-                GameTooltip:AddLine("Låst op af: " .. table.concat(who, ", "), 0.4, 0.9, 0.5)
+                GameTooltip:AddLine(ns.L("Låst op af: ") .. table.concat(who, ", "), 0.4, 0.9, 0.5)
             end
             GameTooltip:Show()
         end)
@@ -4736,10 +4740,10 @@ local function RefreshTrophies()
     ns.trophyFriend = friend
     if not friend then return end
     local n, pts = AchCount(friend)
-    ns.trophyTitle:SetText("Trofæer")
+    ns.trophyTitle:SetText(ns.L("Trofæer"))
     ns.trophyTitle:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
-    ns.trophySub:SetText(string.format("%s har låst %d af %d op  -  %d trofæpoint", Name(friend), n, #ACH, pts))
-    ns.trophyPick.text:SetText("Se trofæer for: " .. Name(friend))
+    ns.trophySub:SetText(string.format(ns.L("%s har låst %d af %d op  -  %d trofæpoint"), Name(friend), n, #ACH, pts))
+    ns.trophyPick.text:SetText(ns.L("Se trofæer for: ") .. Name(friend))
 
     local rowsTotal = math.ceil(#ACH / 2)
     local offset = math.max(0, math.min(ns.trophyOffset or 0, math.max(0, rowsTotal - ACH_ROWS)))
@@ -4770,7 +4774,7 @@ local function RefreshTrophies()
                 c.name:SetTextColor(0.6, 0.6, 0.66)
                 c.desc:SetTextColor(0.45, 0.45, 0.5)
                 c.pts:SetTextColor(0.4, 0.4, 0.45)
-                c.when:SetText("|cff666666Låst|r")
+                c.when:SetText(ns.L("|cff666666Låst|r"))
             end
             c:Show()
         else
@@ -4866,7 +4870,7 @@ local function RefreshRace()
         local r, g, b = ClassColor(s.class)
         row.rank:SetText(tostring(i))
         SetClassIcon(row.icon, s.class)
-        row.name:SetText(s.disp .. (s.isMe and " (dig)" or ""))
+        row.name:SetText(s.disp .. (s.isMe and ns.L(" (dig)") or ""))
         row.name:SetTextColor(r, g, b)
 
         local frac = math.min(1, math.max(0, s.progress / MAX_LEVEL))
@@ -4879,15 +4883,15 @@ local function RefreshRace()
 
         if s.level > 0 then
             if s.level >= MAX_LEVEL then
-                row.info:SetText("|cffffd100Level " .. MAX_LEVEL .. " - i mål!|r")
+                row.info:SetText("|cffffd100Level " .. MAX_LEVEL .. ns.L(" - i mål!|r"))
             else
                 row.info:SetText(string.format("Level %d  (%d%%)", s.level, s.xp))
             end
             local gap = leader - s.progress
-            local tail = (i == 1) and "|cffffd100forrest|r" or string.format("-%.1f level", gap)
+            local tail = (i == 1) and ns.L("|cffffd100forrest|r") or string.format("-%.1f level", gap)
             row.sub:SetText(string.format("%s%s  -  %s", s.charFull or s.char or "?", s.online and "  |cff40e060online|r" or "", tail))
         else
-            row.info:SetText("|cff888888ikke set endnu|r")
+            row.info:SetText(ns.L("|cff888888ikke set endnu|r"))
             row.sub:SetText("")
         end
 
@@ -4902,7 +4906,7 @@ local function RefreshRace()
             row:SetBackdropColor(COL_PANEL[1], COL_PANEL[2], COL_PANEL[3], 1)
         end
     end
-    ns.raceNote:SetText("Hver vens karakter med højest level tæller. XP-procenten opdateres, mens vennen er online.")
+    ns.raceNote:SetText(ns.L("Hver vens karakter med højest level tæller. XP-procenten opdateres, mens vennen er online."))
 end
 
 -- v0.5-sider og indstillinger ligger i en blok for sig, så hovedfilen holder sig under
@@ -4913,21 +4917,21 @@ do
     -- =============================================================================
     -- UI: side 8 - uheldsrating for rolls (under Loot-fanen)
     -- =============================================================================
-    local ROLL_COLS = {
+    local ROLL_COLS = ns.LT({
         { x = 10,  w = 30,  j = "CENTER", label = "#" },
         { x = 50,  w = 220, j = "LEFT",   label = "Ven" },
         { x = 280, w = 90,  j = "CENTER", label = "Rolls" },
         { x = 380, w = 90,  j = "CENTER", label = "Vundet" },
         { x = 480, w = 100, j = "CENTER", label = "Tabt" },
         { x = 590, w = 100, j = "CENTER", label = "Snit" },
-    }
+    })
 
     local function BuildStatsPage(page)
         local right = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
         right:SetAllPoints(page)
         local rt = Txt(right, "GameFontNormalLarge")
         rt:SetPoint("TOPLEFT", right, "TOPLEFT", 12, -10)
-        rt:SetText("Uheldsrating for rolls")
+        rt:SetText(ns.L("Uheldsrating for rolls"))
         rt:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
 
         for _, c in ipairs(ROLL_COLS) do
@@ -4956,24 +4960,24 @@ do
                 GameTooltip:AddLine(Name(d.name), 1, 1, 1)
                 local r = d.r
                 if not r or (r.rolls or 0) == 0 then
-                    GameTooltip:AddLine("Ingen rolls registreret endnu", 0.6, 0.6, 0.66)
+                    GameTooltip:AddLine(ns.L("Ingen rolls registreret endnu"), 0.6, 0.6, 0.66)
                 else
-                    GameTooltip:AddDoubleLine("Deltaget i", Plural(r.rolls, "roll", "rolls"), 0.8, 0.8, 0.8, 1, 1, 1)
-                    GameTooltip:AddDoubleLine("Vundet", tostring(r.wins or 0), 0.8, 0.8, 0.8, 0.4, 0.9, 0.5)
-                    GameTooltip:AddDoubleLine("Tabt", tostring(math.max(0, r.rolls - (r.wins or 0))), 0.8, 0.8, 0.8, 1, 0.45, 0.45)
+                    GameTooltip:AddDoubleLine(ns.L("Deltaget i"), Plural(r.rolls, "roll", "rolls"), 0.8, 0.8, 0.8, 1, 1, 1)
+                    GameTooltip:AddDoubleLine(ns.L("Vundet"), tostring(r.wins or 0), 0.8, 0.8, 0.8, 0.4, 0.9, 0.5)
+                    GameTooltip:AddDoubleLine(ns.L("Tabt"), tostring(math.max(0, r.rolls - (r.wins or 0))), 0.8, 0.8, 0.8, 1, 0.45, 0.45)
                     local avg = ns.AvgRoll(r)
                     if avg then
                         GameTooltip:AddLine(" ")
-                        GameTooltip:AddDoubleLine("Snit-roll", string.format("%.1f (forventet 50,5)", avg), 0.8, 0.8, 0.8, 1, 1, 1)
-                        GameTooltip:AddDoubleLine("Laveste / højeste", string.format("%d / %d", r.low or 0, r.high or 0), 0.8, 0.8, 0.8, 1, 1, 1)
+                        GameTooltip:AddDoubleLine(ns.L("Snit-roll"), string.format(ns.L("%.1f (forventet 50,5)"), avg), 0.8, 0.8, 0.8, 1, 1, 1)
+                        GameTooltip:AddDoubleLine(ns.L("Laveste / højeste"), string.format("%d / %d", r.low or 0, r.high or 0), 0.8, 0.8, 0.8, 1, 1, 1)
                     end
                     local luck = ns.LuckStats and ns.LuckStats(d.name)
                     if luck then
-                        GameTooltip:AddDoubleLine("Held, seneste " .. luck.n .. " rolls", string.format("%d%%", math.floor(luck.pct + 0.5)), 0.8, 0.8, 0.8, 0.5, 0.8, 1)
+                        GameTooltip:AddDoubleLine(ns.L("Held, seneste ") .. luck.n .. " rolls", string.format("%d%%", math.floor(luck.pct + 0.5)), 0.8, 0.8, 0.8, 0.5, 0.8, 1)
                     end
                     if (r.rolls or 0) < ns.ROLL_MIN then
                         GameTooltip:AddLine(" ")
-                        GameTooltip:AddLine("Rating fra " .. ns.ROLL_MIN .. " rolls", 0.5, 0.5, 0.56)
+                        GameTooltip:AddLine(ns.L("Rating fra ") .. ns.ROLL_MIN .. " rolls", 0.5, 0.5, 0.56)
                     end
                 end
                 GameTooltip:Show()
@@ -4989,7 +4993,7 @@ do
         ns.rollNote:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 12, 10)
         ns.rollNote:SetWidth(700)
         ns.rollNote:SetTextColor(0.5, 0.5, 0.56)
-        ns.rollNote:SetText("Tabt = andel af dine need/greed-rolls, du ikke vandt. Snit = dit gennemsnitlige roll (held er 50,5).")
+        ns.rollNote:SetText(ns.L("Tabt = andel af dine need/greed-rolls, du ikke vandt. Snit = dit gennemsnitlige roll (held er 50,5)."))
     end
 
     local function RefreshStatsPage()
@@ -5014,7 +5018,7 @@ do
             local r = d.r
             local rr, gg, bb = ClassColor(classOf[d.name])
             row.f[1]:SetText(d.loss and tostring(i) or "-")
-            row.f[2]:SetText(Name(d.name) .. (d.name == db.me and " (dig)" or ""))
+            row.f[2]:SetText(Name(d.name) .. (d.name == db.me and ns.L(" (dig)") or ""))
             row.f[2]:SetTextColor(rr, gg, bb)
             row.f[3]:SetText(d.rolls > 0 and tostring(d.rolls) or "-")
             row.f[4]:SetText(r and r.rolls > 0 and tostring(r.wins or 0) or "-")
@@ -5056,7 +5060,7 @@ do
         left:SetWidth(362)
         local lt = Txt(left, "GameFontNormalLarge")
         lt:SetPoint("TOPLEFT", left, "TOPLEFT", 12, -10)
-        lt:SetText("Dødsstatistik")
+        lt:SetText(ns.L("Dødsstatistik"))
         lt:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
         ns.deathSplitText = Txt(left, "GameFontHighlight")
         ns.deathSplitText:SetPoint("TOPRIGHT", left, "TOPRIGHT", -12, -13)
@@ -5073,7 +5077,7 @@ do
         right:SetWidth(362)
         local rt = Txt(right, "GameFontNormalLarge")
         rt:SetPoint("TOPLEFT", right, "TOPLEFT", 12, -10)
-        rt:SetText("Seneste dødsfald")
+        rt:SetText(ns.L("Seneste dødsfald"))
         rt:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
         ns.deathRecentText = Txt(right, "GameFontHighlightSmall")
         ns.deathRecentText:SetPoint("TOPLEFT", rt, "BOTTOMLEFT", 0, -10)
@@ -5096,23 +5100,23 @@ do
             lines[#lines + 1] = " "
         end
         local function withWho(i, e)
-            return string.format("%d. %s  |cffff8080%d|r  |cff888888(%s)|r", i, e.name, e.n, ns.WhoText(e.who, 3))
+            return string.format("%d. %s  |cffff8080%d|r  |cff888888(%s)|r", i, ns.L(e.name), e.n, ns.WhoText(e.who, 3))
         end
-        section("Farligste mob (PvE)", mobs, "Ingen er blevet slået ihjel af et mob endnu.", 3, withWho)
-        section("Farligste spiller (PvP)", players, "Ingen er blevet ganket endnu.", 3, function(i, e)
-            return string.format("%d. %s  |cff80b0ff%d|r  |cff888888(%s)|r", i, e.name, e.n, ns.WhoText(e.who, 3))
+        section(ns.L("Farligste mob (PvE)"), mobs, ns.L("Ingen er blevet slået ihjel af et mob endnu."), 3, withWho)
+        section(ns.L("Farligste spiller (PvP)"), players, ns.L("Ingen er blevet ganket endnu."), 3, function(i, e)
+            return string.format("%d. %s  |cff80b0ff%d|r  |cff888888(%s)|r", i, ns.L(e.name), e.n, ns.WhoText(e.who, 3))
         end)
-        section("Farligste zone", zones, "Ingen dødsfald endnu.", 3, withWho)
+        section(ns.L("Farligste zone"), zones, ns.L("Ingen dødsfald endnu."), 3, withWho)
         if ns.DeathRateRanking then
-            section("Deaths/hr (døde pr. times spilletid)", ns.DeathRateRanking(), "Ingen spilletid kendt endnu.", 3,
+            section(ns.L("Deaths/hr (døde pr. times spilletid)"), ns.DeathRateRanking(), ns.L("Ingen spilletid kendt endnu."), 3,
                 function(i, e)
-                    return string.format("%d. %s  |cffff8080%s|r  |cff888888(%d PvE + %d PvP på %s)|r", i, Name(e.name),
+                    return string.format(ns.L("%d. %s  |cffff8080%s|r  |cff888888(%d PvE + %d PvP på %s)|r"), i, Name(e.name),
                         ns.FormatDPH(e.dph), e.deaths - (e.pvp or 0), e.pvp or 0, ns.FormatPlayed(e.secs))
                 end)
         end
-        section("Faldskade-konge", falls, "Ingen er faldet ihjel endnu. Endnu.", 3, function(i, e)
-            return string.format("%d. %s  |cffff8080%s|r%s", i, Name(e.name), Plural(e.n, "fald", "fald"),
-                i == 1 and "  |cffffd100(kongen)|r" or "")
+        section(ns.L("Faldskade-konge"), falls, ns.L("Ingen er faldet ihjel endnu. Endnu."), 3, function(i, e)
+            return string.format("%d. %s  |cffff8080%s|r%s", i, Name(e.name), (ns.lang == "en" and Plural(e.n, "fall", "falls") or Plural(e.n, "fald", "fald")),
+                i == 1 and ns.L("  |cffffd100(kongen)|r") or "")
         end)
         lines[#lines] = nil
         ns.deathStatText:SetText(table.concat(lines, "\n"))
@@ -5128,15 +5132,16 @@ do
             local ev = recent[i]
             local what = (ev.killer and ev.killer ~= "") and ev.killer or "Ukendt"
             if what == "Omgivelserne" and ev.ability and ev.ability ~= "" then what = ev.ability end
+            what = ns.L(what)
             if ev.pvp then what = "|cff80b0ff" .. what .. " (PvP)|r" end
             local fr = EventFriend(ev)
             local full = ns.CharFull(fr, ev.name, ev.sur)
             local who = ColorName(fr, ev.class)
             if full and full ~= "" and full ~= Name(fr) then who = who .. " |cff888888(" .. full .. ")|r" end
-            rl[#rl + 1] = string.format("%s  |cff888888%s|r  %s  |cff888888i %s|r",
+            rl[#rl + 1] = string.format(ns.L("%s  |cff888888%s|r  %s  |cff888888i %s|r"),
                 who, FormatAgoShort(ev.time), what, ev.zone or "?")
         end
-        if #rl == 0 then rl[1] = "|cff888888Ingen dødsfald endnu. Nyd det, mens det varer.|r" end
+        if #rl == 0 then rl[1] = ns.L("|cff888888Ingen dødsfald endnu. Nyd det, mens det varer.|r") end
         ns.deathRecentText:SetText(table.concat(rl, "\n"))
     end
 
@@ -5147,8 +5152,8 @@ do
     -- =============================================================================
     -- UI: side 9 - guldgraf over tid
     -- =============================================================================
-    local GOLD_RANGES = { { label = "7 dage", days = 7 }, { label = "30 dage", days = 30 },
-                          { label = "90 dage", days = 90 }, { label = "Alt", days = 0 } }
+    local GOLD_RANGES = ns.LT({ { label = "7 dage", days = 7 }, { label = "30 dage", days = 30 },
+                          { label = "90 dage", days = 90 }, { label = "Alt", days = 0 } })
     local FRIEND_COLORS = {
         { 1.00, 0.82, 0.20 }, { 0.35, 0.70, 1.00 }, { 1.00, 0.40, 0.40 }, { 0.40, 0.90, 0.50 },
         { 0.75, 0.45, 1.00 }, { 1.00, 0.60, 0.25 }, { 0.30, 0.90, 0.90 }, { 0.95, 0.50, 0.80 },
@@ -5223,16 +5228,16 @@ do
                 GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
                 GameTooltip:AddLine(Name(self.friend), 1, 1, 1)
                 if #d.pts == 0 then
-                    GameTooltip:AddLine("Ingen målinger i perioden", 0.6, 0.6, 0.66)
+                    GameTooltip:AddLine(ns.L("Ingen målinger i perioden"), 0.6, 0.6, 0.66)
                 else
                     local first, last = d.pts[1][2], d.pts[#d.pts][2]
                     local diff = last - first
-                    GameTooltip:AddDoubleLine("Nu", FormatGold(last), 0.8, 0.8, 0.8, 1, 1, 1)
-                    GameTooltip:AddDoubleLine("I perioden", (diff >= 0 and "+" or "-") .. FormatGold(math.abs(diff)),
+                    GameTooltip:AddDoubleLine(ns.L("Nu"), FormatGold(last), 0.8, 0.8, 0.8, 1, 1, 1)
+                    GameTooltip:AddDoubleLine(ns.L("I perioden"), (diff >= 0 and "+" or "-") .. FormatGold(math.abs(diff)),
                         0.8, 0.8, 0.8, diff >= 0 and 0.4 or 1, diff >= 0 and 0.9 or 0.45, diff >= 0 and 0.5 or 0.45)
-                    GameTooltip:AddDoubleLine("Målinger", tostring(#d.pts), 0.8, 0.8, 0.8, 1, 1, 1)
+                    GameTooltip:AddDoubleLine(ns.L("Målinger"), tostring(#d.pts), 0.8, 0.8, 0.8, 1, 1, 1)
                 end
-                GameTooltip:AddLine("Klik for at skjule/vise", 0.5, 0.8, 1)
+                GameTooltip:AddLine(ns.L("Klik for at skjule/vise"), 0.5, 0.8, 1)
                 GameTooltip:Show()
             end)
             b:SetScript("OnLeave", function(self)
@@ -5359,7 +5364,7 @@ do
             local t = from + (now - from) * frac
             g.xlab[i]:ClearAllPoints()
             g.xlab[i]:SetPoint("TOP", g, "BOTTOMLEFT", GRAPH_L + w * frac, GRAPH_B - 4)
-            g.xlab[i]:SetText(i == 5 and "nu" or date("%d/%m", t))
+            g.xlab[i]:SetText(i == 5 and ns.L("nu") or date("%d/%m", t))
         end
 
         local function X(t) return GRAPH_L + w * ((t - from) / math.max(1, now - from)) end
@@ -5391,13 +5396,13 @@ do
         for i = nl + 1, #g.lines do if g.lines[i] then g.lines[i]:Hide() end end
         for i = nd + 1, #g.dots do g.dots[i]:Hide() end
 
-        g.empty:SetText(any and "" or "Ingen guldmålinger i perioden. Der måles, hver gang nogen logger ud.")
+        g.empty:SetText(any and "" or ns.L("Ingen guldmålinger i perioden. Der måles, hver gang nogen logger ud."))
         local total = 0
         for _, s in ipairs(series) do
             local last = s.pts[#s.pts]
             if last then total = total + last[2] end
         end
-        ns.goldInfo:SetText(any and ("Samlet for de viste: " .. FormatGold(total)) or "")
+        ns.goldInfo:SetText(any and (ns.L("Samlet for de viste: ") .. FormatGold(total)) or "")
     end
 
     EXTRA_PAGES[9] = { build = BuildGoldPage, refresh = RefreshGoldPage }
@@ -5454,7 +5459,7 @@ do
                 GameTooltip:AddLine(self.prof.name, 1, 0.82, 0.2)
                 local list = self.data or {}
                 if #list == 0 then
-                    GameTooltip:AddLine("Ingen af jer har det endnu", 0.6, 0.6, 0.66)
+                    GameTooltip:AddLine(ns.L("Ingen af jer har det endnu"), 0.6, 0.6, 0.66)
                 end
                 for _, e in ipairs(list) do
                     local r, g, b = ClassColor(e.class)
@@ -5473,7 +5478,7 @@ do
         ns.profNote:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(#ns.PROFS * 28 + 4))
         ns.profNote:SetWidth(732)
         ns.profNote:SetTextColor(0.5, 0.5, 0.56)
-        ns.profNote:SetText("Hver vens bedste karakter står først. Hold musen over en linje for at se alle karakterer.")
+        ns.profNote:SetText(ns.L("Hver vens bedste karakter står først. Hold musen over en linje for at se alle karakterer."))
     end
 
     local function RefreshProfPage()
@@ -5491,7 +5496,7 @@ do
                 end
             end
             if #parts == 0 then
-                row.who:SetText("|cff666666ingen endnu|r")
+                row.who:SetText(ns.L("|cff666666ingen endnu|r"))
                 row.name:SetTextColor(0.5, 0.5, 0.56)
                 row.icon:SetVertexColor(0.4, 0.4, 0.4)
             else
@@ -5538,7 +5543,7 @@ do
 
     local function BuildGearPage(page)
         ns.gearOffset = 0
-        ns.gearFriendBtn = MakeButton(page, 180, 26, "Ven: Alle", function()
+        ns.gearFriendBtn = MakeButton(page, 180, 26, ns.L("Ven: Alle"), function()
             local idx = 0
             for i, n in ipairs(ROSTER) do if n == ns.gearFriend then idx = i end end
             ns.gearFriend = ROSTER[idx + 1]   -- efter sidste ven kommer "Alle" (nil)
@@ -5547,9 +5552,9 @@ do
         end)
         ns.gearFriendBtn:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
 
-        local heads = { { "Karakter", GC.char, 150 }, { "Ven", GC.friend, 90 }, { "Lvl", GC.level, 40 },
+        local heads = { { ns.L("Karakter"), GC.char, 150 }, { ns.L("Ven"), GC.friend, 90 }, { "Lvl", GC.level, 40 },
                         { "Item level", GC.ilvl, 66 }, { "Enchants", GC.ench, 136 }, { "Gems", GC.gems, 86 },
-                        { "Opdateret", GC.time, 120 } }
+                        { ns.L("Opdateret"), GC.time, 120 } }
         for _, hd in ipairs(heads) do
             local fs = Txt(page, "GameFontHighlightSmall")
             fs:SetPoint("TOPLEFT", page, "TOPLEFT", hd[2], -34)
@@ -5580,18 +5585,18 @@ do
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 local r, g, b = ClassColor(d.class)
                 GameTooltip:AddLine(d.char .. " (" .. Name(d.friend) .. ")", r, g, b)
-                GameTooltip:AddDoubleLine("Snit item level", string.format("%.1f", d.g.il or 0), 0.8, 0.8, 0.8, 1, 1, 1)
+                GameTooltip:AddDoubleLine(ns.L("Snit item level"), string.format("%.1f", d.g.il or 0), 0.8, 0.8, 0.8, 1, 1, 1)
                 local miss = MissingSlots(d.g.me)
                 GameTooltip:AddLine(" ")
                 if #miss == 0 then
-                    GameTooltip:AddLine("Alle enchants er på", 0.4, 0.9, 0.5)
+                    GameTooltip:AddLine(ns.L("Alle enchants er på"), 0.4, 0.9, 0.5)
                 else
-                    GameTooltip:AddLine("Mangler enchant: " .. table.concat(miss, ", "), 1, 0.5, 0.5, true)
+                    GameTooltip:AddLine(ns.L("Mangler enchant: ") .. table.concat(miss, ", "), 1, 0.5, 0.5, true)
                 end
                 if (d.g.mg or 0) > 0 then
-                    GameTooltip:AddLine("Tomme gem-sockets: " .. d.g.mg, 1, 0.5, 0.5)
+                    GameTooltip:AddLine(ns.L("Tomme gem-sockets: ") .. d.g.mg, 1, 0.5, 0.5)
                 else
-                    GameTooltip:AddLine("Ingen tomme sockets", 0.4, 0.9, 0.5)
+                    GameTooltip:AddLine(ns.L("Ingen tomme sockets"), 0.4, 0.9, 0.5)
                 end
                 GameTooltip:Show()
             end)
@@ -5621,7 +5626,7 @@ do
 
     local function RefreshGearPage()
         if ns.gearFriend and not ROSTER_SET[ns.gearFriend] then ns.gearFriend = nil end
-        ns.gearFriendBtn.text:SetText("Ven: " .. (Name(ns.gearFriend) or "Alle"))
+        ns.gearFriendBtn.text:SetText(ns.L("Ven: ") .. (Name(ns.gearFriend) or ns.L("Alle")))
         local list = GearList()
         local total = #list
         local offset = math.max(0, math.min(ns.gearOffset or 0, math.max(0, total - GEAR_ROWS)))
@@ -5641,9 +5646,9 @@ do
                 if #miss == 0 then
                     row.ench:SetText("|cff40e060OK|r")
                 else
-                    row.ench:SetText(string.format("|cffff6060Mangler %d|r |cff888888(%s)|r", #miss, table.concat(miss, ", ")))
+                    row.ench:SetText(string.format(ns.L("|cffff6060Mangler %d|r |cff888888(%s)|r"), #miss, table.concat(miss, ", ")))
                 end
-                row.gems:SetText((d.g.mg or 0) > 0 and string.format("|cffff6060%d tomme|r", d.g.mg) or "|cff40e060OK|r")
+                row.gems:SetText((d.g.mg or 0) > 0 and string.format(ns.L("|cffff6060%d tomme|r"), d.g.mg) or "|cff40e060OK|r")
                 row.time:SetText("|cff888888" .. FormatAgo(d.g.t and d.g.t > 0 and d.g.t or nil) .. "|r")
                 row:Show()
             else
@@ -5651,11 +5656,11 @@ do
             end
         end
         if total == 0 then
-            ns.gearEmpty:SetText("Intet gear registreret endnu. Det måles, når en ven logger ind eller skifter udstyr.")
+            ns.gearEmpty:SetText(ns.L("Intet gear registreret endnu. Det måles, når en ven logger ind eller skifter udstyr."))
             ns.gearInfo:SetText("")
         else
             ns.gearEmpty:SetText("")
-            ns.gearInfo:SetText(string.format("Viser %d-%d af %d  -  sorteret efter item level  -  ringe tælles ikke med i enchants",
+            ns.gearInfo:SetText(string.format(ns.L("Viser %d-%d af %d  -  sorteret efter item level  -  ringe tælles ikke med i enchants"),
                 offset + 1, math.min(offset + GEAR_ROWS, total), total))
         end
     end
@@ -5722,20 +5727,20 @@ do
         if not d then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if d.exalted then
-            GameTooltip:AddLine(Name(d.friend) .. ": exalted med", 1, 0.82, 0.2)
+            GameTooltip:AddLine(Name(d.friend) .. ns.L(": exalted med"), 1, 0.82, 0.2)
             local names = {}
             for fname in pairs(d.exalted) do names[#names + 1] = fname end
             table.sort(names)
-            if #names == 0 then GameTooltip:AddLine("Ingen endnu", 0.6, 0.6, 0.66) end
+            if #names == 0 then GameTooltip:AddLine(ns.L("Ingen endnu"), 0.6, 0.6, 0.66) end
             for _, fname in ipairs(names) do
                 GameTooltip:AddDoubleLine(fname, table.concat(d.exalted[fname], ", "), 0.9, 0.9, 0.9, 0.6, 0.6, 0.66)
             end
         else
             local k = d.key
             GameTooltip:AddLine(Name(d.friend) .. " - " .. table.concat(k.names, " / "), 1, 0.82, 0.2)
-            GameTooltip:AddLine(k.item .. " (" .. k.what .. ") kræver Revered", 0.6, 0.6, 0.66, true)
+            GameTooltip:AddLine(k.item .. " (" .. k.what .. ns.L(") kræver Revered"), 0.6, 0.6, 0.66, true)
             GameTooltip:AddLine(" ")
-            if #d.list == 0 then GameTooltip:AddLine("Ingen karakterer har denne rep endnu", 0.6, 0.6, 0.66) end
+            if #d.list == 0 then GameTooltip:AddLine(ns.L("Ingen karakterer har denne rep endnu"), 0.6, 0.6, 0.66) end
             for _, e in ipairs(d.list) do
                 local r, g, b = ClassColor(e.class)
                 local sr, sg, sb = StandingColor(e.s)
@@ -5766,13 +5771,13 @@ do
                 hf:SetScript("OnLeave", function() GameTooltip:Hide() end)
             end
         end
-        head("Ven", 0, 150)
+        head(ns.L("Ven"), 0, 150)
         for k, kf in ipairs(ns.KEY_FACTIONS) do
             head(kf.label, REP_X + (k - 1) * (REP_W + 2), REP_W,
-                table.concat(kf.names, " / ") .. ": " .. kf.item .. " til " .. kf.what .. " (Revered)")
+                table.concat(kf.names, " / ") .. ": " .. kf.item .. ns.L(" til ") .. kf.what .. " (Revered)")
         end
         local exX = REP_X + #ns.KEY_FACTIONS * (REP_W + 2)
-        head("Exalted", exX, 732 - exX, "Antal fraktioner, vennen er exalted med på mindst én karakter")
+        head("Exalted", exX, 732 - exX, ns.L("Antal fraktioner, vennen er exalted med på mindst én karakter"))
 
         ns.repRows = {}
         for i = 1, ns.MAX_MEMBERS do
@@ -5812,7 +5817,7 @@ do
         ns.repNote:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -(24 + ns.MAX_MEMBERS * 38 + 2))
         ns.repNote:SetWidth(732)
         ns.repNote:SetTextColor(0.5, 0.5, 0.56)
-        ns.repNote:SetText("Grøn = Revered eller bedre, så heroic-nøglen kan købes. Vennens bedste karakter vises. Hold musen over et felt for detaljer.")
+        ns.repNote:SetText(ns.L("Grøn = Revered eller bedre, så heroic-nøglen kan købes. Vennens bedste karakter vises. Hold musen over et felt for detaljer."))
     end
 
     local function RefreshRepPage()
@@ -5824,7 +5829,7 @@ do
             local s = stats[friend] or {}
             local r, g, b = ClassColor(s.class)
             SetClassIcon(row.icon, s.class)
-            row.name:SetText(Name(friend) .. (friend == db.me and " (dig)" or ""))
+            row.name:SetText(Name(friend) .. (friend == db.me and ns.L(" (dig)") or ""))
             row.name:SetTextColor(r, g, b)
             for k, kf in ipairs(ns.KEY_FACTIONS) do
                 local cell = row.cells[k]
@@ -5893,8 +5898,44 @@ do
             b:SetBackdropColor(c[1], c[2], c[3], 1)
         end
         p.meText:SetText(ns.GroupStatusText and ns.GroupStatusText() or "")
+        local chosen = db.settings.lang or "da"
+        for _, b in ipairs(p.langBtns) do
+            local c = (b.lang == chosen) and COL_SELECT or COL_BTN
+            b:SetBackdropColor(c[1], c[2], c[3], 1)
+        end
+        p.reloadBtn:SetShown(chosen ~= ns.lang)
     end
     ns.RefreshOptions = RefreshOptions
+
+    -- Tekst på et bestemt sprog (beskeden om sprogskift skrives på det nye sprog)
+    local function LangText(lang, s)
+        if lang == "en" then return ns.EN[s] or s end
+        return s
+    end
+
+    -- Vælg sprog (Indstillinger eller /wc4ever language). Gælder efter /reload.
+    function ns.ChooseLanguage(lang)
+        if not db then return end
+        db.settings.lang = (lang == "en") and "en" or "da"
+        lang = db.settings.lang
+        RefreshOptions()
+        local name = ns.LANG_NAMES[lang] or lang
+        if lang == ns.lang then
+            Print(string.format(LangText(lang, "Sprog: |cffffd100%s|r. Skift med |cffffd100/wc4ever sprog da|r eller |cffffd100/wc4ever language en|r."), name))
+            return
+        end
+        Print(string.format(LangText(lang, "Sprog: |cffffd100%s|r. Skriv |cffffd100/reload|r for at skifte."), name))
+        if StaticPopupDialogs and StaticPopup_Show and ReloadUI then
+            StaticPopupDialogs["WASTEDCOAST_RELOAD"] = {
+                text = string.format(LangText(lang, "Skift sprog til %s? Brugerfladen genindlæses."), name),
+                button1 = LangText(lang, "Genindlæs nu"),
+                button2 = LangText(lang, "Senere"),
+                OnAccept = function() ReloadUI() end,
+                timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+            }
+            StaticPopup_Show("WASTEDCOAST_RELOAD")
+        end
+    end
 
     local function BuildOptions()
         local p = CreateFrame("Frame", "WastedCoastOptions", UIParent, "BackdropTemplate")
@@ -5908,17 +5949,17 @@ do
         local sub = Txt(p, "GameFontHighlightSmall")
         sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
         sub:SetTextColor(0.6, 0.6, 0.66)
-        sub:SetText("Alt kan også styres med /wc4ever. Ændringer gælder med det samme.")
+        sub:SetText(ns.L("Alt kan også styres med /wc4ever. Ændringer gælder med det samme."))
 
         p.checks = {}
         local checks = {
-            { "Lyd", "Egne lydklip og Blizzards lyd ved dødsfald, loot, wipes og trofæer.",
+            { ns.L("Lyd"), ns.L("Egne lydklip og Blizzards lyd ved dødsfald, loot, wipes og trofæer."),
               function() return db.settings.sound end, function(v) db.settings.sound = v end },
-            { "Beskeder i chatten", "Skriv dødsfald, loot og bosskills i dit chatvindue.",
+            { ns.L("Beskeder i chatten"), ns.L("Skriv dødsfald, loot og bosskills i dit chatvindue."),
               function() return db.settings.announce end, function(v) db.settings.announce = v end },
-            { "Popups", "Små beskeder øverst på skærmen, når en ven logger ind, stiger i level, wiper, får rare/epic loot eller dræber et rare mob.",
+            { "Popups", ns.L("Små beskeder øverst på skærmen, når en ven logger ind, stiger i level, wiper, får rare/epic loot eller dræber et rare mob."),
               function() return db.settings.toasts end, function(v) db.settings.toasts = v end },
-            { "Synk uden guild", "Skjult kanal og usynlige whispers, så I ser hinanden uden fælles guild eller gruppe.",
+            { ns.L("Synk uden guild"), ns.L("Skjult kanal og usynlige whispers, så I ser hinanden uden fælles guild eller gruppe."),
               function() return db.settings.fallbackSync ~= false end, function(v) ns.SetFallbackSync(v) end },
         }
         for i, c in ipairs(checks) do
@@ -5929,11 +5970,11 @@ do
 
         local qh = Txt(p, "GameFontNormal")
         qh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -244)
-        qh:SetText("Minimumskvalitet for loot")
+        qh:SetText(ns.L("Minimumskvalitet for loot"))
         local qs = Txt(p, "GameFontHighlightSmall")
         qs:SetPoint("TOPLEFT", qh, "BOTTOMLEFT", 0, -2)
         qs:SetTextColor(0.6, 0.6, 0.66)
-        qs:SetText("Loot under denne kvalitet bliver ikke registreret.")
+        qs:SetText(ns.L("Loot under denne kvalitet bliver ikke registreret."))
         p.qualityBtns = {}
         for i, q in ipairs(QUALITY_CHOICES) do
             local b = MakeButton(p, 110, 24, string.format("|cff%s%s|r", QUALITY_HEX[q], QUALITY_NAME[q]), function()
@@ -5948,27 +5989,45 @@ do
 
         local mh = Txt(p, "GameFontNormal")
         mh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -326)
-        mh:SetText("Din gruppe og dit navn")
+        mh:SetText(ns.L("Din gruppe og dit navn"))
         p.meText = Txt(p, "GameFontHighlightSmall")
         p.meText:SetPoint("TOPLEFT", mh, "BOTTOMLEFT", 0, -2)
         p.meText:SetWidth(470)
-        local gb = MakeButton(p, 220, 24, "Gruppe, kode og navn ...", function()
+        local gb = MakeButton(p, 220, 24, ns.L("Gruppe, kode og navn ..."), function()
             if ns.ShowGroupWindow then ns.ShowGroupWindow() end
         end)
         gb:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -380)
 
-        local open = MakeButton(p, 150, 24, "Åbn WC4ever", function()
+        local open = MakeButton(p, 150, 24, ns.L("Åbn WC4ever"), function()
             if ns.frame then ns.frame:Show() end
         end)
         open:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -436)
-        local test = MakeButton(p, 150, 24, "Vis test-popups", function()
+        local test = MakeButton(p, 150, 24, ns.L("Vis test-popups"), function()
             SlashCmdList["WASTEDCOAST"]("testtoast")
         end)
         test:SetPoint("LEFT", open, "RIGHT", 8, 0)
-        local sync = MakeButton(p, 150, 24, "Synk med vennerne", function()
+        local sync = MakeButton(p, 150, 24, ns.L("Synk med vennerne"), function()
             SlashCmdList["WASTEDCOAST"]("sync")
         end)
         sync:SetPoint("LEFT", test, "RIGHT", 8, 0)
+
+        local lh = Txt(p, "GameFontNormal")
+        lh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -482)
+        lh:SetText(ns.L("Sprog / Language"))
+        local ls = Txt(p, "GameFontHighlightSmall")
+        ls:SetPoint("TOPLEFT", lh, "BOTTOMLEFT", 0, -2)
+        ls:SetTextColor(0.6, 0.6, 0.66)
+        ls:SetText(ns.L("Sproget i addonets vinduer, popups og chatbeskeder. Skift kræver /reload."))
+        p.langBtns = {}
+        for i, lang in ipairs(ns.LANGS) do
+            local b = MakeButton(p, 110, 24, ns.LANG_NAMES[lang], function() ns.ChooseLanguage(lang) end)
+            b.lang = lang
+            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -518)
+            p.langBtns[i] = b
+        end
+        p.reloadBtn = MakeButton(p, 150, 24, ns.L("Genindlæs UI"), function() if ReloadUI then ReloadUI() end end)
+        p.reloadBtn:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + #ns.LANGS * 116 + 8, -518)
+        p.reloadBtn:Hide()
 
         p:SetScript("OnShow", RefreshOptions)
 
@@ -5984,7 +6043,7 @@ do
             p:SetBackdrop(FLAT)
             p:SetBackdropColor(COL_BG[1], COL_BG[2], COL_BG[3], COL_BG[4])
             p:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
-            p:SetSize(520, 474)
+            p:SetSize(520, 556)
             p:SetPoint("CENTER")
             p:SetFrameStrata("DIALOG")
             p:EnableMouse(true)
@@ -6017,7 +6076,7 @@ end
 -- UI: hovedvindue, faner og identitetsvalg
 -- =============================================================================
 -- Fem faner, hver med sine undersider. Sidenumrene er de gamle (ns.ShowTab(3) viser stadig karaktererne).
-local GROUPS = {
+local GROUPS = ns.LT({
     { label = "Venner",     icon = "INV_Misc_Head_Human_01",
       pages = { 1, 3, 11, 10, 12, 9 }, names = { "Kort", "Karakterer", "Gear", "Professions", "Reputation", "Guld" } },
     { label = "Rangliste",  icon = "Ability_Rogue_Sprint",
@@ -6028,7 +6087,7 @@ local GROUPS = {
       pages = { 16, 5 },               names = { "Statistik", "Instanser" } },
     { label = "Sjov",       icon = "Spell_Nature_Polymorph",
       pages = { 6, 13 },               names = { "Trofæer", "Drilleri" } },
-}
+})
 ns.GROUPS = GROUPS
 
 function ns.ShowTab(i)
@@ -6067,9 +6126,9 @@ function ns.RefreshUI()
     local f = ns.frame
     if not f or not f:IsShown() or not db then return end
     if db.me and ROSTER_SET[db.me] then
-        f.me:SetText("Du er: |cffffd100" .. Name(db.me) .. "|r")
+        f.me:SetText(ns.L("Du er: |cffffd100") .. Name(db.me) .. "|r")
     else
-        f.me:SetText("|cffff6060Du er ikke med i en gruppe endnu|r")
+        f.me:SetText(ns.L("|cffff6060Du er ikke med i en gruppe endnu|r"))
     end
     if ns.tab == 1 then
         RefreshOverview()
@@ -6144,11 +6203,11 @@ function ns.BuildMinimapButton()
         GameTooltip:AddLine("Wasted Coast Forever (WC4ever)", COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
         local online = 0
         for _, name in ipairs(ROSTER) do if IsOnline(name) then online = online + 1 end end
-        GameTooltip:AddLine(string.format("%d af %d venner online", online, #ROSTER), 1, 1, 1)
+        GameTooltip:AddLine(string.format(ns.L("%d af %d venner online"), online, #ROSTER), 1, 1, 1)
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Venstreklik: åbn/luk vinduet", 0.7, 0.7, 0.76)
-        GameTooltip:AddLine("Højreklik: indstillinger", 0.7, 0.7, 0.76)
-        GameTooltip:AddLine("Træk: flyt knappen  -  skjul med /wc4ever minimap", 0.7, 0.7, 0.76)
+        GameTooltip:AddLine(ns.L("Venstreklik: åbn/luk vinduet"), 0.7, 0.7, 0.76)
+        GameTooltip:AddLine(ns.L("Højreklik: indstillinger"), 0.7, 0.7, 0.76)
+        GameTooltip:AddLine(ns.L("Træk: flyt knappen  -  skjul med /wc4ever minimap"), 0.7, 0.7, 0.76)
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -6331,7 +6390,7 @@ local function BuildUI()
     local sub = Txt(header, "GameFontHighlightSmall")
     sub:SetPoint("LEFT", title, "RIGHT", 10, -2)
     sub:SetTextColor(0.6, 0.6, 0.68)
-    sub:SetText("WC4ever  -  vi dør sammen")
+    sub:SetText(ns.L("WC4ever  -  vi dør sammen"))
 
     local ver = Txt(f, "GameFontHighlightSmall")
     if ns.native then
@@ -6450,18 +6509,18 @@ local function BuildUI()
         b:SetScript("OnClick", onClick)
         return b
     end
-    local switch = FooterButton(60, "Gruppe", function() ns.ShowGroupWindow() end)
+    local switch = FooterButton(60, ns.L("Gruppe"), function() ns.ShowGroupWindow() end)
     switch:SetPoint("LEFT", f.me, "RIGHT", 10, 0)
-    local opts = FooterButton(100, "Indstillinger", function() ns.OpenOptions() end)
+    local opts = FooterButton(100, ns.L("Indstillinger"), function() ns.OpenOptions() end)
     opts:SetPoint("LEFT", switch, "RIGHT", 6, 0)
-    local refresh = FooterButton(80, "Opdater", function() ns.RefreshNow() end)
+    local refresh = FooterButton(80, ns.L("Opdater"), function() ns.RefreshNow() end)
     refresh:SetPoint("LEFT", opts, "RIGHT", 6, 0)
 
     local hint = Txt(f, "GameFontHighlightSmall")
     hint:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, ns.native and 10 or 14)
     hint:SetJustifyH("RIGHT")
     hint:SetTextColor(0.5, 0.5, 0.56)
-    hint:SetText("Klik på et kort for at se vennens karakterer")
+    hint:SetText(ns.L("Klik på et kort for at se vennens karakterer"))
 
     -- Opdater løbende, mens vinduet er åbent (online-status, "set for x min siden")
     -- og ton blødt ind, når det åbnes
@@ -6757,15 +6816,15 @@ do
     end
 
     -- /wc4ever status: hvordan hver ven nås lige nu
-    local VIA_LABEL = { GUILD = "guild", PARTY = "party", RAID = "raid", CHANNEL = "skjult kanal" }
+    local VIA_LABEL = ns.LT({ GUILD = "guild", PARTY = "party", RAID = "raid", CHANNEL = "skjult kanal" })
     function ns.PrintRoutes()
         local id = (GetChannelName(route.CHANNEL)) or 0
         if db.settings.fallbackSync == false then
-            Print("Synk uden guild er slået fra (|cffffd100/wc4ever kanal|r slår den til).")
+            Print(ns.L("Synk uden guild er slået fra (|cffffd100/wc4ever kanal|r slår den til)."))
         elseif not route.channelOK then
-            Print("Den skjulte kanal virker ikke i denne klient. Vennerne nås via whisper.")
+            Print(ns.L("Den skjulte kanal virker ikke i denne klient. Vennerne nås via whisper."))
         else
-            Print("Skjult kanal: " .. (id > 0 and ("|cff40ff40forbundet|r (/" .. id .. ")") or "|cffff6060ikke forbundet|r"))
+            Print(ns.L("Skjult kanal: ") .. (id > 0 and (ns.L("|cff40ff40forbundet|r (/") .. id .. ")") or ns.L("|cffff6060ikke forbundet|r")))
         end
         for _, friend in ipairs(ROSTER) do
             if friend ~= db.me then
@@ -6776,15 +6835,15 @@ do
                 end
                 if route.Recent(w) then via[#via + 1] = "whisper (" .. w.char .. ")" end
                 local how = (#via > 0) and ("|cff40ff40" .. table.concat(via, ", ") .. "|r")
-                    or "|cff9aa0a6ikke hørt fra de seneste 3 minutter|r"
+                    or ns.L("|cff9aa0a6ikke hørt fra de seneste 3 minutter|r")
                 print("  " .. Name(friend) .. ": " .. how)
             end
         end
         local paths = {}
         for _, c in ipairs(route.Targets()) do paths[#paths + 1] = c[2] and ("whisper " .. c[2]) or (VIA_LABEL[c[1]] or c[1]) end
         local st = route.stats
-        print(string.format("  Sender via: %s.  Kø: %d.  Sendt: %d, ventet på spillets grænse: %d, droppet: %d.",
-            #paths > 0 and table.concat(paths, ", ") or "ingen", #queue, st.sent, st.throttled, st.dropped))
+        print(string.format(ns.L("  Sender via: %s.  Kø: %d.  Sendt: %d, ventet på spillets grænse: %d, droppet: %d."),
+            #paths > 0 and table.concat(paths, ", ") or ns.L("ingen"), #queue, st.sent, st.throttled, st.dropped))
     end
 end
 
@@ -6827,6 +6886,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         local loaded = ...
         if loaded ~= addonName then return end
         InitDB()
+        ns.SetLanguage(db.settings.lang)
         BuildLootPatterns()
         if RegisterPrefix then RegisterPrefix(PREFIX) end
         BuildUI()
@@ -6834,7 +6894,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         ns.BuildOptions()
         ns.InitFallbackFilters()
         StartPump()
-        Print("indlæst (" .. GAME.label .. "). Skriv /wc4ever for at åbne vinduet.")
+        Print(ns.L("indlæst (") .. GAME.label .. ns.L("). Skriv /wc4ever for at åbne vinduet."))
 
     elseif event == "PLAYER_LOGIN" then
         -- Den skjulte synk-kanal: efter spillets egne kanaler, så de beholder /1 og /2
@@ -6850,8 +6910,8 @@ events:SetScript("OnEvent", function(_, event, ...)
                 ns.InitAchievements()
                 ns.AfterIdentity()
                 if GAME.isForever and not ns.MySurname() then
-                    Print("Dit efternavn kunne ikke findes automatisk. Skriv |cffffd100/wc4ever efternavn Ditefternavn|r, " ..
-                        "så vennerne ser dit fulde navn.")
+                    Print(ns.L("Dit efternavn kunne ikke findes automatisk. Skriv |cffffd100/wc4ever efternavn Ditefternavn|r, ") ..
+                        ns.L("så vennerne ser dit fulde navn."))
                 end
             else
                 ns.ShowGroupWindow()
@@ -6943,49 +7003,57 @@ SlashCmdList["WASTEDCOAST"] = function(input)
 
     if cmd == "" or cmd == "show" or cmd == "toggle" then
         ns.frame:SetShown(not ns.frame:IsShown())
-    elseif cmd == "skin" or cmd == "stil" then
+    elseif cmd == "skin" or cmd == "stil" or cmd == "style" then
         local native = ns.UseNativeSkin()
         db.settings.skin = native and "classic" or "native"
-        Print("Udseende: " .. (native and "addonets egen stil" or "spillets egne rammer (native)") ..
-            ". Skriv |cffffd100/reload|r for at se det.")
+        Print(ns.L("Udseende: ") .. (native and ns.L("addonets egen stil") or ns.L("spillets egne rammer (native)")) ..
+            ns.L(". Skriv |cffffd100/reload|r for at se det."))
     elseif cmd == "minimap" then
         db.settings.minimapHide = not db.settings.minimapHide
         if ns.minimapButton then ns.minimapButton:SetShown(not db.settings.minimapHide) end
-        Print("Knappen ved minimappet er " .. (db.settings.minimapHide and "skjult" or "vist igen") .. ".")
-    elseif cmd == "jeg" or cmd == "gruppe" or cmd == "navn" then
+        Print(ns.L("Knappen ved minimappet er ") .. (db.settings.minimapHide and ns.L("skjult") or ns.L("vist igen")) .. ".")
+    elseif cmd == "jeg" or cmd == "gruppe" or cmd == "navn" or cmd == "group" or cmd == "name" then
         ns.ShowGroupWindow()
-    elseif cmd == "config" or cmd == "indstillinger" or cmd == "options" then
+    elseif cmd == "config" or cmd == "indstillinger" or cmd == "options" or cmd == "settings" then
         ns.OpenOptions()
+    elseif cmd == "language" or cmd == "sprog" or cmd == "lang" then
+        local lang = ns.ParseLanguage(arg)
+        if lang then
+            ns.ChooseLanguage(lang)
+        else
+            Print(string.format(ns.L("Sprog: |cffffd100%s|r. Skift med |cffffd100/wc4ever sprog da|r eller |cffffd100/wc4ever language en|r."),
+                ns.LANG_NAMES[db.settings.lang or "da"] or "Dansk"))
+        end
     elseif cmd == "sound" then
         local isEvent = false
         for _, e in ipairs(SOUND_EVENTS) do if e == arg then isEvent = true end end
         if isEvent then
             local ok, what = PlayEventSound(arg, db.me, true)
-            Print(string.format("Lyd til |cffffd100%s|r: %s", arg, ok and ("afspillet (" .. what .. ")") or what))
+            Print(string.format(ns.L("Lyd til |cffffd100%s|r: %s"), arg, ok and (ns.L("afspillet (") .. what .. ")") or what))
         elseif arg and arg ~= "" then
-            Print("Ukendt event. Prøv: " .. table.concat(SOUND_EVENTS, ", "))
+            Print(ns.L("Ukendt event. Prøv: ") .. table.concat(SOUND_EVENTS, ", "))
         else
             db.settings.sound = not db.settings.sound
-            Print("Lyd: " .. (db.settings.sound and "til" or "fra") ..
-                ".  Test en lyd med |cffffd100/wc4ever sound <event>|r (" .. table.concat(SOUND_EVENTS, ", ") .. ").")
+            Print(ns.L("Lyd: ") .. (db.settings.sound and ns.L("til") or ns.L("fra")) ..
+                ns.L(".  Test en lyd med |cffffd100/wc4ever sound <event>|r (") .. table.concat(SOUND_EVENTS, ", ") .. ").")
         end
     elseif cmd == "toast" then
         db.settings.toasts = not db.settings.toasts
-        Print("Toasts (online, wipe, level, loot, rares): " .. (db.settings.toasts and "til" or "fra"))
+        Print("Toasts (online, wipe, level, loot, rares): " .. (db.settings.toasts and ns.L("til") or ns.L("fra")))
     elseif cmd == "loottoast" then
         db.settings.lootToasts = not db.settings.lootToasts
-        Print("Toasts for rare/epic loot: " .. (db.settings.lootToasts and "til" or "fra"))
+        Print("Toasts for rare/epic loot: " .. (db.settings.lootToasts and ns.L("til") or ns.L("fra")))
     elseif cmd == "raretoast" then
         db.settings.rareToasts = not db.settings.rareToasts
-        Print("Toasts for dræbte rare mobs: " .. (db.settings.rareToasts and "til" or "fra"))
+        Print(ns.L("Toasts for dræbte rare mobs: ") .. (db.settings.rareToasts and ns.L("til") or ns.L("fra")))
     elseif cmd == "testtoast" then
         -- Viser eksempler på alle popups, uden at gemme eller sende noget
         local _, class = UnitClass("player")
-        ns.Toast({ kind = "online", title = "Mikkel er online", text = "Mikkeltank (level 62) - Hellfire Peninsula",
+        ns.Toast({ kind = "online", title = ns.L("Mikkel er online"), text = "Mikkeltank (level 62) - Hellfire Peninsula",
                    class = class, force = true })
         ns.ShowWipeToast("Nick", "Shadow Labyrinth", time() + math.random(1, 9999) * 100)
         local a = ACH[math.random(#ACH)]
-        ns.Toast({ kind = "achievement", head = "TROFÆ LÅST OP", title = a.name, text = a.desc, icon = a.icon,
+        ns.Toast({ kind = "achievement", head = ns.L("TROFÆ LÅST OP"), title = a.name, text = a.desc, icon = a.icon,
                    pts = a.pts, sound = "achievement", friend = db.me, force = true })
         if ns.TestPrankToasts then ns.TestPrankToasts() end
         ns.LootToast({ char = UnitName("player"), class = class, item = "item:28830", name = "Dragonspine Trophy",
@@ -7000,46 +7068,46 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         elseif raw then
             local sur = ns.CleanMemberName and ns.CleanMemberName(raw) or raw
             sur = sur and sur:gsub("%s.*$", "")
-            if not sur or sur == "" then Print("Ugyldigt efternavn."); return end
+            if not sur or sur == "" then Print(ns.L("Ugyldigt efternavn.")); return end
             db.settings.surnames[first] = sur
         end
         local sur = ns.MySurname()
         if sur then
-            Print("Din karakter hedder |cffffd100" .. first .. " " .. sur .. "|r" ..
-                ((db.settings.surnames[first] and "" or " (fundet automatisk)")) .. ".")
+            Print(ns.L("Din karakter hedder |cffffd100") .. first .. " " .. sur .. "|r" ..
+                ((db.settings.surnames[first] and "" or ns.L(" (fundet automatisk)"))) .. ".")
         else
-            Print("Intet efternavn kendt for " .. first .. ". Skriv |cffffd100/wc4ever efternavn Ditefternavn|r.")
+            Print(ns.L("Intet efternavn kendt for ") .. first .. ns.L(". Skriv |cffffd100/wc4ever efternavn Ditefternavn|r."))
         end
         if raw and db.me then SendHeartbeat() end
     elseif cmd == "announce" then
         db.settings.announce = not db.settings.announce
-        Print("Beskeder i chat: " .. (db.settings.announce and "til" or "fra"))
+        Print(ns.L("Beskeder i chat: ") .. (db.settings.announce and ns.L("til") or ns.L("fra")))
     elseif cmd == "loot" then
         local levels = { uncommon = 2, rare = 3, epic = 4, legendary = 5 }
         if arg and levels[arg] then
             db.settings.minQuality = levels[arg]
-            Print("Registrerer nu loot af kvalitet |cffffd100" .. QUALITY_NAME[levels[arg]] .. "|r eller bedre.")
+            Print(ns.L("Registrerer nu loot af kvalitet |cffffd100") .. QUALITY_NAME[levels[arg]] .. ns.L("|r eller bedre."))
         else
-            Print("Registrerer loot af kvalitet " .. (QUALITY_NAME[db.settings.minQuality] or "Rare") ..
-                " eller bedre. Skift med |cffffd100/wc4ever loot uncommon|rare|epic|legendary|r.")
+            Print(ns.L("Registrerer loot af kvalitet ") .. (QUALITY_NAME[db.settings.minQuality] or "Rare") ..
+                ns.L(" eller bedre. Skift med |cffffd100/wc4ever loot uncommon|rare|epic|legendary|r."))
         end
     elseif cmd == "sync" then
         ns.RefreshNow()
-        Print("Anmoder vennerne om at sende deres data...")
+        Print(ns.L("Anmoder vennerne om at sende deres data..."))
     elseif cmd == "status" then
         ns.PrintRoutes()
-    elseif cmd == "kanal" then
+    elseif cmd == "kanal" or cmd == "channel" then
         ns.SetFallbackSync(db.settings.fallbackSync == false)
-        Print("Synk uden guild (skjult kanal og whispers): " .. (db.settings.fallbackSync ~= false and "til" or "fra"))
+        Print(ns.L("Synk uden guild (skjult kanal og whispers): ") .. (db.settings.fallbackSync ~= false and ns.L("til") or ns.L("fra")))
     elseif cmd == "demo" then
         if arg == "slut" or arg == "clear" then
             ns.ClearDemo()
-            Print("Demo-data er fjernet.")
+            Print(ns.L("Demo-data er fjernet."))
         elseif #ROSTER == 0 then
-            Print("Demo-data kræver en gruppe. Opret eller deltag i en med |cffffd100/wc4ever gruppe|r.")
+            Print(ns.L("Demo-data kræver en gruppe. Opret eller deltag i en med |cffffd100/wc4ever gruppe|r."))
         else
             ns.MakeDemo()
-            Print("Demo-data lagt ind (kun lokalt). Fjern det igen med |cffffd100/wc4ever demo slut|r.")
+            Print(ns.L("Demo-data lagt ind (kun lokalt). Fjern det igen med |cffffd100/wc4ever demo slut|r."))
             ns.frame:Show()
         end
     elseif cmd == "test" then
@@ -7060,7 +7128,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
             ctx = ctx, zone = Clean(place), time = time(),
         })
     elseif cmd == "reset" then
-        if arg == "ja" then
+        if arg == "ja" or arg == "yes" then
             wipe(db.runs)
             wipe(db.rolls)
             wipe(db.goldHist)
@@ -7078,41 +7146,42 @@ SlashCmdList["WASTEDCOAST"] = function(input)
             db.group, db.myId, db.myName = nil, nil, nil
             ns.InitGroup()
             ns.RefreshUI()
-            Print("Alle data er slettet.")
+            Print(ns.L("Alle data er slettet."))
         else
-            Print("Skriv |cffffd100/wc4ever reset ja|r for at slette alle data.")
+            Print(ns.L("Skriv |cffffd100/wc4ever reset ja|r for at slette alle data."))
         end
     elseif ns.GossipSlash and ns.GossipSlash(cmd, arg) then
         -- klaret i Gossip.lua (sladder)
     elseif ns.PrankSlash and ns.PrankSlash(cmd, arg) then
         -- klaret i Drilleri.lua (angrib, annonce, emotes, testannonce)
     else
-        Print("Kommandoer:")
-        print("  /wc4ever              - vis/skjul vinduet")
-        print("  /wc4ever gruppe       - opret eller deltag i en gruppe, del koden, skift dit navn")
-        print("  /wc4ever config       - åbn indstillingerne (også under Options > AddOns)")
-        print("  /wc4ever loot         - vis/skift minimumskvalitet for loot (uncommon, rare, epic, legendary)")
-        print("  /wc4ever demo         - fyld med demo-data (|cffffd100demo slut|r fjerner det)")
-        print("  /wc4ever sync         - hent data fra vennerne igen")
-        print("  /wc4ever status       - se, hvordan hver ven nås (guild, gruppe, kanal eller whisper)")
-        print("  /wc4ever kanal        - slå synk uden guild til/fra")
-        print("  /wc4ever sound        - slå lyd til/fra  (|cffffd100sound <event>|r tester en lyd)")
-        print("  /wc4ever toast        - slå popups (online, wipe, level) til/fra")
-        print("  /wc4ever minimap      - vis/skjul WC4ever-knappen ved minimappet")
-        print("  /wc4ever stil         - skift mellem spillets egne rammer og addonets egen stil")
-        print("  /wc4ever testtoast    - vis eksempler på popups")
-        print("  /wc4ever efternavn X  - sæt din karakters efternavn (auto = find selv)")
-        print("  /wc4ever announce     - slå chat-beskeder til/fra")
-        print("  /wc4ever sladder      - vis dagens sladder igen  (|cffffd100sladder fra|r/|cffffd100til|r ved login)")
-        print("  /wc4ever angrib <ven> - send et emote-angreb til en ven")
-        print("  /wc4ever annonce      - slå dødsannoncer til/fra")
-        print("  /wc4ever emotes       - slå popups for emote-angreb mod dig til/fra")
-        print("  /wc4ever testannonce  - vis en test-dødsannonce")
-        print("  /wc4ever test         - lav et falsk dødsfald")
-        print("  /wc4ever testloot     - lav en falsk loot win")
-        print("  /wc4ever loottoast    - slå toasts for rare/epic loot til/fra")
-        print("  /wc4ever raretoast    - slå toasts for dræbte rare mobs til/fra")
-        print("  /wc4ever reset ja     - slet alle data")
+        Print(ns.L("Kommandoer:"))
+        print(ns.L("  /wc4ever              - vis/skjul vinduet"))
+        print(ns.L("  /wc4ever gruppe       - opret eller deltag i en gruppe, del koden, skift dit navn"))
+        print(ns.L("  /wc4ever config       - åbn indstillingerne (også under Options > AddOns)"))
+    print(ns.L("  /wc4ever language X   - sprog: da (dansk) eller en (engelsk)"))
+        print(ns.L("  /wc4ever loot         - vis/skift minimumskvalitet for loot (uncommon, rare, epic, legendary)"))
+        print(ns.L("  /wc4ever demo         - fyld med demo-data (|cffffd100demo slut|r fjerner det)"))
+        print(ns.L("  /wc4ever sync         - hent data fra vennerne igen"))
+        print(ns.L("  /wc4ever status       - se, hvordan hver ven nås (guild, gruppe, kanal eller whisper)"))
+        print(ns.L("  /wc4ever kanal        - slå synk uden guild til/fra"))
+        print(ns.L("  /wc4ever sound        - slå lyd til/fra  (|cffffd100sound <event>|r tester en lyd)"))
+        print(ns.L("  /wc4ever toast        - slå popups (online, wipe, level) til/fra"))
+        print(ns.L("  /wc4ever minimap      - vis/skjul WC4ever-knappen ved minimappet"))
+        print(ns.L("  /wc4ever stil         - skift mellem spillets egne rammer og addonets egen stil"))
+        print(ns.L("  /wc4ever testtoast    - vis eksempler på popups"))
+        print(ns.L("  /wc4ever efternavn X  - sæt din karakters efternavn (auto = find selv)"))
+        print(ns.L("  /wc4ever announce     - slå chat-beskeder til/fra"))
+        print(ns.L("  /wc4ever sladder      - vis dagens sladder igen  (|cffffd100sladder fra|r/|cffffd100til|r ved login)"))
+        print(ns.L("  /wc4ever angrib <ven> - send et emote-angreb til en ven"))
+        print(ns.L("  /wc4ever annonce      - slå dødsannoncer til/fra"))
+        print(ns.L("  /wc4ever emotes       - slå popups for emote-angreb mod dig til/fra"))
+        print(ns.L("  /wc4ever testannonce  - vis en test-dødsannonce"))
+        print(ns.L("  /wc4ever test         - lav et falsk dødsfald"))
+        print(ns.L("  /wc4ever testloot     - lav en falsk loot win"))
+        print(ns.L("  /wc4ever loottoast    - slå toasts for rare/epic loot til/fra"))
+        print(ns.L("  /wc4ever raretoast    - slå toasts for dræbte rare mobs til/fra"))
+        print(ns.L("  /wc4ever reset ja     - slet alle data"))
     end
 end
 

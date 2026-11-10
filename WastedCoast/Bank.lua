@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- =============================================================================
 -- Guild bank og repair (v0.11): hvem har taget mest fra guild banken, hvem har lagt mest
@@ -90,7 +91,7 @@ ns.BankTopItem = TopItem
 
 local function ItemName(id)
     local name, _, q = C.GAME.ItemInfo(id)
-    if not name then return "ting #" .. id end
+    if not name then return L("ting #") .. id end
     local hex = q and C.QUALITY_HEX and C.QUALITY_HEX[q]
     return hex and ("|cff" .. hex .. name .. "|r") or name
 end
@@ -149,12 +150,12 @@ function ns.OnBankMessage(t)
         local gave = e.dg - (old.dg or 0)
         local rep = e.rep - (old.rep or 0)
         if took >= BIG_GOLD then
-            Print(string.format("%s tog lige |cffffd100%s|r fra guild banken.", Name(friend), Money(took)))
+            Print(string.format(L("%s tog lige |cffffd100%s|r fra guild banken."), Name(friend), Money(took)))
         elseif gave >= BIG_GOLD then
-            Print(string.format("%s lagde lige |cffffd100%s|r i guild banken. Flot!", Name(friend), Money(gave)))
+            Print(string.format(L("%s lagde lige |cffffd100%s|r i guild banken. Flot!"), Name(friend), Money(gave)))
         end
         if rep >= BIG_REPAIR then
-            Print(string.format("%s betalte lige |cffffd100%s|r for at reparere. Av.", Name(friend), Money(rep)))
+            Print(string.format(L("%s betalte lige |cffffd100%s|r for at reparere. Av."), Name(friend), Money(rep)))
         end
     end
     db.bank[friend] = e
@@ -442,27 +443,27 @@ local COL_PANEL, COL_BORDER, COL_GOLD, COL_BTN, COL_SELECT = C.COL_PANEL, C.COL_
 local ui = {}
 ns.bankUI = ui
 
-local SORTS = {
+local SORTS = ns.LT({
     { key = "took", label = "Taget",  title = "taget mest" },
     { key = "gave", label = "Lagt",   title = "lagt mest" },
     { key = "net",  label = "Netto",  title = "bedst for banken" },
-}
+})
 
-local BANK_COLS = {
+local BANK_COLS = ns.LT({
     { x = 4,   w = 18, j = "CENTER", label = "#" },
     { x = 24,  w = 86, j = "LEFT",   label = "Ven" },
     { x = 112, w = 74, j = "RIGHT",  label = "Lagt ind" },
     { x = 190, w = 74, j = "RIGHT",  label = "Taget ud" },
     { x = 268, w = 70, j = "RIGHT",  label = "Netto" },
-}
-local REP_COLS = {
+})
+local REP_COLS = ns.LT({
     { x = 4,   w = 18, j = "CENTER", label = "#" },
     { x = 24,  w = 86, j = "LEFT",   label = "Ven" },
     { x = 112, w = 70, j = "RIGHT",  label = "Repair" },
     { x = 186, w = 62, j = "RIGHT",  label = "Guild" },
     { x = 252, w = 30, j = "RIGHT",  label = "Antal" },
     { x = 286, w = 52, j = "RIGHT",  label = "Største" },
-}
+})
 
 -- Ind/ud i alt = guld + tingenes vendor-værdi
 local function Totals(friend)
@@ -548,35 +549,35 @@ local function BankTooltip(d)
     GameTooltip:AddLine(Name(d.name), 1, 1, 1)
     local e = d.t and d.t.e
     if not d.t or not d.t.any then
-        GameTooltip:AddLine("Ingen guild bank-handler endnu", 0.6, 0.6, 0.66)
+        GameTooltip:AddLine(L("Ingen guild bank-handler endnu"), 0.6, 0.6, 0.66)
         return
     end
-    Line("Guld lagt ind", Money(e.dg))
-    Line("Guld taget ud", Money(e.wg))
-    Line("Ting lagt ind", string.format("%d  (%s)", e.di, Money(e.dv)))
-    Line("Ting taget ud", string.format("%d  (%s)", e.wi, Money(e.wv)))
+    Line(L("Guld lagt ind"), Money(e.dg))
+    Line(L("Guld taget ud"), Money(e.wg))
+    Line(L("Ting lagt ind"), string.format("%d  (%s)", e.di, Money(e.dv)))
+    Line(L("Ting taget ud"), string.format("%d  (%s)", e.wi, Money(e.wv)))
     local wid, wn = TopItem(d.name, "w")
     local did, dn = TopItem(d.name, "d")
     if wid or did then GameTooltip:AddLine(" ") end
-    if wid then Line("Tager mest", ItemName(wid) .. " x" .. wn) end
-    if did then Line("Lægger mest", ItemName(did) .. " x" .. dn) end
+    if wid then Line(L("Tager mest"), ItemName(wid) .. " x" .. wn) end
+    if did then Line(L("Lægger mest"), ItemName(did) .. " x" .. dn) end
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Tingenes værdi er vendor-prisen. Målt siden " .. date("%d/%m/%Y", e.since or time()) .. ".", 0.5, 0.5, 0.56, true)
+    GameTooltip:AddLine(L("Tingenes værdi er vendor-prisen. Målt siden ") .. date("%d/%m/%Y", e.since or time()) .. ".", 0.5, 0.5, 0.56, true)
 end
 
 local function RepairTooltip(d)
     GameTooltip:AddLine(Name(d.name), 1, 1, 1)
     local e = d.t and d.t.e
     if not d.t or not d.t.anyRep then
-        GameTooltip:AddLine("Ingen reparationer endnu", 0.6, 0.6, 0.66)
+        GameTooltip:AddLine(L("Ingen reparationer endnu"), 0.6, 0.6, 0.66)
         return
     end
-    Line("Repair i alt", Money(e.rep))
-    Line("Selv betalt", Money(e.rep - e.grep))
-    Line("Betalt af guild banken", Money(e.grep), 0.4, 0.9, 0.5)
-    Line("Reparationer", tostring(e.nrep))
-    Line("Snit pr. gang", Money(e.rep / math.max(1, e.nrep)))
-    Line("Største regning", Money(e.maxrep), 1, 0.45, 0.45)
+    Line(L("Repair i alt"), Money(e.rep))
+    Line(L("Selv betalt"), Money(e.rep - e.grep))
+    Line(L("Betalt af guild banken"), Money(e.grep), 0.4, 0.9, 0.5)
+    Line(L("Reparationer"), tostring(e.nrep))
+    Line(L("Snit pr. gang"), Money(e.rep / math.max(1, e.nrep)))
+    Line(L("Største regning"), Money(e.maxrep), 1, 0.45, 0.45)
 end
 
 local function BuildPage(page)
@@ -600,16 +601,16 @@ local function BuildPage(page)
     end
     ColumnLabels(left, BANK_COLS)
     ui.bankRows = Rows(left, BANK_COLS, BankTooltip)
-    ui.bankFacts = Facts(left, "Lagt ind og taget ud = guld + tingenes vendor-værdi. Hver ven måler sine egne handler i guild banken. Hold musen over en ven for detaljer.")
+    ui.bankFacts = Facts(left, L("Lagt ind og taget ud = guld + tingenes vendor-værdi. Hver ven måler sine egne handler i guild banken. Hold musen over en ven for detaljer."))
 
     local right = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
     right:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
     right:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 0)
     right:SetWidth(362)
-    Header(right, "Repair", "hvem slider mest på gearet")
+    Header(right, "Repair", L("hvem slider mest på gearet"))
     ColumnLabels(right, REP_COLS)
     ui.repRows = Rows(right, REP_COLS, RepairTooltip)
-    ui.repFacts = Facts(right, "Guild = betalt af guild banken (Repair med guildens penge). Tæller alle reparationer hos en vendor.")
+    ui.repFacts = Facts(right, L("Guild = betalt af guild banken (Repair med guildens penge). Tæller alle reparationer hos en vendor."))
 end
 
 local function Shade(row, first, me, any)
@@ -663,7 +664,7 @@ local function RefreshPage()
         row.data = d
         local r, g, b = C.ClassColor(classOf[d.name])
         row.f[1]:SetText(any and tostring(i) or "-")
-        row.f[2]:SetText(Name(d.name) .. (d.name == db.me and " (dig)" or ""))
+        row.f[2]:SetText(Name(d.name) .. (d.name == db.me and L(" (dig)") or ""))
         row.f[2]:SetTextColor(r, g, b)
         row.f[3]:SetText(any and Money(t.gave) or "-")
         row.f[4]:SetText(any and Money(t.took) or "-")
@@ -678,18 +679,18 @@ local function RefreshPage()
 
     local facts = {}
     local robber, took = Best(list, function(t) return t.any and t.took or 0 end)
-    if robber then facts[#facts + 1] = string.format("|cffffd100Bankrøveren:|r %s (%s taget)", Colored(robber.name), Money(took)) end
+    if robber then facts[#facts + 1] = string.format(L("|cffffd100Bankrøveren:|r %s (%s taget)"), Colored(robber.name), Money(took)) end
     local friend, net = Best(list, function(t) return t.any and t.net or 0 end)
-    if friend then facts[#facts + 1] = string.format("|cffffd100Bankens bedste ven:|r %s (+%s)", Colored(friend.name), Money(net)) end
+    if friend then facts[#facts + 1] = string.format(L("|cffffd100Bankens bedste ven:|r %s (+%s)"), Colored(friend.name), Money(net)) end
     local leech, neg = Best(list, function(t) return t.any and -t.net or 0 end)
-    if leech and leech ~= robber then facts[#facts + 1] = string.format("|cffffd100Snylteren:|r %s (%s i minus)", Colored(leech.name), Money(neg)) end
+    if leech and leech ~= robber then facts[#facts + 1] = string.format(L("|cffffd100Snylteren:|r %s (%s i minus)"), Colored(leech.name), Money(neg)) end
     local fav, favN, favWho = nil, 0, nil
     for _, d in ipairs(list) do
         local id, n = TopItem(d.name, "w")
         if id and n > favN then fav, favN, favWho = id, n, d.name end
     end
-    if fav then facts[#facts + 1] = string.format("|cffffd100Mest hævet:|r %s x%d (%s)", ItemName(fav), favN, Colored(favWho)) end
-    if #facts == 0 then facts[1] = "|cff888888Ingen har været i guild banken med addonet endnu.|r" end
+    if fav then facts[#facts + 1] = string.format(L("|cffffd100Mest hævet:|r %s x%d (%s)"), ItemName(fav), favN, Colored(favWho)) end
+    if #facts == 0 then facts[1] = L("|cff888888Ingen har været i guild banken med addonet endnu.|r") end
     ui.bankFacts:SetText(table.concat(facts, "\n"))
 
     -- Repair
@@ -708,7 +709,7 @@ local function RefreshPage()
         row.data = d
         local r, g, b = C.ClassColor(classOf[d.name])
         row.f[1]:SetText(any and tostring(i) or "-")
-        row.f[2]:SetText(Name(d.name) .. (d.name == db.me and " (dig)" or ""))
+        row.f[2]:SetText(Name(d.name) .. (d.name == db.me and L(" (dig)") or ""))
         row.f[2]:SetTextColor(r, g, b)
         row.f[3]:SetText(any and Money(e.rep) or "-")
         row.f[4]:SetText((any and e.grep > 0) and ("|cff66e080" .. Money(e.grep) .. "|r") or "-")
@@ -719,15 +720,15 @@ local function RefreshPage()
 
     facts = {}
     local rusty, rv = Best(list, function(t) return t.e.rep or 0 end)
-    if rusty then facts[#facts + 1] = string.format("|cffffd100Rustbunken:|r %s (%s i repair)", Colored(rusty.name), Money(rv)) end
+    if rusty then facts[#facts + 1] = string.format(L("|cffffd100Rustbunken:|r %s (%s i repair)"), Colored(rusty.name), Money(rv)) end
     local sponsored, sv = Best(list, function(t) return t.e.grep or 0 end)
-    if sponsored then facts[#facts + 1] = string.format("|cffffd100Guildens regning:|r %s har fået %s betalt", Colored(sponsored.name), Money(sv)) end
+    if sponsored then facts[#facts + 1] = string.format(L("|cffffd100Guildens regning:|r %s har fået %s betalt"), Colored(sponsored.name), Money(sv)) end
     local ouch, ov = Best(list, function(t) return t.e.maxrep or 0 end)
-    if ouch then facts[#facts + 1] = string.format("|cffffd100Største regning:|r %s (%s på én gang)", Colored(ouch.name), Money(ov)) end
+    if ouch then facts[#facts + 1] = string.format(L("|cffffd100Største regning:|r %s (%s på én gang)"), Colored(ouch.name), Money(ov)) end
     local total = 0
     for _, d in ipairs(list) do total = total + ((d.t and d.t.e.rep) or 0) end
-    if total > 0 then facts[#facts + 1] = string.format("|cffffd100Samlet:|r I har brugt %s på repair", Money(total)) end
-    if #facts == 0 then facts[1] = "|cff888888Ingen har repareret med addonet endnu.|r" end
+    if total > 0 then facts[#facts + 1] = string.format(L("|cffffd100Samlet:|r I har brugt %s på repair"), Money(total)) end
+    if #facts == 0 then facts[1] = L("|cff888888Ingen har repareret med addonet endnu.|r") end
     ui.repFacts:SetText(table.concat(facts, "\n"))
 end
 

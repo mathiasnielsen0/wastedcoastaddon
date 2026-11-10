@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- =============================================================================
 -- Sjældne mobs (v0.16): når en ven dræber et rare eller rare elite mob, får alle en toast.
@@ -42,7 +43,7 @@ local function ShowRareToast(friend, char, class, mob, level, cls, zone)
     local db = DB()
     if not db or not db.settings or db.settings.rareToasts == false then return end
     local full = (C.CharFull and C.CharFull(friend, char)) or char or "?"
-    local head = "RARE MOB DRÆBT"
+    local head = L("RARE MOB DRÆBT")
     if friend and char and Name(friend) ~= char then head = head .. "  -  " .. Name(friend) end
     ns.Toast({
         kind = "raremob", head = head, title = full, class = class, icon = ICON,

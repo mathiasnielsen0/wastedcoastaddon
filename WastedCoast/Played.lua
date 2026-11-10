@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- =============================================================================
 -- Spilletid (v0.13): /played for hver karakter, samlet pr. ven og for hele gruppen,
@@ -32,8 +33,8 @@ function ns.FormatPlayed(s)
     if not s then return "-" end
     s = math.floor(s)
     local d, h, m = math.floor(s / 86400), math.floor((s % 86400) / 3600), math.floor((s % 3600) / 60)
-    if d > 0 then return string.format("%dd %dt", d, h) end
-    if h > 0 then return string.format("%dt %dm", h, m) end
+    if d > 0 then return string.format(L("%dd %dt"), d, h) end
+    if h > 0 then return string.format(L("%dt %dm"), h, m) end
     return string.format("%dm", m)
 end
 
@@ -299,21 +300,21 @@ local function Heads(box, cols)
     end
 end
 
-local LEFT_COLS = {
+local LEFT_COLS = ns.LT({
     { x = 4,   w = 18, j = "CENTER", label = "#" },
     { x = 24,  w = 96, j = "LEFT",   label = "Ven" },
     { x = 122, w = 76, j = "CENTER", label = "Spilletid" },
     { x = 200, w = 40, j = "CENTER", label = "Døde" },
     { x = 242, w = 52, j = "CENTER", label = "Deaths/hr" },
     { x = 296, w = 42, j = "CENTER", label = "Kar." },
-}
-local RIGHT_COLS = {
+})
+local RIGHT_COLS = ns.LT({
     { x = 4,   w = 150, j = "LEFT",   label = "Karakter" },
     { x = 156, w = 30,  j = "CENTER", label = "Lvl" },
     { x = 188, w = 70,  j = "CENTER", label = "Spilletid" },
     { x = 260, w = 34,  j = "CENTER", label = "Døde" },
     { x = 294, w = 46,  j = "CENTER", label = "Deaths/hr" },
-}
+})
 
 local function DphColor(v)
     if not v then return 0.6, 0.6, 0.66 end
@@ -327,7 +328,7 @@ local function BuildPage(page)
     left:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
     left:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
     left:SetWidth(362)
-    Header(left, "Spilletid", "/played for hele gruppen")
+    Header(left, L("Spilletid"), L("/played for hele gruppen"))
     Heads(left, LEFT_COLS)
     ui.rows = {}
     for i = 1, ns.MAX_MEMBERS do
@@ -349,21 +350,21 @@ local function BuildPage(page)
             GameTooltip:AddLine(Name(d.name), 1, 1, 1)
             local t = d.t
             if not t.secs then
-                GameTooltip:AddLine("Ingen spilletid endnu", 0.6, 0.6, 0.66)
-                GameTooltip:AddLine("Kommer, når " .. Name(d.name) .. " logger ind med v0.13 eller nyere.", 0.6, 0.6, 0.66, true)
+                GameTooltip:AddLine(L("Ingen spilletid endnu"), 0.6, 0.6, 0.66)
+                GameTooltip:AddLine(L("Kommer, når ") .. Name(d.name) .. L(" logger ind med v0.13 eller nyere."), 0.6, 0.6, 0.66, true)
             else
-                GameTooltip:AddDoubleLine("Spilletid i alt", ns.FormatPlayed(t.secs), 0.8, 0.8, 0.8, 1, 1, 1)
-                GameTooltip:AddDoubleLine("Timer", string.format("%.1f", t.secs / 3600), 0.8, 0.8, 0.8, 1, 1, 1)
-                GameTooltip:AddDoubleLine("Dødsfald", string.format("%d  (%d PvE, %d PvP)", t.rated, t.rated - t.ratedPvp, t.ratedPvp),
+                GameTooltip:AddDoubleLine(L("Spilletid i alt"), ns.FormatPlayed(t.secs), 0.8, 0.8, 0.8, 1, 1, 1)
+                GameTooltip:AddDoubleLine(L("Timer"), string.format("%.1f", t.secs / 3600), 0.8, 0.8, 0.8, 1, 1, 1)
+                GameTooltip:AddDoubleLine(L("Dødsfald"), string.format("%d  (%d PvE, %d PvP)", t.rated, t.rated - t.ratedPvp, t.ratedPvp),
                     0.8, 0.8, 0.8, 1, 0.5, 0.5)
                 GameTooltip:AddDoubleLine("Deaths/hr", ns.FormatDPH(t.dph), 0.8, 0.8, 0.8, DphColor(t.dph))
-                GameTooltip:AddDoubleLine("  PvE pr. time", ns.FormatDPH(t.pveDph), 0.6, 0.6, 0.66, DphColor(t.pveDph))
-                GameTooltip:AddDoubleLine("  PvP pr. time", ns.FormatDPH(t.pvpDph), 0.6, 0.6, 0.66, 0.5, 0.7, 1)
+                GameTooltip:AddDoubleLine(L("  PvE pr. time"), ns.FormatDPH(t.pveDph), 0.6, 0.6, 0.66, DphColor(t.pveDph))
+                GameTooltip:AddDoubleLine(L("  PvP pr. time"), ns.FormatDPH(t.pvpDph), 0.6, 0.6, 0.66, 0.5, 0.7, 1)
                 if t.top then
-                    GameTooltip:AddDoubleLine("Mest spillet", t.top.full or t.top.name, 0.8, 0.8, 0.8, C.ClassColor(t.top.class))
+                    GameTooltip:AddDoubleLine(L("Mest spillet"), t.top.full or t.top.name, 0.8, 0.8, 0.8, C.ClassColor(t.top.class))
                 end
             end
-            GameTooltip:AddLine("Klik for at se karaktererne", 0.5, 0.5, 0.56)
+            GameTooltip:AddLine(L("Klik for at se karaktererne"), 0.5, 0.5, 0.56)
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", function(self)
@@ -380,13 +381,13 @@ local function BuildPage(page)
     ui.note:SetPoint("BOTTOMLEFT", left, "BOTTOMLEFT", 12, 10)
     ui.note:SetWidth(338)
     ui.note:SetTextColor(0.5, 0.5, 0.56)
-    ui.note:SetText("Deaths/hr = dødsfald pr. times spilletid (kun karakterer med kendt spilletid og mindst en halv time).")
+    ui.note:SetText(L("Deaths/hr = dødsfald pr. times spilletid (kun karakterer med kendt spilletid og mindst en halv time)."))
 
     local right = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
     right:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
     right:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 0)
     right:SetWidth(362)
-    ui.rightHead, ui.rightSub = Header(right, "Karakterer", "")
+    ui.rightHead, ui.rightSub = Header(right, L("Karakterer"), "")
     Heads(right, RIGHT_COLS)
     right:EnableMouseWheel(true)
     right:SetScript("OnMouseWheel", function(_, delta)
@@ -410,22 +411,22 @@ local function BuildPage(page)
             GameTooltip:AddLine(d.full or d.name, C.ClassColor(d.class))
             if d.level > 0 then GameTooltip:AddLine("Level " .. d.level, 0.8, 0.8, 0.8) end
             if d.secs then
-                GameTooltip:AddDoubleLine("Spilletid i alt", ns.FormatPlayed(d.secs), 0.8, 0.8, 0.8, 1, 1, 1)
+                GameTooltip:AddDoubleLine(L("Spilletid i alt"), ns.FormatPlayed(d.secs), 0.8, 0.8, 0.8, 1, 1, 1)
                 if d.levelSecs and d.levelSecs > 0 then
-                    GameTooltip:AddDoubleLine("På dette level", ns.FormatPlayed(d.levelSecs), 0.8, 0.8, 0.8, 1, 1, 1)
+                    GameTooltip:AddDoubleLine(L("På dette level"), ns.FormatPlayed(d.levelSecs), 0.8, 0.8, 0.8, 1, 1, 1)
                 end
-                GameTooltip:AddDoubleLine("Dødsfald", string.format("%d  (%d PvE, %d PvP)", d.deaths, d.deaths - d.pvp, d.pvp),
+                GameTooltip:AddDoubleLine(L("Dødsfald"), string.format("%d  (%d PvE, %d PvP)", d.deaths, d.deaths - d.pvp, d.pvp),
                     0.8, 0.8, 0.8, 1, 0.5, 0.5)
                 GameTooltip:AddDoubleLine("Deaths/hr", ns.FormatDPH(d.dph), 0.8, 0.8, 0.8, DphColor(d.dph))
-                GameTooltip:AddDoubleLine("  PvE pr. time", ns.FormatDPH(d.pveDph), 0.6, 0.6, 0.66, DphColor(d.pveDph))
-                GameTooltip:AddDoubleLine("  PvP pr. time", ns.FormatDPH(d.pvpDph), 0.6, 0.6, 0.66, 0.5, 0.7, 1)
+                GameTooltip:AddDoubleLine(L("  PvE pr. time"), ns.FormatDPH(d.pveDph), 0.6, 0.6, 0.66, DphColor(d.pveDph))
+                GameTooltip:AddDoubleLine(L("  PvP pr. time"), ns.FormatDPH(d.pvpDph), 0.6, 0.6, 0.66, 0.5, 0.7, 1)
                 if d.online then
-                    GameTooltip:AddLine("Online nu: tæller med", 0.25, 0.88, 0.38)
+                    GameTooltip:AddLine(L("Online nu: tæller med"), 0.25, 0.88, 0.38)
                 elseif d.at then
-                    GameTooltip:AddLine("Målt " .. C.FormatAgo(d.at), 0.6, 0.6, 0.66)
+                    GameTooltip:AddLine(L("Målt ") .. C.FormatAgo(d.at), 0.6, 0.6, 0.66)
                 end
             else
-                GameTooltip:AddLine("Spilletid ikke kendt endnu", 0.6, 0.6, 0.66)
+                GameTooltip:AddLine(L("Spilletid ikke kendt endnu"), 0.6, 0.6, 0.66)
             end
             GameTooltip:Show()
         end)
@@ -459,7 +460,7 @@ local function RefreshPage()
         local row, t = ui.rows[i], d.t
         row.data = d
         row.f[1]:SetText(t.secs and tostring(i) or "-")
-        row.f[2]:SetText(Name(d.name) .. (d.name == db.me and " (dig)" or ""))
+        row.f[2]:SetText(Name(d.name) .. (d.name == db.me and L(" (dig)") or ""))
         row.f[2]:SetTextColor(C.ClassColor(classOf[d.name]))
         row.f[3]:SetText(ns.FormatPlayed(t.secs))
         row.f[4]:SetText(t.secs and (t.ratedPvp > 0 and ((t.rated - t.ratedPvp) .. "|cff80b0ff+" .. t.ratedPvp .. "|r") or tostring(t.rated)) or "-")
@@ -478,23 +479,23 @@ local function RefreshPage()
     local g = ns.GroupPlayed()
     local lines = {}
     if g.secs then
-        lines[1] = string.format("|cffffd100Hele gruppen:|r %s  |cff888888(%s timer)|r",
+        lines[1] = string.format(L("|cffffd100Hele gruppen:|r %s  |cff888888(%s timer)|r"),
             ns.FormatPlayed(g.secs), math.floor(g.secs / 3600 + 0.5))
         lines[2] = string.format("|cffffd100Deaths/hr:|r %s  |cff888888(PvE %s, |r|cff80b0ffPvP %s|r|cff888888)|r", ns.FormatDPH(g.dph),
             ns.FormatDPH(g.pveDph), ns.FormatDPH(g.pvpDph))
         if g.topChar then
             local r, gg, b = C.ClassColor(g.topChar.class)
-            lines[3] = string.format("|cffffd100Mest spillede karakter:|r |cff%02x%02x%02x%s|r  |cff888888(%s, %s)|r",
+            lines[3] = string.format(L("|cffffd100Mest spillede karakter:|r |cff%02x%02x%02x%s|r  |cff888888(%s, %s)|r"),
                 math.floor(r * 255), math.floor(gg * 255), math.floor(b * 255), g.topChar.full or g.topChar.name,
                 Name(g.topFriend), ns.FormatPlayed(g.topChar.secs))
         end
         local rank = ns.DeathRateRanking()
         if #rank > 0 then
-            lines[#lines + 1] = string.format("|cffffd100Flest deaths/hr:|r %s  |cffff8080%s|r",
+            lines[#lines + 1] = string.format(L("|cffffd100Flest deaths/hr:|r %s  |cffff8080%s|r"),
                 Name(rank[1].name), ns.FormatDPH(rank[1].dph))
         end
     else
-        lines[1] = "|cff888888Ingen spilletid endnu. Den kommer, når I logger ind med den nye version.|r"
+        lines[1] = L("|cff888888Ingen spilletid endnu. Den kommer, når I logger ind med den nye version.|r")
     end
     ui.total:SetText(table.concat(lines, "\n"))
 
@@ -502,9 +503,9 @@ local function RefreshPage()
     local sel = ui.sel
     local chars = sel and ns.PlayedChars(sel) or {}
     local st = sel and ns.PlayedTotals(sel)
-    ui.rightHead:SetText(sel and Name(sel) or "Karakterer")
+    ui.rightHead:SetText(sel and Name(sel) or L("Karakterer"))
     ui.rightHead:SetTextColor(C.ClassColor(classOf[sel]))
-    ui.rightSub:SetText(st and st.secs and (ns.FormatPlayed(st.secs) .. " i alt  -  " .. ns.FormatDPH(st.dph) .. " deaths/hr") or "")
+    ui.rightSub:SetText(st and st.secs and (ns.FormatPlayed(st.secs) .. L(" i alt  -  ") .. ns.FormatDPH(st.dph) .. " deaths/hr") or "")
     local maxOffset = math.max(0, #chars - CHAR_ROWS)
     local offset = math.max(0, math.min(ui.offset or 0, maxOffset))
     ui.offset = offset
@@ -525,12 +526,12 @@ local function RefreshPage()
         end
     end
     if #chars == 0 then
-        ui.more:SetText(sel and (Name(sel) .. " har ingen karakterer endnu.") or "")
+        ui.more:SetText(sel and (Name(sel) .. L(" har ingen karakterer endnu.")) or "")
     elseif #chars > CHAR_ROWS then
-        ui.more:SetText(string.format("Viser %d-%d af %d  -  rul med musehjulet", offset + 1,
+        ui.more:SetText(string.format(L("Viser %d-%d af %d  -  rul med musehjulet"), offset + 1,
             math.min(offset + CHAR_ROWS, #chars), #chars))
     else
-        ui.more:SetText("Grøn spilletid = online nu. Hold musen over en karakter for detaljer.")
+        ui.more:SetText(L("Grøn spilletid = online nu. Hold musen over en karakter for detaljer."))
     end
 end
 

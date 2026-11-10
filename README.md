@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.17.4. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.18.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua` og (fra 0.16) `Rares.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua` og (fra 0.18) `Locale.lua` og `Locale_en.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -326,6 +326,17 @@ Under **Options > AddOns > Wasted Coast Forever** kan du slå lyd, chatbeskeder 
 til og fra, slå synk uden guild til og fra, vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
 knapper til at åbne vinduet, vise test-popups og synkronisere.
 
+### Sprog / Language
+Nederst i indstillingerne vælger du **Dansk** (standard) eller **English**. Sproget gælder
+alt, hvad addonet viser: faner, kolonner, tooltips, popups, dødsannoncer, sladder,
+trofæer og chatbeskeder. Det er en lokal indstilling, så hver ven vælger selv, og I kan
+sagtens spille sammen med hver sit sprog (dødsannoncer og sladder er de samme, bare
+oversat). Skiftet kræver en genindlæsning: addonet spørger, om det skal gøre det nu,
+eller du kan skrive `/reload`. Du kan også skifte med `/wc4ever language en` eller
+`/wc4ever sprog da`. På engelsk virker kommandoerne også med engelske navne, fx
+`/wc4ever group`, `channel`, `style`, `surname`, `gossip`, `attack`, `obits`,
+`testobit`, `demo clear` og `reset yes`.
+
 ### Popups (toasts)
 Små beskeder øverst på skærmen:
 - **Ven logger ind** (højst en gang pr. ven pr. 10 minutter)
@@ -373,6 +384,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever` | Vis/skjul vinduet (`/wc4l` virker også) |
 | `/wc4ever gruppe` | Dit navn, opret eller deltag i en gruppe, del koden, fjern medlemmer (admin) |
 | `/wc4ever config` | Åbn indstillingerne |
+| `/wc4ever language en` | Skift sprog til engelsk (`/wc4ever sprog da` = dansk). Kræver /reload |
 | `/wc4ever loot` | Vis, hvilken kvalitet loot registreres fra |
 | `/wc4ever loot epic` | Registrér kun epic og bedre (også `uncommon`, `rare`, `legendary`) |
 | `/wc4ever demo` | Fyld med demo-data, så du kan se, hvordan det ser ud (kun lokalt) |
@@ -550,4 +562,6 @@ python3 tests/test_drilleri.py WastedCoast          # hele addonet, klassisk sti
 python3 tests/test_drilleri.py WastedCoast native   # med spillets egne rammer (som på Forever)
 python3 tests/test_robust.py WastedCoast            # fejlrettelser, synk og ødelagte beskeder (TBC)
 python3 tests/test_robust.py WastedCoast forever    # det samme som WoW Forever (ingen combat log, kun C_Item)
+python3 tests/test_language.py WastedCoast          # engelsk: ingen dansk tekst nogen steder; dansk er standard
+python3 tests/test_language.py WastedCoast forever  # det samme på WoW Forever
 ```

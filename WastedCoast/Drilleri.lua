@@ -1,4 +1,5 @@
 local _, ns = ...
+local L = ns.L
 
 -- =============================================================================
 -- Drilleri (v0.6)
@@ -183,7 +184,7 @@ local function HatTimes()
 end
 
 local function Duration(secs)
-    if secs < 3600 then return math.max(1, math.floor(secs / 60)) .. " min" end
+    if secs < 3600 then return math.max(1, math.floor(secs / 60)) .. L(" min") end
     if secs < 86400 then return math.floor(secs / 3600) .. " t" end
     return string.format("%d d %d t", math.floor(secs / 86400), math.floor((secs % 86400) / 3600))
 end
@@ -230,19 +231,19 @@ end
 
 local function LevelToastText(char, level, secs)
     local parts = { char }
-    if secs and secs > 0 then parts[#parts + 1] = Duration(secs) .. " siden sidste level" end
+    if secs and secs > 0 then parts[#parts + 1] = Duration(secs) .. L(" siden sidste level") end
     local text = table.concat(parts, "  -  ")
     if level == C.MAX_LEVEL then
-        text = text .. "\nMAX LEVEL! Endelig. Nu kan det rigtige spil begynde."
+        text = text .. L("\nMAX LEVEL! Endelig. Nu kan det rigtige spil begynde.")
     elseif level % 10 == 0 then
-        text = text .. "\nLevel " .. level .. ". Et rundt tal, tillykke!"
+        text = text .. "\nLevel " .. level .. L(". Et rundt tal, tillykke!")
     end
     return text
 end
 
 local function ShowLevelToast(friend, char, class, level, secs, isMe)
     levelToasted[friend .. "-" .. char] = level
-    ns.Toast({ kind = "levelup", title = (isMe and "Du" or Name(friend)) .. " nåede level " .. level,
+    ns.Toast({ kind = "levelup", title = (isMe and L("Du") or Name(friend)) .. L(" nåede level ") .. level,
                text = LevelToastText(char, level, secs), class = class,
                sound = (not isMe) and "levelup" or nil, friend = friend })
 end
@@ -294,13 +295,13 @@ function ns.SnailText(friend)
     if ns.snailHolder ~= friend then return nil end
     local e = DB().levelAt[friend]
     if not e then return nil end
-    return string.format("Level-snegl: level %d, %s%s siden sidste level", e.l, e.g and "mindst " or "", Duration(time() - e.t))
+    return string.format(L("Level-snegl: level %d, %s%s siden sidste level"), e.l, e.g and L("mindst ") or "", Duration(time() - e.t))
 end
 
 -- =============================================================================
 -- Dødsannonce
 -- =============================================================================
-local OBITS = {
+local OBITS = ns.LT({
     fall = {
         "{N} testede tyngdekraften i {Z}. Tyngdekraften vandt.",
         "{N} troede, man kunne flyve i {Z}. Det kunne man ikke.",
@@ -351,7 +352,7 @@ local OBITS = {
         "{N} nåede level {L}, og så kom {K}.",
         "{N} havde en plan. {K} havde en bedre.",
     },
-}
+})
 
 local function ObitKind(ev)
     local env = C.ENV_NAMES
@@ -384,9 +385,9 @@ function ns.Obituary(ev, friend)
     local kl = tonumber(ev.klvl)
     local vars = {
         N = (friend and Name(friend)) or ev.name or "?",
-        K = ev.killer or "?",
-        AB = (ev.ability and ev.ability ~= "" and ev.ability ~= "Nærkamp") and (" (" .. ev.ability .. ")") or "",
-        Z = (ev.zone and ev.zone ~= "") and ev.zone or "et ukendt sted",
+        K = L(ev.killer) or "?",
+        AB = (ev.ability and ev.ability ~= "" and ev.ability ~= "Nærkamp") and (" (" .. L(ev.ability) .. ")") or "",
+        Z = (ev.zone and ev.zone ~= "") and ev.zone or L("et ukendt sted"),
         L = tostring(ev.level or "?"),
         KL = (kl == -1) and "??" or tostring(kl or "?"),
         D = tostring(friend and DeathCount(friend) or 1),
@@ -406,17 +407,17 @@ function ns.OnFreshDeath(ev, friend)
         else
             title = title .. " (level " .. tostring(ev.level or "?") .. ")"
         end
-        ns.Toast({ kind = "obit", head = "DØDSANNONCE", title = title, text = ns.Obituary(ev, friend),
+        ns.Toast({ kind = "obit", head = L("DØDSANNONCE"), title = title, text = ns.Obituary(ev, friend),
                    icon = OBIT_ICON, class = ev.class, dur = 7, friend = friend })
     end
     if db.settings.announce then
         local prev = LatestDeath(ev)
         if prev == friend then
-            Print(Name(friend) .. " beholder |cffffd100Skammens hat|r. Den sidder godt fast nu.")
+            Print(Name(friend) .. L(" beholder |cffffd100Skammens hat|r. Den sidder godt fast nu."))
         elseif prev then
-            Print("|cffffd100Skammens hat|r går videre fra " .. Name(prev) .. " til " .. Name(friend) .. ".")
+            Print(L("|cffffd100Skammens hat|r går videre fra ") .. Name(prev) .. L(" til ") .. Name(friend) .. ".")
         else
-            Print(Name(friend) .. " får |cffffd100Skammens hat|r som den første.")
+            Print(Name(friend) .. L(" får |cffffd100Skammens hat|r som den første."))
         end
     end
 end
@@ -439,11 +440,11 @@ end
 -- =============================================================================
 -- Need-politiet
 -- =============================================================================
-local SHAME_TEXT = {
+local SHAME_TEXT = ns.LT({
     gone = "...og kom af med det uden nogensinde at tage det på. Solgt? Disenchanted? Skam dig.",
     unused = "...og det har ligget ubrugt i tasken i " .. NEED_DAYS .. " dage.",
-}
-local SHAME_SHORT = { gone = "solgt/væk uden at blive brugt", unused = "aldrig taget på" }
+})
+local SHAME_SHORT = ns.LT({ gone = "solgt/væk uden at blive brugt", unused = "aldrig taget på" })
 
 local function AddShame(e, fromNet)
     local db = DB()
@@ -453,11 +454,11 @@ local function AddShame(e, fromNet)
     table.insert(db.needShame, e)
     while #db.needShame > 200 do table.remove(db.needShame, 1) end
     if not e.demo and (time() - (e.time or 0)) < 300 then
-        ns.Toast({ kind = "police", head = "NEED-POLITIET", title = Name(e.friend) .. " needede " .. ItemLink(e),
+        ns.Toast({ kind = "police", head = L("NEED-POLITIET"), title = Name(e.friend) .. L(" needede ") .. ItemLink(e),
                    text = SHAME_TEXT[e.why] or "", icon = ItemIcon(tonumber(e.item:match("^item:(%d+)"))),
                    dur = 7, friend = e.friend })
         if db.settings.announce then
-            Print(string.format("|cff4080ffNeed-politiet:|r %s needede %s %s", Name(e.friend), ItemLink(e), SHAME_TEXT[e.why] or ""))
+            Print(string.format(L("|cff4080ffNeed-politiet:|r %s needede %s %s"), Name(e.friend), ItemLink(e), SHAME_TEXT[e.why] or ""))
         end
     end
     if ns.RefreshUI then ns.RefreshUI() end
@@ -529,7 +530,7 @@ end
 -- Emote-angreb
 -- =============================================================================
 -- { tekst ({F} = angriberen, {T} = offeret), emote, der laves i spillet, hvis offeret er i nærheden }
-local ATTACKS = {
+local ATTACKS = ns.LT({
     { "{F} kaster en død fisk i hovedet på {T}.", "SLAP" },
     { "{F} peger på {T} og griner højlydt.", "POINT" },
     { "{F} kalder {T} en kylling.", "CHICKEN" },
@@ -545,7 +546,7 @@ local ATTACKS = {
     { "{F} spørger {T}, om det er første gang med tastatur og mus.", "LAUGH" },
     { "{F} tilbyder {T} et kursus i ikke at stå i ilden.", "TAUNT" },
     { "{F} siger, at {T} spiller som en level 1 gnome.", "ROFL" },
-}
+})
 
 local function AttackText(idx, from, to)
     local a = ATTACKS[idx]
@@ -576,10 +577,10 @@ local function OnAttack(from, to, idx, nonce)
     db.emoteStats.recv[to] = (db.emoteStats.recv[to] or 0) + 1
     if to == db.me and from ~= db.me then
         if db.settings.emotes ~= false then
-            ns.Toast({ kind = "emote", head = "EMOTE-ANGREB", title = Name(from) .. " angriber dig!",
-                       text = AttackText(idx, from, "dig"), icon = EMOTE_ICON, class = (ClassOf(from)), friend = from })
+            ns.Toast({ kind = "emote", head = L("EMOTE-ANGREB"), title = Name(from) .. L(" angriber dig!"),
+                       text = AttackText(idx, from, L("dig")), icon = EMOTE_ICON, class = (ClassOf(from)), friend = from })
         end
-        Print("|cffff70c0" .. AttackText(idx, from, "dig") .. "|r")
+        Print("|cffff70c0" .. AttackText(idx, from, L("dig")) .. "|r")
     elseif db.settings.announce then
         Print("|cffff70c0" .. AttackText(idx, from, to) .. "|r")
     end
@@ -590,12 +591,12 @@ local lastAttack = -100
 function ns.EmoteAttack(target)
     local db = DB()
     if not db.me then
-        Print("Opret eller deltag først i en gruppe (|cffffd100/wc4ever gruppe|r).")
+        Print(L("Opret eller deltag først i en gruppe (|cffffd100/wc4ever gruppe|r)."))
         return
     end
     if not ROSTER_SET[target] or target == db.me then return end
     if GetTime() - lastAttack < EMOTE_COOLDOWN then
-        Print(string.format("Rolig nu. Du kan angribe igen om %d sek.", math.ceil(EMOTE_COOLDOWN - (GetTime() - lastAttack))))
+        Print(string.format(L("Rolig nu. Du kan angribe igen om %d sek."), math.ceil(EMOTE_COOLDOWN - (GetTime() - lastAttack))))
         return
     end
     lastAttack = GetTime()
@@ -714,7 +715,7 @@ local function BuildPage(page)
     local luck = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
     luck:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
     luck:SetSize(362, 44 + ns.MAX_MEMBERS * 26)
-    SubText(luck, Header(luck, "Held-rangering"), "seneste " .. LUCK_KEEP .. " rolls")
+    SubText(luck, Header(luck, L("Held-rangering")), L("seneste ") .. LUCK_KEEP .. " rolls")
     ui.luckRows = {}
     for i = 1, ns.MAX_MEMBERS do
         local row = MakeBox("Button", luck, COL_BTN, COL_BORDER)
@@ -740,20 +741,20 @@ local function BuildPage(page)
             GameTooltip:AddLine(Name(d.name), 1, 1, 1)
             local st = d.st
             if not st then
-                GameTooltip:AddLine(string.format("Mindst %d rolls før der er en rating (har %d)", LUCK_MIN, d.n), 0.6, 0.6, 0.66)
+                GameTooltip:AddLine(string.format(L("Mindst %d rolls før der er en rating (har %d)"), LUCK_MIN, d.n), 0.6, 0.6, 0.66)
             else
-                GameTooltip:AddDoubleLine("Held", string.format("%d%%", math.floor(st.pct + 0.5)), 0.8, 0.8, 0.8, 1, 1, 1)
-                GameTooltip:AddDoubleLine("Snit", string.format("%.1f (forventet 50,5)", st.mean), 0.8, 0.8, 0.8, 1, 1, 1)
-                GameTooltip:AddDoubleLine("Bedste / værste", string.format("%d / %d", st.best, st.worst), 0.8, 0.8, 0.8, 1, 1, 1)
+                GameTooltip:AddDoubleLine(L("Held"), string.format("%d%%", math.floor(st.pct + 0.5)), 0.8, 0.8, 0.8, 1, 1, 1)
+                GameTooltip:AddDoubleLine(L("Snit"), string.format(L("%.1f (forventet 50,5)"), st.mean), 0.8, 0.8, 0.8, 1, 1, 1)
+                GameTooltip:AddDoubleLine(L("Bedste / værste"), string.format("%d / %d", st.best, st.worst), 0.8, 0.8, 0.8, 1, 1, 1)
                 local last = WastedCoastDB.rolls[d.name].last
                 local parts = {}
                 for k = #last, math.max(1, #last - 11), -1 do parts[#parts + 1] = tostring(last[k]) end
                 GameTooltip:AddLine(" ")
-                GameTooltip:AddLine("Seneste: " .. table.concat(parts, ", "), 0.7, 0.7, 0.76, true)
+                GameTooltip:AddLine(L("Seneste: ") .. table.concat(parts, ", "), 0.7, 0.7, 0.76, true)
             end
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("Held 80% = de seneste rolls er bedre end 80% af, hvad rent held ville give. 50% er helt normalt.", 0.5, 0.8, 1, true)
-            GameTooltip:AddLine("Need/greed-rolls og /roll 1-100 tæller med.", 0.5, 0.5, 0.56, true)
+            GameTooltip:AddLine(L("Held 80% = de seneste rolls er bedre end 80% af, hvad rent held ville give. 50% er helt normalt."), 0.5, 0.8, 1, true)
+            GameTooltip:AddLine(L("Need/greed-rolls og /roll 1-100 tæller med."), 0.5, 0.5, 0.56, true)
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", function(self)
@@ -767,7 +768,7 @@ local function BuildPage(page)
     local hat = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
     hat:SetPoint("BOTTOMLEFT", page, "BOTTOMLEFT", 0, 0)
     hat:SetSize(362, 144)
-    local hh = Header(hat, "Skammens hat")
+    local hh = Header(hat, L("Skammens hat"))
     hh:SetPoint("TOPLEFT", hat, "TOPLEFT", 38, -10)
     local icon = hat:CreateTexture(nil, "ARTWORK")
     icon:SetSize(20, 20)
@@ -782,7 +783,7 @@ local function BuildPage(page)
     local emo = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
     emo:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
     emo:SetSize(362, 62 + math.ceil(ns.MAX_MEMBERS / 2) * 28)
-    SubText(emo, Header(emo, "Emote-angreb"), "en tilfældig fornærmelse")
+    SubText(emo, Header(emo, L("Emote-angreb")), L("en tilfældig fornærmelse"))
     ui.emoteBtns = {}
     for i = 1, ns.MAX_MEMBERS do
         local b = MakeButton(emo, 166, 24, "", function(self) if self.friend then ns.EmoteAttack(self.friend) end end)
@@ -801,7 +802,7 @@ local function BuildPage(page)
     need:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 0)
     need:SetPoint("TOPRIGHT", emo, "BOTTOMRIGHT", 0, -8)
     need:SetWidth(362)
-    SubText(need, Header(need, "Need-politiet"), "needet, men aldrig brugt")
+    SubText(need, Header(need, L("Need-politiet")), L("needet, men aldrig brugt"))
     ui.needText = Txt(need, "GameFontHighlightSmall")
     ui.needText:SetPoint("TOPLEFT", need, "TOPLEFT", 12, -36)
     ui.needText:SetWidth(338)
@@ -838,7 +839,7 @@ local function RefreshPage()
         row.data = d
         local rr, gg, bb = C.ClassColor(classOf[d.name])
         row.rank:SetText(d.st and tostring(i) or "-")
-        row.name:SetText(Name(d.name) .. (d.name == db.me and " (dig)" or ""))
+        row.name:SetText(Name(d.name) .. (d.name == db.me and L(" (dig)") or ""))
         row.name:SetTextColor(rr, gg, bb)
         row.n:SetText(d.n > 0 and (d.n .. " r") or "")
         if d.st then
@@ -853,7 +854,7 @@ local function RefreshPage()
         end
         if i == 1 and d.st and rated >= 2 then
             row:SetBackdropColor(0.08, 0.20, 0.10, 1)
-            row.name:SetText(Name(d.name) .. "  |cffffd100Fætter Højben|r")
+            row.name:SetText(Name(d.name) .. L("  |cffffd100Fætter Højben|r"))
         elseif d.st and i == rated and rated >= 2 then
             row:SetBackdropColor(0.20, 0.08, 0.08, 1)
         elseif d.name == db.me then
@@ -867,19 +868,19 @@ local function RefreshPage()
     local holder, ev = LatestDeath()
     local lines = {}
     if not holder then
-        lines[1] = "Ingen har båret hatten endnu. Den første, der dør, får den."
+        lines[1] = L("Ingen har båret hatten endnu. Den første, der dør, får den.")
     else
-        lines[1] = string.format("%s har båret hatten i |cffffd100%s|r.", C.ColorName(holder, classOf[holder]),
+        lines[1] = string.format(L("%s har båret hatten i |cffffd100%s|r."), C.ColorName(holder, classOf[holder]),
             Duration(time() - (ev.time or time())))
-        local what = ev.killer or "?"
-        if ev.ability and ev.ability ~= "" then what = what .. " (" .. ev.ability .. ")" end
-        lines[2] = "|cff888888Død til " .. what .. " i " .. (ev.zone or "?") .. ".|r"
+        local what = L(ev.killer) or "?"
+        if ev.ability and ev.ability ~= "" then what = what .. " (" .. L(ev.ability) .. ")" end
+        lines[2] = L("|cff888888Død til ") .. what .. L(" i ") .. (ev.zone or "?") .. ".|r"
         lines[3] = "|cffbbbbbb\"" .. ns.Obituary(ev, holder) .. "\"|r"
         local times = HatTimes()
         local parts = {}
         for i = 1, math.min(3, #times) do parts[i] = Name(times[i].name) .. " " .. Duration(times[i].secs) end
         lines[4] = " "
-        lines[5] = "|cffffd100Mest tid med hatten:|r " .. table.concat(parts, ", ")
+        lines[5] = L("|cffffd100Mest tid med hatten:|r ") .. table.concat(parts, ", ")
     end
     ui.hatText:SetText(table.concat(lines, "\n"))
 
@@ -894,7 +895,7 @@ local function RefreshPage()
         if not b.friend then
             -- tom plads
         elseif b.friend == db.me then
-            b.text:SetText("|cff666666" .. Name(b.friend) .. " (dig)|r")
+            b.text:SetText("|cff666666" .. Name(b.friend) .. L(" (dig)|r"))
             b:Disable()
         else
             b:Enable()
@@ -912,9 +913,9 @@ local function RefreshPage()
     local bully, bn = top(db.emoteStats.sent)
     local victim, vn = top(db.emoteStats.recv)
     if bully then
-        ui.emoteStats:SetText(string.format("Største bølle: %s (%d)   Mest mobbet: %s (%d)", Name(bully), bn, Name(victim), vn))
+        ui.emoteStats:SetText(string.format(L("Største bølle: %s (%d)   Mest mobbet: %s (%d)"), Name(bully), bn, Name(victim), vn))
     else
-        ui.emoteStats:SetText("Ingen angreb endnu. Vær den første.")
+        ui.emoteStats:SetText(L("Ingen angreb endnu. Vær den første."))
     end
 
     -- Need-politiet
@@ -927,11 +928,11 @@ local function RefreshPage()
         nl[#nl + 1] = string.format("%s %s |cff888888- %s, %s|r", C.ColorName(e.friend, e.class), ItemLink(e),
             SHAME_SHORT[e.why] or "?", C.FormatAgo(e.time))
     end
-    if #nl == 0 then nl[1] = "|cff888888Ingen need-synder endnu. Politiet holder øje.|r" end
+    if #nl == 0 then nl[1] = L("|cff888888Ingen need-synder endnu. Politiet holder øje.|r") end
     ui.needText:SetText(table.concat(nl, "\n"))
     local watching = 0
     for _ in pairs(db.needWatch) do watching = watching + 1 end
-    ui.needNote:SetText(string.format("Need-gear, der ikke er taget på efter %d dage, eller som bliver solgt, kommer på listen. Du har %s under opsyn.",
+    ui.needNote:SetText(string.format(L("Need-gear, der ikke er taget på efter %d dage, eller som bliver solgt, kommer på listen. Du har %s under opsyn."),
         NEED_DAYS, C.Plural(watching, "item", "items")))
 end
 
@@ -1006,13 +1007,13 @@ function ns.TestPrankToasts()
     local class = select(2, UnitClass("player"))
     local fake = { id = "test-" .. math.random(1, 99999), name = UnitName("player"), class = class,
                    killer = "Murloc Forager", ability = "Nærkamp", klvl = 12, level = 31, zone = "Westfall", time = time() }
-    ns.Toast({ kind = "obit", head = "DØDSANNONCE", title = Name(me) .. " (level 31)", text = ns.Obituary(fake, me),
+    ns.Toast({ kind = "obit", head = L("DØDSANNONCE"), title = Name(me) .. " (level 31)", text = ns.Obituary(fake, me),
                icon = OBIT_ICON, class = class, dur = 7, force = true })
     local e = { friend = me, item = "item:28830", name = "Dragonspine Trophy", quality = 4 }
-    ns.Toast({ kind = "police", head = "NEED-POLITIET", title = Name(me) .. " needede " .. ItemLink(e), text = SHAME_TEXT.gone,
+    ns.Toast({ kind = "police", head = L("NEED-POLITIET"), title = Name(me) .. L(" needede ") .. ItemLink(e), text = SHAME_TEXT.gone,
                icon = ItemIcon(28830), dur = 7, force = true })
     local idx = math.random(#ATTACKS)
-    ns.Toast({ kind = "emote", head = "EMOTE-ANGREB", title = "Nick angriber dig!", text = AttackText(idx, "Nick", "dig"),
+    ns.Toast({ kind = "emote", head = L("EMOTE-ANGREB"), title = L("Nick angriber dig!"), text = AttackText(idx, "Nick", L("dig")),
                icon = EMOTE_ICON, force = true })
 end
 
@@ -1030,19 +1031,19 @@ end
 -- Returnerer true, hvis kommandoen blev klaret her
 function ns.PrankSlash(cmd, arg)
     local db = DB()
-    if cmd == "angrib" or cmd == "emote" then
+    if cmd == "angrib" or cmd == "emote" or cmd == "attack" then
         local name = FindFriend(arg)
-        if name then ns.EmoteAttack(name) else Print("Hvem? Skriv fx |cffffd100/wc4ever angrib nick|r.") end
+        if name then ns.EmoteAttack(name) else Print(L("Hvem? Skriv fx |cffffd100/wc4ever angrib nick|r.")) end
         return true
-    elseif cmd == "annonce" or cmd == "annoncer" then
+    elseif cmd == "annonce" or cmd == "annoncer" or cmd == "obits" or cmd == "obit" then
         db.settings.obits = (db.settings.obits == false)
-        Print("Dødsannoncer: " .. (db.settings.obits and "til" or "fra"))
+        Print(L("Dødsannoncer: ") .. (db.settings.obits and L("til") or L("fra")))
         return true
     elseif cmd == "emotes" then
         db.settings.emotes = (db.settings.emotes == false)
-        Print("Popups for emote-angreb mod dig: " .. (db.settings.emotes and "til" or "fra"))
+        Print(L("Popups for emote-angreb mod dig: ") .. (db.settings.emotes and L("til") or L("fra")))
         return true
-    elseif cmd == "testannonce" then
+    elseif cmd == "testannonce" or cmd == "testobit" then
         ns.TestPrankToasts()
         return true
     end
