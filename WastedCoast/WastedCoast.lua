@@ -36,6 +36,7 @@ local addonName, ns = ...
 --   * v0.17.1: "er online"-toasten kommer kun ved et rigtigt login (login-session i livstegnet), ikke igen og igen midt i en session
 --   * v0.17.2: fejlrettelser (bank-dato, item-værdier på Forever, dobbelt duel-toast, lange beskeder, BG-synk,
 --             fremtidige tidsstempler, nye link-farver) og flere tests (tests/test_robust.py)
+--   * v0.17.3: samme ven med to ID'er (fx nyt ID efter geninstallation) vises kun én gang; data flettes sammen
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)

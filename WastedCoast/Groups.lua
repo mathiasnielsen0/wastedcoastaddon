@@ -136,17 +136,125 @@ function ns.GroupName(g)
 end
 
 -- =============================================================================
+-- Dubletter: samme ven med to ID'er (fx nyt ID efter geninstallation, en anden WoW-konto eller
+-- et oprindeligt ID plus et nyt). Medlemmer med samme navn regnes for den samme ven: kun ét ID
+-- vises (dit eget, ellers det, der sidst har været aktivt), og det andet ID's data flettes ind.
+-- =============================================================================
+ns.memberAlias = {}   -- skjult dublet-ID -> det ID, der vises
+
+local function NameKey(m, id)
+    local n = CleanName(m and m.n) or id
+    return n:lower()
+end
+
+-- Sidst aktiv: nyeste karakter set, eller seneste besked fra et skjult dublet-ID
+local function Activity(id)
+    local db, g = DB(), Group()
+    local best = (g and g.members[id] and g.members[id].la) or 0
+    local info = db and db.friends and db.friends[id]
+    if info and info.chars then
+        for _, c in pairs(info.chars) do
+            if c.seen and c.seen > best then best = c.seen end
+        end
+    end
+    return best
+end
+
+-- Flyt det, der er gemt om "from", over på "to". Findes noget allerede hos "to", beholdes det.
+local KEYED = { "runs", "ach", "rolls", "goldHist", "legacy", "levelAt", "bank", "duels", "rareKills" }
+function ns.MergeMemberData(from, to)
+    local db = DB()
+    if not db or not from or not to or from == to then return end
+    if db.friends and db.friends[from] then
+        local src = db.friends[from]
+        local dst = db.friends[to]
+        if not dst then
+            db.friends[to] = src
+        else
+            dst.chars = dst.chars or {}
+            for cn, c in pairs(src.chars or {}) do
+                local old = dst.chars[cn]
+                if not old or (c.seen or 0) > (old.seen or 0) then dst.chars[cn] = c end
+            end
+            for k, v in pairs(src) do
+                if k ~= "chars" and dst[k] == nil then dst[k] = v end
+            end
+        end
+        db.friends[from] = nil
+    end
+    for cn, f in pairs(db.chars or {}) do
+        if f == from then db.chars[cn] = to end
+    end
+    for _, key in ipairs(KEYED) do
+        local t = db[key]
+        if type(t) == "table" and t[from] ~= nil then
+            if t[to] == nil then t[to] = t[from] end
+            t[from] = nil
+        end
+    end
+    for _, key in ipairs({ "events", "loot", "needShame" }) do
+        for _, ev in ipairs(db[key] or {}) do
+            if ev.friend == from then ev.friend = to end
+        end
+    end
+    local g = Group()
+    if g and g.owners then
+        for char, f in pairs(g.owners) do
+            if f == from then g.owners[char] = to end
+        end
+    end
+end
+
+-- Samler medlemmer med samme navn. Returnerer listen uden dubletter.
+local function Dedupe(list)
+    local db = DB()
+    wipe(ns.memberAlias)
+    local byName, out = {}, {}
+    for _, e in ipairs(list) do
+        local key = NameKey(e.m, e.id)
+        local cur = byName[key]
+        if not cur then
+            byName[key] = e
+            out[#out + 1] = e
+        else
+            -- Hvem vises? Dig selv, ellers den senest aktive, ellers den, der kom først med
+            local keep
+            if e.id == db.me then keep = e
+            elseif cur.id == db.me then keep = cur
+            else
+                local ae, ac = Activity(e.id), Activity(cur.id)
+                if ae ~= ac then keep = (ae > ac) and e or cur
+                else keep = ((e.m.j or 0) < (cur.m.j or 0)) and e or cur end
+            end
+            local drop = (keep == e) and cur or e
+            if keep == e then
+                for i, x in ipairs(out) do if x == cur then out[i] = e end end
+                byName[key] = e
+            end
+            ns.memberAlias[drop.id] = keep.id
+        end
+    end
+    for from, to in pairs(ns.memberAlias) do
+        while ns.memberAlias[to] do to = ns.memberAlias[to] end
+        ns.memberAlias[from] = to
+        ns.MergeMemberData(from, to)
+    end
+    return out
+end
+
+-- =============================================================================
 -- Vennelisten (ROSTER) og den skjulte kanal følger gruppen
 -- =============================================================================
 local function Rebuild()
     wipe(ROSTER)
     wipe(ROSTER_SET)
     local g = Group()
-    if not g then return end
+    if not g then wipe(ns.memberAlias) return end
     local list = {}
     for id, m in pairs(g.members) do
         if not IsKicked(id) then list[#list + 1] = { id = id, m = m } end
     end
+    list = Dedupe(list)
     table.sort(list, function(a, b)
         local la, lb = g.legacy and LEGACY_SET[a.id] or 100, g.legacy and LEGACY_SET[b.id] or 100
         if la ~= lb then return la < lb end
@@ -267,7 +375,19 @@ end
 local lastAsk = -100
 function ns.UnknownMember(id)
     local db, g = DB(), Group()
-    if not g or not db.me or not ValidId(id) or IsKicked(id) or g.members[id] then return end
+    if not g or not db.me or not ValidId(id) or IsKicked(id) then return end
+    if g.members[id] then
+        -- Et skjult dublet-ID er aktivt: bliver det nyere end det viste, skifter vi over til det
+        local to = ns.memberAlias[id]
+        if to and to ~= db.me then
+            g.members[id].la = time()
+            if Activity(id) > Activity(to) then
+                Rebuild()
+                if ns.RefreshUI then ns.RefreshUI() end
+            end
+        end
+        return
+    end
     if GetTime() - lastAsk < 60 then return end
     lastAsk = GetTime()
     C.Send("GW;" .. db.me .. ";" .. g.id)
@@ -656,7 +776,8 @@ function ns.RefreshGroupWindow(fillName)
             if e.id == db.me then note[#note + 1] = "dig" end
             if e.id == g.admin then note[#note + 1] = "admin" end
             if e.kicked then note[#note + 1] = "fjernet" elseif online and e.id ~= db.me then note[#note + 1] = "|cff40e060online|r" end
-            if not e.kicked and not ROSTER_SET[e.id] then note[#note + 1] = "skjult" end
+            if not e.kicked and ns.memberAlias[e.id] then note[#note + 1] = "dublet"
+            elseif not e.kicked and not ROSTER_SET[e.id] then note[#note + 1] = "skjult" end
             row.note:SetText(table.concat(note, ", "))
             local canKick = isAdmin and e.id ~= db.me
             row.btn:SetShown(canKick)

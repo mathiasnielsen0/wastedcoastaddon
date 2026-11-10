@@ -403,6 +403,45 @@ do
 end
 
 -- -----------------------------------------------------------------------------
+-- Samme ven med to ID'er (fx McAndze med både et gammelt og et nyt ID) vises kun én gang
+-- -----------------------------------------------------------------------------
+do
+    local g = db.group
+    local R, RS = ns.core.ROSTER, ns.core.ROSTER_SET
+    local before = #R
+    -- Det gamle ID: hverken set eller med data. Et dødsfald og en loot hænger på det.
+    g.members.uMCANDZE2 = { n = "McAndze", nt = 1, j = 1 }
+    db.events[#db.events + 1] = { id = "dup-death", friend = "uMCANDZE2", name = "Oldchar", time = NOW - 50 }
+    db.runs.uMCANDZE2 = { Deadmines = { wipes = 2, clears = 1 } }
+    ns.RebuildRoster()
+    check(RS.uMCANDZE2 and #R == before + 1, "et nyt medlem kommer på listen")
+    -- Det nye ID melder sig og sender livstegn
+    msg(table.concat({ "GM", "uMCANDZE3", g.id, "uMCANDZE3", "mcandze", NOW, NOW }, ";"), "GUILD", "Murer")
+    msg(table.concat({ "H", "uMCANDZE3", "Murer", "DRUID", "16", "0", "Stormwind City" }, ";"), "GUILD", "Murer")
+    check(#R == before + 1, "samme navn (uanset store/små bogstaver) vises kun én gang: " .. #R)
+    check(RS.uMCANDZE3 and not RS.uMCANDZE2, "det aktive ID vises, det gamle skjules")
+    check(ns.memberAlias.uMCANDZE2 == "uMCANDZE3", "det gamle ID peger på det nye")
+    check(db.events[#db.events].friend == "uMCANDZE3" and db.runs.uMCANDZE3 and db.runs.uMCANDZE2 == nil,
+          "det gamle ID's data flyttes over til det nye")
+    local n = 0
+    for _, s in ipairs(ns.core.BuildStats()) do if s.disp == "McAndze" or s.disp == "mcandze" then n = n + 1 end end
+    check(n == 1, "kortet viser McAndze én gang: " .. n)
+    -- Logger han ind på det gamle ID igen, skifter visningen over (og data følger med)
+    NOW = NOW + 10
+    msg(table.concat({ "H", "uMCANDZE2", "Oldchar", "DRUID", "20", "0", "Darnassus" }, ";"), "GUILD", "Oldchar")
+    check(RS.uMCANDZE2 and not RS.uMCANDZE3 and #R == before + 1, "det senest aktive ID vises")
+    check(db.friends.uMCANDZE2 and db.friends.uMCANDZE2.chars.Murer and db.friends.uMCANDZE2.chars.Oldchar,
+          "karaktererne følger med ved skiftet")
+    -- Dig selv vinder altid over en dublet med dit navn
+    g.members.uMEDUPLCX = { n = ns.core.Name(db.me), nt = 1, j = 1 }
+    ns.RebuildRoster()
+    check(RS[db.me] and not RS.uMEDUPLCX, "dit eget ID vises altid")
+    g.members.uMEDUPLCX, g.members.uMCANDZE2, g.members.uMCANDZE3 = nil, nil, nil
+    ns.RebuildRoster()
+    check(#R == before, "tilbage til den normale gruppe")
+end
+
+-- -----------------------------------------------------------------------------
 -- Fuzz: tilfældige og ødelagte beskeder af alle typer må aldrig give en Lua-fejl
 -- -----------------------------------------------------------------------------
 do
