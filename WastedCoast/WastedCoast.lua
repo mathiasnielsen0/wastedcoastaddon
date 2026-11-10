@@ -41,6 +41,7 @@ local addonName, ns = ...
 --   * v0.18.0: sprogvalg i indstillingerne: dansk (standard) eller engelsk (Locale.lua og Locale_en.lua)
 --   * v0.18.1: venner i samme guild finder altid hinanden (livstegnet går også i guild, til vennen er hørt i
 --             den skjulte kanal), og en ven, der er online i guild-listen, vises som online
+--   * v0.18.3: daglig sladder kommer første gang du logger ind på en ny dato (ikke efter 3 timers pause)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)

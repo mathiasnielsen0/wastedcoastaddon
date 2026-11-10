@@ -823,6 +823,19 @@ SlashCmdList.WASTEDCOAST("sladder fra")
 check(db.settings.gossip == false, "sladder ved login fra")
 SlashCmdList.WASTEDCOAST("sladder til")
 check(db.settings.gossip == true, "sladder ved login til")
+-- første login på en ny dato viser sladderen, næste login samme dag gør ikke
+_G.WastedCoastGossip:Hide()
+db.gossip.day = nil
+Fire("PLAYER_LOGIN") RunTimers()
+check(_G.WastedCoastGossip:IsShown() and db.gossip.day == date("%Y-%m-%d", NOW), "sladder ved første login på dagen")
+_G.WastedCoastGossip:Hide()
+NOW = NOW + 60
+Fire("PLAYER_LOGIN") RunTimers()
+check(not _G.WastedCoastGossip:IsShown(), "ikke igen samme dag")
+NOW = NOW + 86400
+Fire("PLAYER_LOGIN") RunTimers()
+check(_G.WastedCoastGossip:IsShown(), "igen næste dag")
+_G.WastedCoastGossip:Hide()
 
 SlashCmdList.WASTEDCOAST("reset ja")
 check(#db.needShame == 0, "reset sletter need-synder")

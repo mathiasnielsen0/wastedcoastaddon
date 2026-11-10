@@ -3,11 +3,13 @@ local L = ns.L
 
 -- =============================================================================
 -- Daglig sladder (v0.11)
--- Når du logger ind efter en pause, får du et lille vindue med højdepunkterne siden
+-- Første gang du logger ind på en ny dato (din lokale dato, pr. konto), får du et lille
+-- vindue med højdepunkterne siden
 -- sidst: levels, dødsfald (især de pinlige), epic loot, trofæer, dueller, Need-politiet,
 -- guld og hvem der er forsvundet. Alt bygges af data, addonet allerede har og synker,
 -- så sladderen sender ingen nye beskeder.
--- db.gossip = { out = sidst set online, snap = { ven -> højeste level }, shown = sidst vist }
+-- db.gossip = { out = sidst set online, snap = { ven -> højeste level }, shown = sidst vist,
+--              day = datoen (ÅÅÅÅ-MM-DD) hvor sladderen sidst kom af sig selv }
 -- Indlæses efter WastedCoast.lua og bruger dens hjælpefunktioner via ns.core.
 -- =============================================================================
 
@@ -16,7 +18,6 @@ local ROSTER, ROSTER_SET = C.ROSTER, C.ROSTER_SET
 local Print = C.Print
 local Name = C.Name
 
-local MIN_AWAY = 3 * 3600      -- så længe skal du have været væk, før sladderen kommer af sig selv
 local MAX_BACK = 7 * 86400     -- længere tilbage end en uge kigger sladderen ikke
 local FIRST_BACK = 86400       -- første gang: det seneste døgn
 local SHOW_DELAY = 30          -- sekunder efter login, så vennernes data er nået frem
@@ -411,16 +412,24 @@ function ns.ShowGossip(lines, since)
     if PlaySound and SOUNDKIT and SOUNDKIT.IG_QUEST_LIST_OPEN then pcall(PlaySound, SOUNDKIT.IG_QUEST_LIST_OPEN) end
 end
 
--- Byg og vis sladderen. auto = ved login (kun hvis der er noget at sladre om)
+local function Today() return date("%Y-%m-%d", time()) end
+
+-- Byg og vis sladderen. auto = første login på dagen (vinduet kommer altid, også uden nyt)
 function ns.Gossip(auto)
     local db = DB()
     if not db.me then return end
     local since = session.since or (time() - FIRST_BACK)
     local lines = Collect(since)
+    if #lines == 0 and auto and since > time() - FIRST_BACK then
+        -- var du her lige før midnat, så kig på hele det seneste døgn
+        since = time() - FIRST_BACK
+        lines = Collect(since)
+    end
     ns.lastGossip = lines
     if #lines == 0 then
-        if not auto then Print(L("Ingen sladder siden sidst. Gå ud og dø lidt, så der er noget at snakke om.")) end
-        return
+        local none = L("Ingen sladder siden sidst. Gå ud og dø lidt, så der er noget at snakke om.")
+        if not auto then Print(none) return end
+        lines = { none }
     end
     db.gossip.shown = time()
     ns.ShowGossip(lines, since)
@@ -460,9 +469,12 @@ frame:SetScript("OnEvent", function(_, event)
         session.since = math.max(out or (now - FIRST_BACK), now - MAX_BACK)
         session.snap = {}
         for k, v in pairs(db.gossip.snap) do session.snap[k] = v end
-        local away = out and (now - out) or FIRST_BACK
         C_Timer.After(SHOW_DELAY, function()
-            if db.me and db.settings.gossip ~= false and away >= MIN_AWAY then ns.Gossip(true) end
+            -- første login på en ny dato (pr. konto, så et alt-skifte samme dag ikke viser den igen)
+            if db.me and db.settings.gossip ~= false and db.gossip.day ~= Today() then
+                db.gossip.day = Today()
+                ns.Gossip(true)
+            end
             SaveSnapshot()
         end)
         C_Timer.NewTicker(60, SaveSnapshot)

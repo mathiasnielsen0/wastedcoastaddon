@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.18.2. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.18.3. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -311,8 +311,8 @@ kommer med, hvis det kunne ses (target eller nameplate), da man døde. Slå dem 
 `/wc4ever annonce`.
 
 ### Daglig sladder
-Når du logger ind efter mindst tre timers pause, kommer der efter et halvt minut et lille
-vindue med højdepunkterne siden sidst, fx hvem der tog flest levels, hvem der døde mest,
+Første gang du logger ind på en ny dato (pr. konto, så et alt-skifte samme dag ikke tæller),
+kommer der efter et halvt minut et lille vindue med højdepunkterne siden sidst, fx hvem der tog flest levels, hvem der døde mest,
 den mest pinlige død (fald, lava eller et mob langt under ens eget level), epic loot,
 nye trofæer, dueller, Need-politiets anholdelser, hvem der tjente eller brugte mest guld,
 hvem der bærer Skammens hat, og hvem der ikke har været online i flere dage.
