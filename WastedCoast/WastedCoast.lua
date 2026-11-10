@@ -39,6 +39,8 @@ local addonName, ns = ...
 --   * v0.17.3: samme ven med to ID'er (fx nyt ID efter geninstallation) vises kun én gang; data flettes sammen
 --   * v0.17.4: Karakterer-fanen: honor, legacy points og spilletid på egen linje (overlappede det store tal)
 --   * v0.18.0: sprogvalg i indstillingerne: dansk (standard) eller engelsk (Locale.lua og Locale_en.lua)
+--   * v0.18.1: venner i samme guild finder altid hinanden (livstegnet går også i guild, til vennen er hørt i
+--             den skjulte kanal), og en ven, der er online i guild-listen, vises som online
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -623,10 +625,51 @@ local function LastSeen(friend)
     return best
 end
 
+-- v0.18.1: online i guild-listen tæller også. Så ses en ven som online, selvom addon-beskederne
+-- ikke når frem (fx en ven med en gammel version, eller hvis den skjulte kanal ikke leverer).
+-- Kun karakterer, vi allerede kender som vennens. guild = { at = time(), chars = { navn = true } }
+ns.guild = { at = 0, chars = {} }
+function ns.GuildOnline(char)
+    local g = ns.guild
+    return (char and g.chars[char] and (time() - g.at) < 150) and true or false
+end
+
+function ns.ScanGuild()
+    local g = ns.guild
+    if not db or not (IsInGuild and IsInGuild()) or not GetNumGuildMembers or not GetGuildRosterInfo then return end
+    -- Kun vennernes karakterer gemmes. Returnerer true, hvis nogen af dem er kommet/gået.
+    local changed, now = (time() - g.at) >= 150, {}
+    for i = 1, GetNumGuildMembers() or 0 do
+        local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
+        name = GAME.Plain(name)
+        if type(name) == "string" and online then
+            local char = (Ambiguate and Ambiguate(name, "none")) or name:match("^[^%-]+") or name
+            local friend = db.chars[char]
+            if friend and friend ~= db.me then
+                now[char] = true
+                if not g.chars[char] then changed = true end
+            end
+        end
+    end
+    for char in pairs(g.chars) do if not now[char] then changed = true end end
+    g.chars, g.at = now, time()
+    return changed
+end
+
+function ns.RequestGuildRoster()
+    local req = (C_GuildInfo and C_GuildInfo.GuildRoster) or GuildRoster
+    if req and IsInGuild and IsInGuild() then pcall(req) end
+end
+
 local function IsOnline(name)
     if name == db.me then return true end
     local seen = LastSeen(name)
-    return (seen and (time() - seen) < 150) and true or false
+    if seen and (time() - seen) < 150 then return true end
+    local info = db.friends[name]
+    for cn in pairs((info and info.chars) or {}) do
+        if ns.GuildOnline(cn) then return true end
+    end
+    return false
 end
 
 -- =============================================================================
@@ -712,7 +755,7 @@ local function CharList(friend)
             name = name, full = ns.CharFull(friend, name, c.surname),
             class = c.class, level = c.level or 0, xp = c.xp, zone = c.zone, gold = c.gold or 0,
             seen = c.seen, deaths = dBy[name] or 0, pvp = pBy[name] or 0, loot = lBy[name] or 0,
-            online = (c.seen and (now - c.seen) < 150) and true or false,
+            online = ((c.seen and (now - c.seen) < 150) or ns.GuildOnline(name)) and true or false,
         }
     end
     table.sort(list, function(a, b)
@@ -1003,7 +1046,12 @@ do
     -- alt både i guild, gruppe og kanal, hobede køen sig op, og vennerne fik data sent eller
     -- slet ikke. Er den skjulte kanal oppe, når den hele gruppen. Guild og party bruges
     -- så kun til venner, der ikke er hørt i kanalen (fx hvis deres kanal ikke virker).
-    function route.Targets()
+    -- bootstrap = true (livstegnet): send også i guild og party, så længe en ven ikke er hørt i
+    -- den skjulte kanal. Ellers kunne to venner i samme guild gå helt glip af hinanden: begge
+    -- sender kun i kanalen, så længe den er oppe, og guild bruges kun til venner, der allerede er
+    -- hørt i guild. Leverer kanalen ikke beskederne (eller har vennen en anden kanal), hørte
+    -- ingen af dem nogensinde den anden, og vennen stod som offline, selvom han var online.
+    function route.Targets(bootstrap)
         local ch = {}
         -- Kun din egen gruppe: en battleground-gruppe kan ikke nås med PARTY/RAID (den skjulte kanal dækker den)
         local home = LE_PARTY_CATEGORY_HOME
@@ -1024,6 +1072,14 @@ do
                         -- Venner, der kun kan nås via whisper: karakteren, de sidst whisperede fra
                         whispers[#whispers + 1] = route.whisper[friend].char
                     end
+                end
+            end
+        end
+        if bootstrap and chanUp and db.me then
+            for _, friend in ipairs(ROSTER) do
+                if friend ~= db.me and not Heard(friend, "CHANNEL") then
+                    needGuild = needGuild or inGuild
+                    needGroup = needGroup or groupType ~= nil
                 end
             end
         end
@@ -1147,13 +1203,13 @@ do
     end
 end
 
-local function Send(msg, priority)
+local function Send(msg, priority, bootstrap)
     -- Spillet afviser addon-beskeder over 255 tegn (og giver en fejl); dem sender vi ikke
     if type(msg) ~= "string" or #msg > 255 then
         route.stats.dropped = route.stats.dropped + 1
         return
     end
-    for _, c in ipairs(route.Targets()) do
+    for _, c in ipairs(route.Targets(bootstrap)) do
         local item = { msg, c[1], c[2] }
         if priority then table.insert(queue, 1, item) else queue[#queue + 1] = item end
     end
@@ -1255,7 +1311,7 @@ local function SendHeartbeat()
     UpdateChar(db.me, char, { class = class, level = level, gold = gold, zone = zone, xp = xp, surname = sur }, time())
     -- Forrest i køen, så online-status og level ikke venter bag et stort synk-svar.
     -- Felt 9: efternavn (Forever, kan være tomt). Felt 10: login-session (se ns.MySession).
-    Send(table.concat({ "H", db.me, char, class or "", level, gold, zone, xp, sur, ns.MySession() }, ";"), true)
+    Send(table.concat({ "H", db.me, char, class or "", level, gold, zone, xp, sur, ns.MySession() }, ";"), true, true)
     if ns.AfterEvent then ns.AfterEvent() end
 end
 
@@ -6868,6 +6924,7 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_XP_UPDATE")
 events:RegisterEvent("PLAYER_FLAGS_CHANGED")
 events:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
+pcall(events.RegisterEvent, events, "GUILD_ROSTER_UPDATE")
 -- Boss-events findes ikke i alle spilversioner: en ukendt event giver ellers en Lua-fejl
 pcall(events.RegisterEvent, events, "ENCOUNTER_END")
 pcall(events.RegisterEvent, events, "BOSS_KILL")
@@ -6917,7 +6974,9 @@ events:SetScript("OnEvent", function(_, event, ...)
                 ns.ShowGroupWindow()
             end
         end)
+        ns.RequestGuildRoster()
         C_Timer.NewTicker(60, function()
+            ns.RequestGuildRoster()
             SendHeartbeat()
             ns.CheckGold()
         end)
@@ -6978,6 +7037,11 @@ events:SetScript("OnEvent", function(_, event, ...)
 
     elseif event == "CHAT_MSG_ADDON" then
         OnAddonMessage(...)
+
+    elseif event == "GUILD_ROSTER_UPDATE" then
+        if db then
+            if ns.ScanGuild() and ns.RefreshUI then ns.RefreshUI() end
+        end
 
     elseif event == "CHAT_MSG_CHANNEL_NOTICE" then
         -- Lige kommet ind i den skjulte kanal: sig hej og bed om data dér

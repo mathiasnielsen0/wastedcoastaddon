@@ -442,6 +442,47 @@ do
 end
 
 -- -----------------------------------------------------------------------------
+-- v0.18.1: online i guild-listen tæller, og livstegnet går også i guild, til vennen er hørt i kanalen
+-- -----------------------------------------------------------------------------
+do
+    local route, C = ns.route, ns.core
+    -- En kendt karakter, der ikke har sendt livstegn i lang tid
+    db.friends.Nick = db.friends.Nick or { chars = {} }
+    db.friends.Nick.chars = db.friends.Nick.chars or {}
+    db.friends.Nick.chars.Nickchar = { level = 30, seen = NOW - 5000 }
+    for cn, c in pairs(db.friends.Nick.chars) do c.seen = NOW - 5000 end
+    db.chars.Nickchar = "Nick"
+    check(not C.IsOnline("Nick"), "uden livstegn er vennen offline")
+    local roster = { { "Nickchar-Realm", true }, { "Fremmed", true }, { "Frodex", false } }
+    GetNumGuildMembers = function() return #roster end
+    GetGuildRosterInfo = function(i) local r = roster[i] return r[1], "", 0, 30, "", "", "", "", r[2] end
+    Fire("GUILD_ROSTER_UPDATE")
+    check(C.IsOnline("Nick"), "online i guild-listen = online")
+    check(not ns.guild.chars.Fremmed, "kun vennernes karakterer gemmes")
+    roster[1][2] = false
+    Fire("GUILD_ROSTER_UPDATE")
+    check(not C.IsOnline("Nick"), "logget ud i guild-listen = offline igen")
+    roster[1][2] = true
+    Fire("GUILD_ROSTER_UPDATE")
+    NOW = NOW + 200
+    check(not C.IsOnline("Nick"), "en gammel guild-liste tæller ikke")
+    GetNumGuildMembers, GetGuildRosterInfo = nil, nil
+
+    -- Kanalen er oppe, men vennen er ikke hørt i den: livstegnet skal også i guild
+    local oldGCN = GetChannelName
+    GetChannelName = function() return 5 end
+    route.channelOK = true
+    wipe(route.shared)
+    local function has(list, kind) for _, c in ipairs(list) do if c[1] == kind then return true end end return false end
+    check(has(route.Targets(true), "CHANNEL") and has(route.Targets(true), "GUILD"), "livstegn: kanal og guild, når vennen ikke er hørt i kanalen")
+    check(not has(route.Targets(), "GUILD"), "almindelige beskeder: kun kanalen")
+    for _, f in ipairs(C.ROSTER) do route.shared[f] = { CHANNEL = time() } end
+    check(not has(route.Targets(true), "GUILD"), "alle hørt i kanalen: livstegnet går kun i kanalen")
+    wipe(route.shared)
+    GetChannelName = oldGCN
+end
+
+-- -----------------------------------------------------------------------------
 -- Fuzz: tilfældige og ødelagte beskeder af alle typer må aldrig give en Lua-fejl
 -- -----------------------------------------------------------------------------
 do
