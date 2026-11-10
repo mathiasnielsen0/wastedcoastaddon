@@ -37,6 +37,7 @@ local addonName, ns = ...
 --   * v0.17.2: fejlrettelser (bank-dato, item-værdier på Forever, dobbelt duel-toast, lange beskeder, BG-synk,
 --             fremtidige tidsstempler, nye link-farver) og flere tests (tests/test_robust.py)
 --   * v0.17.3: samme ven med to ID'er (fx nyt ID efter geninstallation) vises kun én gang; data flettes sammen
+--   * v0.17.4: Karakterer-fanen: honor, legacy points og spilletid på egen linje (overlappede det store tal)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -3866,6 +3867,10 @@ local function BuildCharsPage(page)
     panel.sub = Txt(panel, "GameFontHighlightSmall")
     panel.sub:SetPoint("TOPLEFT", panel.name, "BOTTOMLEFT", 0, -4)
     panel.sub:SetTextColor(0.7, 0.7, 0.76)
+    panel.sub:SetJustifyH("LEFT")
+    panel.sub:SetWordWrap(true)
+    panel.sub:SetSpacing(2)
+    panel.sub:SetWidth(440)   -- justeres til panelets bredde i RefreshChars (må ikke løbe ind i det store tal)
 
     panel.big = Txt(panel, "GameFontNormal")
     panel.big:SetFont(STANDARD_TEXT_FONT, 30, "OUTLINE")
@@ -3984,9 +3989,12 @@ local function RefreshChars()
     if pt and pt.secs then
         extra = (extra and (extra .. "  -  ") or "") .. ns.FormatPlayed(pt.secs) .. " spilletid"
     end
+    -- Honor, legacy points og spilletid på en linje for sig, så teksten ikke løber ind i det store tal
+    local pw = panel:GetWidth() or 0
+    if pw > 200 then panel.sub:SetWidth(pw - 68 - 100) end
     panel.sub:SetText(string.format("%s  -  %d dødsfald%s  -  %d rare+ loot%s",
         Plural(cur.chars, "karakter", "karakterer"), cur.deaths, cur.pvp > 0 and (" (" .. cur.pvp .. " PvP)") or "",
-        cur.loot, extra and ("  -  " .. extra) or ""))
+        cur.loot, extra and ("\n" .. extra) or ""))
     panel.big:SetText(tostring(cur.chars))
     panel.big:SetTextColor(1, 1, 1)
 
