@@ -628,7 +628,7 @@ local function BuildWindow()
     if C.AddShadow then C.AddShadow(p, 8) end
     table.insert(UISpecialFrames, "WastedCoastGroup")
 
-    local close = C.MakeButton(p, 22, 22, "x", function() p:Hide() end)
+    local close = C.MakeCloseButton(p, 24, function() p:Hide() end)
     close:SetPoint("TOPRIGHT", p, "TOPRIGHT", -8, -8)
 
     ui.title = Label(p, "", "GameFontNormalLarge")

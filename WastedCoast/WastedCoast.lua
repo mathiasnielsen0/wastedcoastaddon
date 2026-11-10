@@ -3255,6 +3255,38 @@ local function MakeButton(parent, w, h, label, onClick)
     return b
 end
 
+-- Tydelig lukkeknap: rødt felt med et stort hvidt X, som ikke afhænger af spillets skabeloner
+function ns.MakeCloseButton(parent, size, onClick)
+    size = size or 24
+    local b = MakeBox("Button", parent, { 0.55, 0.08, 0.08, 1 }, { 0.85, 0.25, 0.2, 1 })
+    b:SetSize(size, size)
+    b:SetFrameLevel((parent:GetFrameLevel() or 1) + 30)
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    b.text:SetPoint("CENTER", b, "CENTER", 1, 0)
+    b.text:SetFont("Fonts\\FRIZQT__.TTF", math.floor(size * 0.7), "OUTLINE")
+    if not b.text:GetFont() then b.text:SetFontObject("GameFontHighlightLarge") end
+    b.text:SetText("X")
+    b.text:SetTextColor(1, 1, 1)
+    b:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(0.8, 0.12, 0.1, 1)
+        self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
+        if GameTooltip then
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(CLOSE or "Close")
+            GameTooltip:Show()
+        end
+    end)
+    b:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0.55, 0.08, 0.08, 1)
+        self:SetBackdropBorderColor(0.85, 0.25, 0.2, 1)
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+    b:SetScript("OnMouseDown", function(self) self.text:SetPoint("CENTER", self, "CENTER", 2, -1) end)
+    b:SetScript("OnMouseUp", function(self) self.text:SetPoint("CENTER", self, "CENTER", 1, 0) end)
+    b:SetScript("OnClick", onClick or function() parent:Hide() end)
+    return b
+end
+
 local function SetClassIcon(tex, class)
     local tc = class and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[class]
     if tc then
@@ -6103,8 +6135,8 @@ do
             p:SetPoint("CENTER")
             p:SetFrameStrata("DIALOG")
             p:EnableMouse(true)
-            local close = CreateFrame("Button", nil, p, "UIPanelCloseButton")
-            close:SetPoint("TOPRIGHT", p, "TOPRIGHT", -2, -2)
+            local close = ns.MakeCloseButton(p, 24)
+            close:SetPoint("TOPRIGHT", p, "TOPRIGHT", -6, -6)
             table.insert(UISpecialFrames, "WastedCoastOptions")
         end
         ns.options = p
@@ -6406,9 +6438,8 @@ local function BuildUI()
             if type(pt) == "table" then pt:SetTexture(ns.LOGO) end
         end
         if type(chrome.CloseButton) == "table" then
-            -- Over hovedvinduet, så den kan klikkes, og den skal lukke hele vinduet
-            chrome.CloseButton:SetFrameLevel((f:GetFrameLevel() or 2) + 20)
-            chrome.CloseButton:SetScript("OnClick", function() f:Hide() end)
+            -- Spillets eget kryds er svært at se; vi bruger vores eget i stedet
+            chrome.CloseButton:Hide()
         end
         if type(chrome.Inset) == "table" then
             chrome.Inset:ClearAllPoints()
@@ -6460,9 +6491,14 @@ local function BuildUI()
     local version = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata or function() end)(addonName, "Version")
     ver:SetText(GAME.label .. (version and ("  -  v" .. version) or ""))
 
+    local close = ns.MakeCloseButton(f, ns.native and 20 or 24, function() f:Hide() end)
+    if ns.native then
+        close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -3, -2)
+    else
+        close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -6, -6)
+    end
+    f.closeButton = close
     if not ns.native then
-        local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-        close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -2, -2)
         FadeLine(f, -37, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.45)
     end
 
@@ -7260,7 +7296,7 @@ ns.core = {
     Print = Print, ClassColor = ClassColor, ColorName = ColorName, FormatAgo = FormatAgo, Plural = Plural,
     FormatToPattern = FormatToPattern, FriendOfChar = FriendOfChar, EventFriend = EventFriend,
     IsOnline = IsOnline, BuildStats = BuildStats, Send = Send,
-    MakeBox = MakeBox, Txt = Txt, Field = Field, MakeButton = MakeButton,
+    MakeBox = MakeBox, Txt = Txt, Field = Field, MakeButton = MakeButton, MakeCloseButton = ns.MakeCloseButton,
     Gradient = Gradient, BarFill = BarFill, SafeIcon = SafeIcon,
     Name = Name, CharFull = ns.CharFull, AddShadow = AddShadow, SendHeartbeat = SendHeartbeat, RequestSync = RequestSync,
     -- v0.11: daglig sladder (Gossip.lua)
