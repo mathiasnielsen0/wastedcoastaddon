@@ -3364,6 +3364,23 @@ function ns.MakeCloseButton(parent, size, onClick)
     return b
 end
 
+-- Løft en knap over alle lag i en frame og dens børn. Spillets native vinduesramme lægger sin
+-- kant (NineSlice) på et meget højt frame level, som ellers dækker vores lukkekryds.
+function ns.RaiseAbove(btn, root)
+    local best = 0
+    local function walk(fr, depth)
+        if type(fr) ~= "table" or fr == btn or depth > 6 then return end
+        local lvl = fr.GetFrameLevel and fr:GetFrameLevel() or 0
+        if lvl > best then best = lvl end
+        if fr.GetChildren then
+            for _, c in ipairs({ fr:GetChildren() }) do walk(c, depth + 1) end
+        end
+    end
+    walk(root, 0)
+    local want = math.min(best + 10, 9000)
+    if (btn:GetFrameLevel() or 0) < want then btn:SetFrameLevel(want) end
+end
+
 local function SetClassIcon(tex, class)
     local tc = class and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[class]
     if tc then
@@ -6575,6 +6592,11 @@ local function BuildUI()
         close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -6, -6)
     end
     f.closeButton = close
+    if f.chrome then
+        -- Over den native ramme (også når vinduet vises igen, hvis spillet har flyttet lagene)
+        ns.RaiseAbove(close, f)
+        f:HookScript("OnShow", function() ns.RaiseAbove(close, f) end)
+    end
     if not ns.native then
         FadeLine(f, -37, COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 0.45)
     end
