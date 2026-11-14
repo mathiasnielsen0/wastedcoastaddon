@@ -47,6 +47,8 @@ local addonName, ns = ...
 --             viser også logout med det samme, og navne med realm/efternavn i guild-listen genkendes
 --   * v0.18.7: guldgrafen viser summen af alle vennens karakterer (guld huskes pr. karakter), så den
 --             ikke længere hopper ned til altens guld, når nogen logger en alt på
+--   * v0.19.0: mere i dagens sladder: legendary og rare loot med navn, need-goblins, rare mobs, maxede
+--             professions, ny reputation, item level, spilletid, instanser og wipes, uheldige rolls og legacy points
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -7532,6 +7534,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
             wipe(db.events)
             wipe(db.seen)
             wipe(db.loot)
+            db.rareLog = nil
             wipe(db.lootSeen)
             wipe(db.friends)
             wipe(db.chars)

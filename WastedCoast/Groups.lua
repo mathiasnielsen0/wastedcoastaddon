@@ -193,7 +193,7 @@ function ns.MergeMemberData(from, to)
             t[from] = nil
         end
     end
-    for _, key in ipairs({ "events", "loot", "needShame" }) do
+    for _, key in ipairs({ "events", "loot", "needShame", "rareLog" }) do
         for _, ev in ipairs(db[key] or {}) do
             if ev.friend == from then ev.friend = to end
         end

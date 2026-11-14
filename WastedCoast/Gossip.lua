@@ -9,7 +9,11 @@ local L = ns.L
 -- guld og hvem der er forsvundet. Alt bygges af data, addonet allerede har og synker,
 -- så sladderen sender ingen nye beskeder.
 -- db.gossip = { out = sidst set online, snap = { ven -> højeste level }, shown = sidst vist,
---              day = datoen (ÅÅÅÅ-MM-DD) hvor sladderen sidst kom af sig selv }
+--              day = datoen (ÅÅÅÅ-MM-DD) hvor sladderen sidst kom af sig selv,
+--              st = { ven -> { prof, rep, il, played, runs, rolls, wins, lp, lc } } (v0.19) }
+-- v0.19: mere "siden sidst": legendary/rare loot med navn, need-goblins, rare mobs,
+-- professions, reputation, item level, spilletid, instanser og wipes, uheldige rolls
+-- og legacy points. Det hele sammenlignes med øjebliksbilledet fra sidste besøg.
 -- Indlæses efter WastedCoast.lua og bruger dens hjælpefunktioner via ns.core.
 -- =============================================================================
 
@@ -21,16 +25,21 @@ local Name = C.Name
 local MAX_BACK = 7 * 86400     -- længere tilbage end en uge kigger sladderen ikke
 local FIRST_BACK = 86400       -- første gang: det seneste døgn
 local SHOW_DELAY = 30          -- sekunder efter login, så vennernes data er nået frem
-local MAX_LINES = 8
+local MAX_LINES = 10
+local PER_FRIEND = 3           -- så mange linjer om samme ven, før de andre får plads
 local GOLD_MIN = 50 * 10000    -- guldændringer under 50g er ikke sladder værd
 local MISSING_DAYS = 4         -- ikke set i så mange dage = savnet
 
-local session = { since = nil, snap = nil }
+local PROF_MAX = (C.MAX_LEVEL or 60) >= 70 and 375 or 300
+local STANDING = { [5] = "Friendly", [6] = "Honored", [7] = "Revered", [8] = "Exalted" }
+
+local session = { since = nil, snap = nil, st = nil }
 
 local function DB()
     local db = WastedCoastDB
     db.gossip = db.gossip or {}
     db.gossip.snap = db.gossip.snap or {}
+    db.gossip.st = db.gossip.st or {}
     return db
 end
 
@@ -46,8 +55,11 @@ local function ClassOf(friend)
     return best
 end
 
--- "Du" om dig selv, ellers vennens navn i klassefarve
+-- "Du" om dig selv, ellers vennens navn i klassefarve. Husker, hvem linjen handler om,
+-- så én ven ikke fylder hele sladderen.
+local lastWho
 local function Who(friend)
+    lastWho = friend
     if friend == WastedCoastDB.me then return L("Du") end
     return C.ColorName(Name(friend), ClassOf(friend))
 end
@@ -64,6 +76,51 @@ local function MaxLevels()
     return out
 end
 
+-- v0.19: alt det andet, vi kan sammenligne med næste gang (bedste værdi pr. ven på tværs af karakterer)
+local function Stats(name)
+    local db = WastedCoastDB
+    local info = db.friends[name]
+    local st = { prof = {}, rep = {}, runs = {} }
+    local any = false
+    for char, c in pairs((info and info.chars) or {}) do
+        if not c.demo then
+            any = true
+            if c.prof and ns.ParseProf then
+                for pn, v in pairs(ns.ParseProf(c.prof)) do
+                    if v[1] > (st.prof[pn] or 0) then st.prof[pn] = v[1] end
+                end
+            end
+            for fac, v in pairs(c.rep or {}) do
+                local sd = tonumber(tostring(v):match("^(%d+)"))
+                if sd and sd > (st.rep[fac] or 0) then st.rep[fac] = sd end
+            end
+            if c.gear and c.gear.il and c.gear.il > (st.il or 0) then st.il = c.gear.il end
+            local secs = ns.PlayedNow and ns.PlayedNow(name, char, c)
+            if secs then st.played = (st.played or 0) + secs end
+        end
+    end
+    for inst, e in pairs(db.runs[name] or {}) do
+        if not e.demo then
+            local b = 0
+            for _, n in pairs(e.boss or {}) do b = b + n end
+            st.runs[inst] = { c = e.clears or 0, w = e.wipes or 0, b = b }
+            any = true
+        end
+    end
+    local r = db.rolls[name]
+    if r then st.rolls, st.wins, any = r.rolls or 0, r.wins or 0, true end
+    local lg = db.legacy and db.legacy[name]
+    if lg then st.lp, st.lc, any = lg.p, lg.c, true end
+    return any and st or nil
+end
+
+local function AllStats()
+    local out = {}
+    for _, name in ipairs(ROSTER) do out[name] = Stats(name) end
+    return out
+end
+ns.GossipStats = AllStats   -- til tests
+
 -- Gem, hvor langt alle var, og hvornår du sidst var her (kaldes jævnligt og ved logout)
 local function SaveSnapshot()
     local db = DB()
@@ -72,6 +129,7 @@ local function SaveSnapshot()
     for name, lvl in pairs(MaxLevels()) do
         if lvl > (db.gossip.snap[name] or 0) then db.gossip.snap[name] = lvl end
     end
+    for name, st in pairs(AllStats()) do db.gossip.st[name] = st end
 end
 
 local function Duration(secs)
@@ -97,10 +155,14 @@ end
 -- =============================================================================
 -- Sladderen: en liste af { score, text }. Højest score vises først.
 -- =============================================================================
-local function Collect(since, snapOverride)
+local function Collect(since, snapOverride, stOverride, limit)
     local db = WastedCoastDB
     local lines = {}
-    local function add(score, text) lines[#lines + 1] = { score = score, text = text } end
+    lastWho = nil
+    local function add(score, text)
+        lines[#lines + 1] = { score = score, text = text, f = lastWho }
+        lastWho = nil
+    end
 
     -- Levels: sammenlign med sidst, du var her (eller levelAt, hvis vi ikke har et øjebliksbillede)
     local snap = snapOverride or session.snap or {}
@@ -198,14 +260,19 @@ local function Collect(since, snapOverride)
         add(25, string.format(L("I alt %d dødsfald i gruppen. Spirit healerne har haft travlt."), total))
     end
 
-    -- Loot: epic og bedre nævnes én for én, ellers en optælling
-    local epics, rares = {}, {}
+    -- Loot: epic og bedre nævnes én for én, rares med navn, ellers en optælling
+    local epics, rares, rareList, needs, lootTotal = {}, {}, {}, {}, 0
     for _, ev in ipairs(db.loot) do
-        if (ev.time or 0) > since then
+        if (ev.time or 0) > since and not (ev.id and tostring(ev.id):find("^demo%-")) then
             local f = C.EventFriend({ friend = ev.friend, name = ev.char })
             if f then
+                lootTotal = lootTotal + 1
                 if (ev.quality or 0) >= 4 then epics[#epics + 1] = { ev = ev, f = f }
-                else rares[f] = (rares[f] or 0) + 1 end
+                else
+                    rares[f] = (rares[f] or 0) + 1
+                    rareList[#rareList + 1] = { ev = ev, f = f }
+                end
+                if ev.how == "need" then needs[f] = (needs[f] or 0) + 1 end
             end
         end
     end
@@ -213,14 +280,178 @@ local function Collect(since, snapOverride)
     local epicStart = math.random(#EPIC_TAILS)
     for i, e in ipairs(epics) do
         if i > 3 then break end
-        add(60 - i, string.format(L("%s fik %s%s. %s"), Who(e.f), C.LootLink(e.ev),
-            (e.ev.zone and e.ev.zone ~= "") and (L(" i ") .. e.ev.zone) or "",
-            EPIC_TAILS[(epicStart + i) % #EPIC_TAILS + 1]))
+        local where = (e.ev.zone and e.ev.zone ~= "") and (L(" i ") .. e.ev.zone) or ""
+        if (e.ev.quality or 0) >= 5 then
+            add(98, string.format(L("%s fik |cffff8000LEGENDARY|r %s%s! %s"), Who(e.f), C.LootLink(e.ev), where,
+                Pick({ L("Det her bliver der talt om i årevis."), L("Resten af os kan bare pakke sammen."), L("Screenshot eller det skete ikke.") })))
+        else
+            add(60 - i, string.format(L("%s fik %s%s. %s"), Who(e.f), C.LootLink(e.ev), where,
+                EPIC_TAILS[(epicStart + i) % #EPIC_TAILS + 1]))
+        end
     end
+    -- Rares: den, der fik flest, får en optælling med det nyeste som eksempel; ellers nævnes et enkelt
+    table.sort(rareList, function(a, b) return (a.ev.time or 0) > (b.ev.time or 0) end)
     local rf, rn = nil, 0
-    for f, n in pairs(rares) do if n > rn then rf, rn = f, n end end
+    for f, n in pairs(rares) do if n > rn or (n == rn and f < rf) then rf, rn = f, n end end
+    local named = {}
     if rf and rn >= 3 then
-        add(30, string.format(L("%s samlede %d rare items op. Tasken er snart fuld."), Who(rf), rn))
+        local ex
+        for _, r in ipairs(rareList) do if r.f == rf then ex = r.ev break end end
+        add(30, string.format(L("%s samlede %d rare items op, bl.a. %s. Tasken er snart fuld."), Who(rf), rn, C.LootLink(ex)))
+        named[rf] = true
+    end
+    local shownRares = 0
+    for _, r in ipairs(rareList) do
+        if shownRares >= 2 then break end
+        if not named[r.f] then
+            named[r.f] = true
+            shownRares = shownRares + 1
+            add(36 - shownRares, string.format(L("%s scorede %s%s. %s"), Who(r.f), C.LootLink(r.ev),
+                (r.ev.zone and r.ev.zone ~= "") and (L(" i ") .. r.ev.zone) or "",
+                Pick({ L("Blå er det nye lilla."), L("Ikke epic, men vi tager den."), L("Pænt. Rigtig pænt.") })))
+        end
+    end
+    local nf, nn = nil, 0
+    for f, n in pairs(needs) do if n > nn or (n == nn and f < nf) then nf, nn = f, n end end
+    if nf and nn >= 3 then
+        add(26, string.format(L("%s vandt %d need-rolls. Need-politiet er underrettet."), Who(nf), nn))
+    end
+    if lootTotal >= 10 then
+        add(14, string.format(L("Gruppen fik %d gode items i alt siden sidst. Nogen burde åbne en butik."), lootTotal))
+    end
+
+    -- Sjældne mobs
+    local rareMobs, rareOrder = {}, {}
+    for _, r in ipairs(db.rareLog or {}) do
+        if (r.t or 0) > since and ROSTER_SET[r.friend] then
+            if not rareMobs[r.friend] then rareMobs[r.friend] = {} rareOrder[#rareOrder + 1] = r.friend end
+            table.insert(rareMobs[r.friend], r)
+        end
+    end
+    table.sort(rareOrder, function(a, b) return #rareMobs[a] > #rareMobs[b] or (#rareMobs[a] == #rareMobs[b] and a < b) end)
+    for i, f in ipairs(rareOrder) do
+        if i > 2 then break end
+        local list = rareMobs[f]
+        local last = list[#list]
+        local mob = "|cffc0c0ff" .. (last.mob or "?") .. "|r"
+        if #list == 1 then
+            add(41 - i, string.format(L("%s nedlagde det sjældne mob %s%s. %s"), Who(f), mob,
+                (last.zone and last.zone ~= "") and (L(" i ") .. last.zone) or "",
+                Pick({ L("Hvor mange timer stod personen og ventede?"), L("Trofæet hænger over pejsen."), L("Ingen andre fik et tag.") })))
+        else
+            add(43 - i, string.format(L("%s nedlagde %d sjældne mobs, senest %s. Rare-jægeren er på spil."), Who(f), #list, mob))
+        end
+    end
+
+    -- v0.19: sammenligning med øjebliksbilledet (professions, rep, gear, spilletid, instanser, rolls, legacy)
+    local stBefore = stOverride or session.st or {}
+    local profMax, profUp, repUp, gearUp, playUp, runUp, wipeUp, rollBad, legUp = {}, {}, {}, {}, {}, {}, {}, {}, {}
+    for _, name in ipairs(ROSTER) do
+        local b, n = stBefore[name], Stats(name)
+        if b and n then
+            -- Professions
+            local gainProf, gainFrom, gainTo, gainN
+            for pn, rank in pairs(n.prof) do
+                local old = b.prof and b.prof[pn]
+                if old and rank >= PROF_MAX and old < PROF_MAX then
+                    profMax[#profMax + 1] = { f = name, p = pn, r = rank }
+                elseif old and rank - old >= 10 and (not gainN or rank - old > gainN) then
+                    gainProf, gainFrom, gainTo, gainN = pn, old, rank, rank - old
+                end
+            end
+            if gainProf then profUp[#profUp + 1] = { f = name, p = gainProf, from = gainFrom, to = gainTo, n = gainN } end
+            -- Reputation: kun nye standings fra Honored og op
+            local hadRep = b.rep and next(b.rep) ~= nil
+            local bestFac, bestSd
+            for fac, sd in pairs(n.rep) do
+                local old = (b.rep and b.rep[fac]) or (hadRep and 4) or nil
+                if old and sd > old and sd >= 6 and (not bestSd or sd > bestSd or (sd == bestSd and fac < bestFac)) then
+                    bestFac, bestSd = fac, sd
+                end
+            end
+            if bestFac then repUp[#repUp + 1] = { f = name, fac = bestFac, sd = bestSd } end
+            -- Gear
+            if b.il and n.il and n.il - b.il >= 2 then gearUp[#gearUp + 1] = { f = name, d = n.il - b.il, il = n.il } end
+            -- Spilletid
+            if b.played and n.played and n.played - b.played >= 2 * 3600 then
+                playUp[#playUp + 1] = { f = name, d = n.played - b.played }
+            end
+            -- Instanser
+            local bestInst, bestC, wipes, wipeInst, wipeMax, bosses = nil, 0, 0, nil, 0, 0
+            for inst, r in pairs(n.runs) do
+                local o = (b.runs and b.runs[inst]) or (b.runs and { c = 0, w = 0, b = 0 })
+                if o then
+                    local dc, dw = r.c - (o.c or 0), r.w - (o.w or 0)
+                    if dc > bestC or (dc == bestC and dc > 0 and inst < bestInst) then bestInst, bestC = inst, dc end
+                    if dw > 0 then
+                        wipes = wipes + dw
+                        if dw > wipeMax then wipeInst, wipeMax = inst, dw end
+                    end
+                    bosses = bosses + math.max(0, r.b - (o.b or 0))
+                end
+            end
+            if bestInst and bestC > 0 then runUp[#runUp + 1] = { f = name, inst = bestInst, n = bestC, bosses = bosses } end
+            if wipes >= 3 then wipeUp[#wipeUp + 1] = { f = name, n = wipes, inst = wipeInst } end
+            -- Rolls: mange rolls, ingen sejre
+            if b.rolls and n.rolls and n.rolls - b.rolls >= 5 and (n.wins or 0) == (b.wins or 0) then
+                rollBad[#rollBad + 1] = { f = name, n = n.rolls - b.rolls }
+            end
+            -- Legacy (WoW Forever)
+            if n.lp and b.lp and n.lp > b.lp then legUp[#legUp + 1] = { f = name, d = n.lp - b.lp, c = (n.lc or 0) - (b.lc or 0) } end
+        end
+    end
+    local function top(list, key)
+        table.sort(list, function(a, b) return a[key] > b[key] or (a[key] == b[key] and a.f < b.f) end)
+        return list
+    end
+    for i, x in ipairs(top(profMax, "r")) do
+        if i > 2 then break end
+        add(58, string.format(L("%s har maxet |cffffd100%s|r (%d)! %s"), Who(x.f), L(x.p), x.r,
+            Pick({ L("Hvor mange materialer gik der til det?"), L("Nu kan man tage imod bestillinger."), L("Respekt for grindet.") })))
+    end
+    local up1 = top(profUp, "n")[1]
+    if up1 then
+        add(27, string.format(L("%s skillede %s fra %d til %d."), Who(up1.f), L(up1.p), up1.from, up1.to))
+    end
+    table.sort(repUp, function(a, b) return a.sd > b.sd or (a.sd == b.sd and a.f < b.f) end)
+    for i, x in ipairs(repUp) do
+        if i > 2 then break end
+        if x.sd >= 8 then
+            add(62, string.format(L("%s er nu |cffffd100Exalted|r med %s! %s"), Who(x.f), x.fac,
+                Pick({ L("De har vist navngivet en gade efter personen."), L("Tabardet er bestilt."), L("Det kostede kun et halvt liv.") })))
+        else
+            add(x.sd == 7 and 44 or 30, string.format(L("%s nåede %s med %s."), Who(x.f), STANDING[x.sd], x.fac))
+        end
+    end
+    local g1 = top(gearUp, "d")[1]
+    if g1 then
+        add(37, string.format(L("%s steg |cffa335ee%.1f item levels|r (nu %.1f). %s"), Who(g1.f), g1.d, g1.il,
+            Pick({ L("Nogen har været i bossernes lommer."), L("Det skinner helt ud til Shattrath."), L("Gammelt gear til salg, spørg i guilden.") })))
+    end
+    local p1 = top(playUp, "d")[1]
+    if p1 then
+        add(p1.d >= 8 * 3600 and 39 or 24, string.format(L("%s har spillet |cffffd100%s|r siden sidst. %s"), Who(p1.f), Duration(p1.d),
+            Pick({ L("Har personen et job?"), L("Familien har meldt personen savnet."), L("Stolen er formet efter personen nu.") })))
+    end
+    local r1 = top(runUp, "n")[1]
+    if r1 then
+        local times = r1.n == 1 and "" or string.format(L(" %d gange"), r1.n)
+        local boss = r1.bosses >= 2 and string.format(L(" og dræbte %d bosser"), r1.bosses) or ""
+        add(46 + math.min(6, r1.n), string.format(L("%s klarede %s%s%s."), Who(r1.f), L(r1.inst), times, boss))
+    end
+    local w1 = top(wipeUp, "n")[1]
+    if w1 then
+        add(34, string.format(L("%s wipede |cffff5050%d gange|r%s. %s"), Who(w1.f), w1.n, w1.inst and (L(" i ") .. L(w1.inst)) or "",
+            Pick({ L("Det er ikke wipes, det er træning."), L("Næste gang læser vi bossens taktik."), L("Tanken siger, det var healerens skyld.") })))
+    end
+    local b1 = top(rollBad, "n")[1]
+    if b1 then
+        add(29, string.format(L("%s rullede %d gange og vandt ingenting. RNG hader personen."), Who(b1.f), b1.n))
+    end
+    local l1 = top(legUp, "d")[1]
+    if l1 then
+        local ch = l1.c > 0 and string.format(L(" og klarede %s"), C.Plural(l1.c, L("challenge"), L("challenges"))) or ""
+        add(33, string.format(L("%s tjente %d legacy points%s."), Who(l1.f), l1.d, ch))
     end
 
     -- Trofæer
@@ -308,8 +539,24 @@ local function Collect(since, snapOverride)
     end
 
     table.sort(lines, function(a, b) return a.score > b.score end)
+    -- Højst PER_FRIEND linjer om samme ven, så længe der er andet at sladre om
+    local max = math.min(limit or MAX_LINES, #lines)
+    local picked, per = {}, {}
+    for _, ln in ipairs(lines) do
+        if #picked >= max then break end
+        if not ln.f or (per[ln.f] or 0) < PER_FRIEND then
+            picked[#picked + 1] = ln
+            ln.used = true
+            if ln.f then per[ln.f] = (per[ln.f] or 0) + 1 end
+        end
+    end
+    for _, ln in ipairs(lines) do
+        if #picked >= max then break end
+        if not ln.used then picked[#picked + 1] = ln end
+    end
+    table.sort(picked, function(a, b) return a.score > b.score end)
     local out = {}
-    for i = 1, math.min(MAX_LINES, #lines) do out[i] = lines[i].text end
+    for i, ln in ipairs(picked) do out[i] = ln.text end
     -- Kun "ingen døde" er ikke nok til en hel sladder
     if #out == 1 and lines[1].score <= 12 then return {} end
     return out
@@ -463,6 +710,8 @@ frame:SetScript("OnEvent", function(_, event)
         session.since = math.max(out or (now - FIRST_BACK), now - MAX_BACK)
         session.snap = {}
         for k, v in pairs(db.gossip.snap) do session.snap[k] = v end
+        session.st = db.gossip.st
+        db.gossip.st = {}   -- nye målinger skrives i en ny tabel, så den gamle forbliver urørt
         C_Timer.After(SHOW_DELAY, function()
             -- første login på en ny dato (pr. konto, så et alt-skifte samme dag ikke viser den igen)
             if db.me and db.settings.gossip ~= false and db.gossip.day ~= Today() then

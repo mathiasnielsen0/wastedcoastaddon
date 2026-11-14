@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.18.7. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.19.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -315,9 +315,13 @@ kommer med, hvis det kunne ses (target eller nameplate), da man døde. Slå dem 
 ### Daglig sladder
 Første gang du logger ind på en ny dato (pr. konto, så et alt-skifte samme dag ikke tæller),
 kommer der efter et halvt minut et lille vindue med højdepunkterne siden sidst, fx hvem der tog flest levels, hvem der døde mest,
-den mest pinlige død (fald, lava eller et mob langt under ens eget level), epic loot,
-nye trofæer, dueller, Need-politiets anholdelser, hvem der tjente eller brugte mest guld,
-hvem der bærer Skammens hat, og hvem der ikke har været online i flere dage.
+den mest pinlige død (fald, lava eller et mob langt under ens eget level), epic og legendary loot,
+de flotteste rare items (med navn), hvem der vandt flest need-rolls, rare mobs, der blev nedlagt,
+maxede professions og store skill-hop, ny reputation (Honored, Revered, Exalted), hvem der steg mest
+i item level, hvem der har spillet mest, instanser klaret (og wipes), hvem der rullede og rullede uden at vinde,
+legacy points (WoW Forever), nye trofæer, dueller, Need-politiets anholdelser, hvem der tjente eller brugte mest guld,
+hvem der bærer Skammens hat, og hvem der ikke har været online i flere dage. Højst 10 linjer, og højst 3 om
+samme ven, så længe der er andet at fortælle.
 Sladderen står også i chatten. Den bygges af de data, addonet allerede har, så den sender
 ingen ekstra beskeder. Første gang dækker den det seneste døgn, ellers tiden siden du sidst
 var online (højst en uge). Vis den igen med `/wc4ever sladder`, og slå den fra ved login

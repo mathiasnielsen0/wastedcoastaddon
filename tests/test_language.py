@@ -177,4 +177,11 @@ check(popup.button1 == "Reload now", "popuppen er på engelsk, når man vælger 
 g.SlashCmdList["WASTEDCOAST"]("sprog da")
 check(len(list(g.POPUPS.values())) == 1, "ingen ny popup, når sproget ikke skifter")
 
+# Alle tekster i sladderen har en engelsk udgave (de fleste linjer vises kun, når der sker noget)
+import os
+src = open(os.path.join(ADDON, "Gossip.lua"), encoding="utf-8").read()
+en = lua.globals().WastedCoastDB and ns.EN
+missing = [k for k in re.findall(r'L\("((?:[^"\\]|\\.)*)"\)', src) if en[k] is None and DANISH.search(ALLOWED.sub(" ", k))]
+check(not missing, "sladder uden engelsk:\n  " + "\n  ".join(missing))
+
 print("OK,", PASSES, "checks passed", "(forever)" if FOREVER else "")

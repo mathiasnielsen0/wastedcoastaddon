@@ -53,6 +53,14 @@ local function ShowRareToast(friend, char, class, mob, level, cls, zone)
     })
 end
 
+-- v0.19: log over drab (til dagens sladder). db.rareLog = { { friend, mob, lvl, cls, zone, t }, ... }
+local RARE_LOG_MAX = 100
+local function LogRare(db, friend, mob, level, cls, zone, at)
+    db.rareLog = db.rareLog or {}
+    table.insert(db.rareLog, { friend = friend, mob = mob, lvl = tonumber(level) or 0, cls = cls, zone = zone, t = at or time() })
+    while #db.rareLog > RARE_LOG_MAX do table.remove(db.rareLog, 1) end
+end
+
 -- Vi (eller gruppen) dræbte et rare mob: vis toasten og fortæl de andre
 local function Killed(guid, info)
     local db = DB()
@@ -66,6 +74,7 @@ local function Killed(guid, info)
     ShowRareToast(db.me, char, class, info.name, info.level, info.cls, zone)
     db.rareKills = db.rareKills or {}
     db.rareKills[db.me] = (db.rareKills[db.me] or 0) + 1
+    LogRare(db, db.me, info.name, info.level, info.cls, zone, now)
     C.Send(table.concat({
         "RM", db.me, Clean(char), class or "", Clean(info.name):sub(1, 40), tostring(info.level or 0),
         info.cls, Clean(zone):sub(1, 30), tostring(now), Clean(guid):sub(1, 60),
@@ -142,6 +151,7 @@ function ns.OnRareMessage(t)
     tracked[key] = nil
     db.rareKills = db.rareKills or {}
     db.rareKills[friend] = (db.rareKills[friend] or 0) + 1
+    LogRare(db, friend, mob, level, cls, zone, at)
     ShowRareToast(friend, char, class ~= "" and class or nil, mob, level, cls, zone)
 end
 

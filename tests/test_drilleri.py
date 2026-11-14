@@ -835,8 +835,11 @@ check(findSent("XD;Mathias;"), "synk sender dueller")
 -- Daglig sladder: bygges af de data, der allerede er, og sender intet
 SENT = {}
 local gl = ns.GossipLines(0)
-local all = table.concat(gl, "\n")
-check(#gl > 0 and #gl <= 8, "sladder har linjer: " .. #gl)
+local all = table.concat(ns.GossipLines(0, nil, nil, 99), "\n")
+local perFriend = {}
+for _, l in ipairs(gl) do if l:find("^Du ") then perFriend.me = (perFriend.me or 0) + 1 end end
+check((perFriend.me or 0) <= 3, "højst 3 linjer om samme ven")
+check(#gl > 0 and #gl <= 10, "sladder har linjer: " .. #gl)
 check(all:find("Need%-politiet"), "need-politiet i sladderen: " .. all)
 check(all:find("vandt %d+ duel"), "dueller i sladderen: " .. all)
 check(all:find("ihjel") or all:find("døde"), "dødsfald i sladderen: " .. all)
@@ -873,8 +876,91 @@ Fire("PLAYER_LOGIN") RunTimers()
 check(_G.WastedCoastGossip:IsShown(), "igen næste dag")
 _G.WastedCoastGossip:Hide()
 
+-- v0.19: mere "siden sidst" (loot, rare mobs, professions, rep, gear, spilletid, instanser, rolls, legacy)
+do
+    local function copy(t) if type(t) ~= "table" then return t end local o = {} for k, v in pairs(t) do o[k] = copy(v) end return o end
+    db.friends.Frode = db.friends.Frode or { chars = {} }
+    db.friends.Frode.chars.Frodex = db.friends.Frode.chars.Frodex or {}
+    local fc = db.friends.Frode.chars.Frodex
+    fc.class, fc.level, fc.seen, fc.demo = "ROGUE", 70, NOW - 1000, nil
+    fc.prof = "Alchemy=370/375,Mining=200/375"
+    fc.rep = { ["Cenarion Expedition"] = "6:100:12000", ["Lower City"] = "5:0:6000" }
+    fc.gear = { il = 100, me = "", mg = 0, t = NOW }
+    fc.played = { t = 3600, l = 100, at = NOW - 1000 }
+    db.runs.Frode = { Karazhan = { clears = 1, wipes = 0, boss = { Attumen = 1 }, last = NOW } }
+    db.rolls.Frode = { rolls = 10, wins = 2, sum = 0, cnt = 0 }
+    db.legacy.Frode = { p = 10, c = 1, t = NOW }
+    db.friends.Jeppe = db.friends.Jeppe or { chars = {} }
+    db.friends.Jeppe.chars.Jeppex = { class = "MAGE", level = 70, seen = NOW - 5000, rep = { ["Lower City"] = "5:0:6000" } }
+    local st0 = copy(ns.GossipStats())
+    check(st0.Frode and st0.Frode.prof.Alchemy == 370 and st0.Frode.rep["Cenarion Expedition"] == 6 and st0.Frode.il == 100, "øjebliksbillede af stats")
+    check(st0.Frode.runs.Karazhan.c == 1 and st0.Frode.runs.Karazhan.b == 1 and st0.Frode.played == 3600, "øjebliksbillede af instanser og spilletid")
+    local since = NOW
+    NOW = NOW + 7200
+    fc.prof = "Alchemy=375/375,Mining=230/375,Herbalism=1/375"
+    fc.rep = { ["Cenarion Expedition"] = "8:0:999", ["Lower City"] = "7:0:21000" }
+    db.friends.Jeppe.chars.Jeppex.rep = { ["Lower City"] = "5:0:6000", ["Sporeggar"] = "7:0:21000" }
+    fc.gear.il = 105.5
+    fc.played = { t = 3600 + 9 * 3600, l = 100, at = NOW - 1000 }
+    fc.seen = NOW - 1000
+    db.runs.Frode.Karazhan = { clears = 3, wipes = 4, boss = { Attumen = 3, Moroes = 2 }, last = NOW }
+    db.rolls.Frode = { rolls = 16, wins = 2, sum = 0, cnt = 0 }
+    db.legacy.Frode = { p = 25, c = 3, t = NOW }
+    db.chars.Nickchar = "Nick"
+    table.insert(db.loot, { id = "g-1", friend = "Frode", char = "Frodex", class = "ROGUE", quality = 5, item = "item:19019", name = "Thunderfury", zone = "Molten Core", time = NOW - 60, how = "need" })
+    for i = 1, 3 do
+        table.insert(db.loot, { id = "g-r" .. i, friend = "Nick", char = "Nickchar", class = "WARRIOR", quality = 3, item = "item:" .. (100 + i), name = "Blå ting " .. i, zone = "Nagrand", time = NOW - 100 + i, how = "need" })
+    end
+    table.insert(db.loot, { id = "g-j", friend = "Jeppe", char = "Jeppex", class = "MAGE", quality = 3, item = "item:200", name = "Jeppes stav", zone = "Zangarmarsh", time = NOW - 50, how = "greed" })
+    db.rareLog = { { friend = "Jeppe", mob = "Old Gobblegut", lvl = 30, cls = "rare", zone = "Hillsbrad", t = since - 10 },
+                   { friend = "Jeppe", mob = "Marticar", lvl = 64, cls = "rare", zone = "Nagrand", t = NOW - 30 },
+                   { friend = "Nick", mob = "Voidhunter Yar", lvl = 66, cls = "rareelite", zone = "Netherstorm", t = NOW - 20 },
+                   { friend = "Nick", mob = "Ever-Core", lvl = 70, cls = "rareelite", zone = "Netherstorm", t = NOW - 10 } }
+    local lines = ns.GossipLines(since, {}, st0, 99)
+    local txt = table.concat(lines, "\n")
+    check(txt:find("LEGENDARY") and txt:find("Thunderfury"), "legendary loot: " .. txt)
+    check(txt:find("samlede 3 rare items op, bl.a.") and txt:find("Blå ting 3"), "rare-optælling med nyeste eksempel")
+    check(txt:find("scorede") and txt:find("Jeppes stav"), "enkelt rare item med navn")
+    check(txt:find("vandt 3 need%-rolls"), "need-goblin")
+    check(txt:find("nedlagde det sjældne mob") and txt:find("Marticar") and not txt:find("Old Gobblegut"), "rare mob siden sidst (ikke ældre)")
+    check(txt:find("nedlagde 2 sjældne mobs, senest") and txt:find("Ever%-Core"), "flere rare mobs")
+    check(txt:find("har maxet") and txt:find("Alchemy") and txt:find("375"), "maxet profession")
+    check(txt:find("skillede Mining fra 200 til 230"), "profession-fremgang")
+    check(not txt:find("Herbalism"), "ny profession på level 1 er ikke sladder")
+    check(txt:find("Exalted") and txt:find("Cenarion Expedition"), "exalted")
+    check(not txt:find("Lower City"), "kun bedste rep pr. ven")
+    check(txt:find("nåede Revered med Sporeggar"), "ny fraktion tæller fra neutral")
+    check(txt:find("5%.5 item levels") and txt:find("105%.5"), "item level op")
+    check(txt:find("har spillet") and txt:find("9 timer"), "spilletid siden sidst")
+    check(txt:find("klarede Karazhan 2 gange og dræbte 4 bosser"), "instanser: " .. txt)
+    check(txt:find("wipede") and txt:find("4 gange"), "wipes")
+    check(txt:find("rullede 6 gange og vandt ingenting"), "uheldige rolls")
+    check(txt:find("tjente 15 legacy points og klarede 2 challenges"), "legacy points")
+    check(not txt:find("{") and not txt:find("%%[sd]") and not txt:find("nil"), "ingen tomme felter: " .. txt)
+    local short = ns.GossipLines(since, {}, st0)
+    check(#short == 10 and short[1]:find("LEGENDARY"), "højst 10 linjer, legendary øverst")
+    -- intet nyt, når øjebliksbilledet er det samme som nu
+    local stNow = copy(ns.GossipStats())
+    local again = table.concat(ns.GossipLines(NOW, {}, stNow, 99), "\n")
+    check(not again:find("maxet") and not again:find("Exalted") and not again:find("item levels") and not again:find("wipede"), "ingen gentagelser: " .. again)
+    -- login gemmer det gamle billede til sammenligning og måler på ny
+    db.gossip.st = copy(st0)
+    db.gossip.day = date("%Y-%m-%d", NOW)
+    Fire("PLAYER_LOGIN") RunTimers()
+    check(db.gossip.st.Frode and db.gossip.st.Frode.il == 105.5, "nyt øjebliksbillede efter login")
+    local afterLogin = table.concat(ns.GossipLines(since, {}, nil, 99), "\n")
+    check(afterLogin:find("Exalted"), "sessionen sammenligner med billedet fra før login")
+    -- navneskift flytter rare mob-loggen med
+    check(db.rareLog[#db.rareLog].friend == "Nick", "rare-log har ven")
+    -- rare mob dræbt af en ven havner i loggen
+    local n0 = #db.rareLog
+    Fire("CHAT_MSG_ADDON", "WCOAST", "RM;Andreas;Andreasx;HUNTER;Doomsayer Jurim;68;rare;Shadowmoon Valley;" .. NOW .. ";Creature-x-9", "GUILD", "Andreasx")
+    check(#db.rareLog == n0 + 1 and db.rareLog[#db.rareLog].mob == "Doomsayer Jurim", "vens rare mob logges")
+end
+
 SlashCmdList.WASTEDCOAST("reset ja")
 check(#db.needShame == 0, "reset sletter need-synder")
+check(db.rareLog == nil, "reset sletter rare mob-loggen")
 check(next(db.duels) == nil, "reset sletter dueller")
 ns.ShowTab(13)
 ns.ShowTab(14)
