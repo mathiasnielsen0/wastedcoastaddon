@@ -162,7 +162,7 @@ local function Activity(id)
 end
 
 -- Flyt det, der er gemt om "from", over på "to". Findes noget allerede hos "to", beholdes det.
-local KEYED = { "runs", "ach", "rolls", "goldHist", "legacy", "levelAt", "bank", "duels", "rareKills" }
+local KEYED = { "runs", "ach", "rolls", "goldHist", "goldChar", "legacy", "levelAt", "bank", "duels", "rareKills" }
 function ns.MergeMemberData(from, to)
     local db = DB()
     if not db or not from or not to or from == to then return end

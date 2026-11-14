@@ -504,10 +504,101 @@ do
 end
 
 -- -----------------------------------------------------------------------------
+-- v0.18.6: guldgrafen er summen af alle vennens karakterer (en alt må ikke få grafen til at hoppe)
+-- -----------------------------------------------------------------------------
+do
+    local G = 10000
+    local start = NOW
+    db.friends.Jeppe = nil
+    db.goldChar.Jeppe = nil
+    -- Jeppes main har 500g
+    msg("H;Jeppe;Jeppemain;WARRIOR;60;" .. (500 * G) .. ";Orgrimmar;0;;11", "GUILD", "Jeppemain")
+    NOW = NOW + 3600
+    -- Han logger en alt på med 2g. Gamle versioner sendte så "2g" som hans samlede guld.
+    msg("H;Jeppe;Jeppealt;MAGE;10;" .. (2 * G) .. ";Elwynn;0;;12", "GUILD", "Jeppealt")
+    msg("G;Jeppe;" .. NOW .. ":" .. (2 * G), "GUILD", "Jeppealt")
+    NOW = NOW + 3600
+    msg("H;Jeppe;Jeppealt;MAGE;11;" .. (7 * G) .. ";Elwynn;0;;12", "GUILD", "Jeppealt")
+    NOW = NOW + 3600
+    -- Tilbage på mainen, der har tjent 20g
+    msg("H;Jeppe;Jeppemain;WARRIOR;60;" .. (520 * G) .. ";Orgrimmar;0;;13", "GUILD", "Jeppemain")
+    msg("G;Jeppe;" .. NOW .. ":" .. (520 * G), "GUILD", "Jeppemain")
+
+    local pts = ns.GoldTotalSeries("Jeppe", start - 86400, NOW)
+    local lo, vals = math.huge, {}
+    for _, p in ipairs(pts) do
+        if p[2] < lo then lo = p[2] end
+        if not p[3] then vals[#vals + 1] = p[2] / G end
+    end
+    check(lo >= 500 * G, "guldgrafen falder ikke til altens guld: laveste " .. lo / G .. "g")
+    -- (altens første kendte beløb tæller også med før, den blev set første gang)
+    check(table.concat(vals, ",") == "502,507,527", "summen følger alle karakterer: " .. table.concat(vals, ","))
+    check(pts[#pts][2] == 527 * G and pts[#pts][1] == NOW, "linjen slutter i det samlede guld nu")
+    local total, known = ns.GoldTotalAt("Jeppe", start + 1800)
+    check(total == 500 * G + 2 * G and known == true, "samlet guld på et tidspunkt: altens første kendte beløb tæller med")
+    check(ns.GoldTotalAt("Jeppe", start + 2 * 3600 + 10) == 507 * G, "samlet guld efter altens ændring")
+
+    -- Trappetrin: beløbet holder sig til næste ændring (ingen skrå linje over flere timer)
+    local stepOK = false
+    for i = 2, #pts do
+        if pts[i][3] and pts[i][2] == pts[i - 1][2] and pts[i + 1] and pts[i + 1][2] ~= pts[i][2] then stepOK = true end
+    end
+    check(stepOK, "grafen tegnes som trapper")
+
+    -- GC: en vens historik pr. karakter fra synk (også fra før vi var online)
+    msg("GC;Jeppe;Jeppemain;" .. (start - 7200) .. ":" .. (450 * G) .. "," .. (start - 3600) .. ":" .. (480 * G), "GUILD", "Jeppemain")
+    local early = ns.GoldTotalSeries("Jeppe", start - 86400, NOW)
+    check(early[1][2] == 452 * G, "synket historik indgår (main 450g + alt 2g): " .. early[1][2] / G)
+    msg("GC;Mathias;Mychar;" .. start .. ":1", "GUILD", "Nickchar")
+    check(not (db.goldChar.Mathias and db.goldChar.Mathias.Mychar and db.goldChar.Mathias.Mychar[1] and db.goldChar.Mathias.Mychar[1][2] == 1),
+        "ingen kan skrive guld på dine egne karakterer")
+    msg("GC;Jeppe;Jeppemain;" .. (NOW + 99999) .. ":" .. (999 * G), "GUILD", "Jeppemain")
+    local h = db.goldChar.Jeppe.Jeppemain
+    check(h[#h][1] <= NOW, "guldmåling fra fremtiden flyttes til nu")
+    h[#h][2] = 520 * G   -- tilbage til det rigtige beløb
+
+    -- Højst én måling pr. 10 minutter pr. karakter, og et loft over antallet
+    db.goldChar.Frode = nil
+    for i = 1, 30 do ns.RecordCharGold("Frode", "Frodo", 6000000 + i * 30, i * G) end
+    check(#db.goldChar.Frode.Frodo <= 3, "målinger samles pr. 10 minutter: " .. #db.goldChar.Frode.Frodo)
+    check(db.goldChar.Frode.Frodo[#db.goldChar.Frode.Frodo][2] == 30 * G, "den nyeste måling vinder")
+    for i = 1, 400 do ns.RecordCharGold("Frode", "Frodo", 7000000 + i * 3600, (i % 2) * G) end
+    check(#db.goldChar.Frode.Frodo <= 300, "loft over målinger pr. karakter")
+    check(db.goldChar.Frode.Frodo[1][1] == 6000000 + 30, "den første måling beholdes")
+
+    -- Guldsiden: "Samlet for de viste" er det samme som summen af hver vens karakterer
+    ns.frame:Show()
+    if ns.goldInfo then
+        for i = 1, #ns.pages do
+            pcall(ns.ShowTab, i)
+            if ns.goldInfo:IsShown() and ns.goldInfo:GetText() and ns.goldInfo:GetText() ~= "" then break end
+        end
+        local want = 0
+        for _, name in ipairs(ns.core.ROSTER) do
+            local pts2 = ns.GoldTotalSeries(name, NOW - 30 * 86400, NOW)
+            if pts2[#pts2] then want = want + pts2[#pts2][2] end
+        end
+        local sum = 0
+        for _, info in pairs(db.friends) do
+            for _, c in pairs(info.chars or {}) do sum = sum + (c.gold or 0) end
+        end
+        check(want == sum, "seneste punkt i grafen = summen af alle karakterers guld (" .. want .. " / " .. sum .. ")")
+    end
+
+    -- Dine egne karakterer sendes som GC i synk
+    SENT = {}
+    ns.RecordCharGold("Mathias", "Mathchar", NOW - 100, 42 * G)
+    db.friends.Mathias = db.friends.Mathias or { chars = {} }
+    db.friends.Mathias.chars.Mathchar = db.friends.Mathias.chars.Mathchar or { gold = 42 * G, seen = NOW - 100 }
+    ns.SendGoldHistory(10)
+    check(findSent("GC;Mathias;Mathchar;") ~= nil, "dine guldmålinger pr. karakter sendes")
+end
+
+-- -----------------------------------------------------------------------------
 -- Fuzz: tilfældige og ødelagte beskeder af alle typer må aldrig give en Lua-fejl
 -- -----------------------------------------------------------------------------
 do
-    local kinds = { "D", "L", "H", "C", "RM", "LP", "HP", "PT", "BK", "S", "B", "W", "A", "R", "G", "P", "E", "F",
+    local kinds = { "D", "L", "H", "C", "RM", "LP", "HP", "PT", "BK", "S", "B", "W", "A", "R", "G", "GC", "P", "E", "F",
                     "XE", "XN", "XK", "XU", "XD", "XL", "GM", "GW", "GK", "Q", "", "ZZ" }
     local vals = { "", "Nick", "Mathias", "abc", "0", "-5", "99999999999", "item:123", "1", "x:y", "1:2,3:4",
                    "WASTEDCOAST", "need", "raid", "rareelite", "Nick-1", tostring(NOW), "a=1:2", "nan", "1e400", "-1e400",

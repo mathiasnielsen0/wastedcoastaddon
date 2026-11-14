@@ -271,21 +271,15 @@ local function Collect(since, snapOverride)
             #cops > 1 and string.format(L(" Og der er %s mere."), C.Plural(#cops - 1, L("sag"), L("sager"))) or ""))
     end
 
-    -- Guld: største op- og nedtur (efter logout-målingerne)
+    -- Guld: største op- og nedtur (v0.18.6: summen af alle vennens karakterer, se ns.GoldTotalAt)
     local up, upN, down, downN = nil, 0, nil, 0
-    for name, h in pairs(db.goldHist or {}) do
-        if ROSTER_SET[name] then
-            local base, last
-            for _, smp in ipairs(h) do
-                if not smp.d then
-                    if smp[1] <= since then base = smp elseif base then last = smp end
-                end
-            end
-            if base and last then
-                local diff = last[2] - base[2]
-                if diff > upN then up, upN = name, diff end
-                if -diff > downN then down, downN = name, -diff end
-            end
+    for name in pairs(ROSTER_SET) do
+        local base, known = ns.GoldTotalAt(name, since, true)
+        local last = known and ns.GoldTotalAt(name, time(), true)
+        if base and last then
+            local diff = last - base
+            if diff > upN then up, upN = name, diff end
+            if -diff > downN then down, downN = name, -diff end
         end
     end
     if up and upN >= GOLD_MIN then

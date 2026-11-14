@@ -45,6 +45,8 @@ local addonName, ns = ...
 --   * v0.18.4: dræbt midt i et hop tæller ikke længere som faldskade (kun lange fald med livstab ved landingen)
 --   * v0.18.5: online-status er mere robust: et par mistede livstegn gør ikke en ven offline, guild-listen
 --             viser også logout med det samme, og navne med realm/efternavn i guild-listen genkendes
+--   * v0.18.7: guldgrafen viser summen af alle vennens karakterer (guld huskes pr. karakter), så den
+--             ikke længere hopper ned til altens guld, når nogen logger en alt på
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -450,7 +452,8 @@ local function InitDB()
     db.ach = db.ach or {}            -- ven -> trofæ-id -> tidspunkt
     db.demoAch = db.demoAch or {}    -- demo-trofæer (fjernes af /wc4ever demo slut)
     db.rolls = db.rolls or {}        -- ven -> { rolls, wins, sum, cnt, low, high }
-    db.goldHist = db.goldHist or {}  -- ven -> { { tid, kobber }, ... } sorteret efter tid
+    db.goldHist = db.goldHist or {}  -- ven -> { { tid, kobber }, ... } sorteret efter tid (samlet sum, kun til ældre versioner)
+    db.goldChar = db.goldChar or {}  -- ven -> karakter -> { { tid, kobber }, ... } (v0.18.7, guldgrafen bygger på den)
     db.legacy = db.legacy or {}      -- ven -> { p = legacy points, c = klarede challenges, t } (kun WoW Forever)
     if db.settings.toasts == nil then db.settings.toasts = true end
     if db.settings.lootToasts == nil then db.settings.lootToasts = true end
@@ -607,6 +610,10 @@ local function UpdateChar(friend, char, data, seenAt, soft)
     if not c.seen or seenAt > c.seen then c.seen = seenAt end
     c.demo = nil
     db.chars[char] = friend
+    -- v0.18.7: guld huskes pr. karakter, så grafen kan lægge alle vennens karakterer sammen
+    if data and data.gold ~= nil and c.gold == data.gold and ns.RecordCharGold then
+        ns.RecordCharGold(friend, char, seenAt, c.gold)
+    end
     return c
 end
 
@@ -1454,7 +1461,7 @@ local function AddDeath(ev)
         if db.settings.announce then
             local shown = f or ev.name
             local what = ns.L(ev.killer)
-            if ev.ability ~= "" then what = what .. " (" .. ns.L(ev.ability) .. ")" end
+            if ev.ability and ev.ability ~= "" then what = what .. " (" .. ns.L(ev.ability) .. ")" end
             local full = ns.CharFull(f, ev.name, ev.sur)
             local extra = (f and full ~= Name(f)) and (" (" .. full .. ")") or ""
             if not f then shown = full end
@@ -2141,6 +2148,158 @@ do
     end
 
     -- =============================================================================
+    -- v0.18.7: guld pr. karakter. db.goldChar[ven][karakter] = { { tid, kobber }, ... }
+    -- Før målte hver installation summen af de karakterer, den selv kendte. Spillede en ven en alt
+    -- et sted, hvor mainen ikke var kendt, blev altens guld til vennens "samlede" guld, og grafen
+    -- hoppede op og ned. Nu huskes hver karakters guld for sig, og grafen lægger dem sammen med
+    -- det senest kendte beløb for de karakterer, der ikke er logget på.
+    -- =============================================================================
+    local CHAR_GOLD_KEEP = 300    -- målinger pr. karakter
+    local CHAR_GOLD_BUCKET = 600  -- højst én måling pr. 10 minutter pr. karakter (den nyeste vinder)
+
+    local function RecordCharGold(friend, char, t, copper, demo)
+        if not ROSTER_SET[friend] or type(char) ~= "string" or char == "" then return false end
+        t, copper = tonumber(t), tonumber(copper)
+        if not t or t ~= t or t <= 0 or t == math.huge then return false end
+        if not copper or copper ~= copper or copper < 0 or copper == math.huge then return false end
+        t, copper = math.floor(t), math.floor(copper)
+        local now = time()
+        if t > now then t = now end   -- vennens ur kan gå forkert
+        local byChar = db.goldChar[friend]
+        if not byChar then byChar = {}; db.goldChar[friend] = byChar end
+        local h = byChar[char]
+        if not h then h = {}; byChar[char] = h end
+        local pos = #h + 1
+        while pos > 1 and h[pos - 1][1] > t do pos = pos - 1 end
+        local prev = h[pos - 1]
+        if prev and prev[1] == t then
+            if prev[2] == copper then return false end
+            prev[2] = copper
+            return true
+        end
+        if prev and prev[2] == copper then return false end   -- uændret
+        if pos == #h + 1 and prev and pos > 2 and math.floor(prev[1] / CHAR_GOLD_BUCKET) == math.floor(t / CHAR_GOLD_BUCKET) then
+            prev[1], prev[2] = t, copper   -- samme 10 minutter: ret den seneste måling
+            if h[pos - 2][2] == copper then table.remove(h, pos - 1) end
+            return true
+        end
+        table.insert(h, pos, { t, copper, d = demo or nil })
+        -- For mange: fjern den måling, der ligger tættest mellem sine naboer (aldrig den første eller sidste)
+        while #h > CHAR_GOLD_KEEP do
+            local best, gap = 2, math.huge
+            for i = 2, #h - 1 do
+                local g = h[i + 1][1] - h[i - 1][1]
+                if g < gap then best, gap = i, g end
+            end
+            table.remove(h, best)
+        end
+        return true
+    end
+    ns.RecordCharGold = RecordCharGold
+
+    -- Vennens karakterer med guld: en liste af målinger pr. karakter. Kun karakterer, vi kender som
+    -- vennens. En karakter uden historik tæller med sit senest kendte guld.
+    local function CharGoldLists(friend, noDemo)
+        local lists = {}
+        local info = db.friends[friend]
+        local byChar = db.goldChar[friend] or {}
+        for cn, c in pairs((info and info.chars) or {}) do
+            local h = byChar[cn]
+            if noDemo and c.demo then
+                -- demo-karakterer tæller ikke med i sladderen
+            elseif h and #h > 0 then
+                lists[#lists + 1] = h
+            elseif c.gold then
+                lists[#lists + 1] = { { c.seen or 1, c.gold } }
+            end
+        end
+        return lists
+    end
+
+    -- Samlet guld for en ven over tid: summen af alle karakterer, hvor hver karakter tæller med sit
+    -- senest kendte beløb (før dens første måling: det første kendte). Punkter fra "from" til "to".
+    -- Hvert punkt er { tid, kobber }; punkter med [3] = true er kun trappetrin (ingen prik).
+    local function GoldTotalSeries(friend, from, to)
+        local lists = CharGoldLists(friend)
+        local cur, ev, total = {}, {}, 0
+        for i, h in ipairs(lists) do
+            cur[i] = h[1][2]
+            total = total + cur[i]
+            for _, smp in ipairs(h) do ev[#ev + 1] = { smp[1], i, smp[2] } end
+        end
+        table.sort(ev, function(a, b)
+            if a[1] ~= b[1] then return a[1] < b[1] end
+            return a[2] < b[2]
+        end)
+        local pts, before = {}, false
+        local function put(t, v)
+            local last = pts[#pts]
+            if last and last[1] == t then last[2] = v; return end
+            if last and last[2] == v then return end
+            -- Trappetrin: beløbet holdt sig, indtil det ændrede sig
+            if last and t - last[1] > 1 then pts[#pts + 1] = { t - 1, last[2], true } end
+            pts[#pts + 1] = { t, v }
+        end
+        for _, e in ipairs(ev) do
+            if e[1] > to then break end
+            if e[1] >= from and #pts == 0 and before and e[1] > from then pts[1] = { from, total } end
+            total = total - cur[e[2]] + e[3]
+            cur[e[2]] = e[3]
+            if e[1] < from then before = true else put(e[1], total) end
+        end
+        if #pts == 0 and before then pts[1] = { from, total } end
+        -- Linjen fortsætter til "nu" med det nuværende beløb
+        local last = pts[#pts]
+        if last and last[1] < to then pts[#pts + 1] = { to, last[2], true } end
+        return pts
+    end
+    ns.GoldTotalSeries = GoldTotalSeries
+
+    -- Samlet guld for en ven på et tidspunkt. Anden værdi: om der fandtes målinger fra før tidspunktet.
+    local function GoldTotalAt(friend, t, noDemo)
+        local total, known, any = 0, false, false
+        for _, h in ipairs(CharGoldLists(friend, noDemo)) do
+            any = true
+            local v = h[1][2]
+            for _, smp in ipairs(h) do
+                if smp[1] > t then break end
+                v, known = smp[2], true
+            end
+            total = total + v
+        end
+        if not any then return nil, false end
+        return total, known
+    end
+    ns.GoldTotalAt = GoldTotalAt
+
+    -- Sender dine karakterers seneste guldmålinger: "GC;ven;karakter;tid:kobber,..."
+    local function SendCharGoldHistory(max)
+        if not db.me then return end
+        local chars = (db.friends[db.me] and db.friends[db.me].chars) or {}
+        for cn, h in pairs(db.goldChar[db.me] or {}) do
+            local c = chars[cn]
+            if c and not c.demo then
+                local head = "GC;" .. db.me .. ";" .. cn .. ";"
+                local parts = {}
+                local function flush()
+                    if #parts > 0 then Send(head .. table.concat(parts, ",")) end
+                    parts = {}
+                end
+                local len = #head
+                for i = math.max(1, #h - (max or 30) + 1), #h do
+                    if not h[i].d then
+                        local p = h[i][1] .. ":" .. h[i][2]
+                        if len + #p + 1 > 250 then flush(); len = #head end
+                        parts[#parts + 1] = p
+                        len = len + #p + 1
+                    end
+                end
+                flush()
+            end
+        end
+    end
+
+    -- =============================================================================
     -- Professions: c.prof = "Alchemy=375/375,Herbalism=300/375"
     -- =============================================================================
     local PROFS = {
@@ -2441,7 +2600,10 @@ do
 
     ns.AddGoldSample = AddGoldSample
     ns.SampleMyGold = SampleMyGold
-    ns.SendGoldHistory = SendGoldHistory
+    ns.SendGoldHistory = function(max)
+        SendGoldHistory(max)
+        SendCharGoldHistory(max)
+    end
     ns.ScheduleScan = ScheduleScan
     ns.PROFS = PROFS
     ns.ParseProf = ParseProf
@@ -2938,6 +3100,17 @@ local function HandleExtraMessage(kind, t)
             if ns.RefreshUI then ns.RefreshUI() end
         end
 
+    elseif kind == "GC" then
+        -- v0.18.7: guld pr. karakter
+        local friend, char = t[2], t[3]
+        if ROSTER_SET[friend] and friend ~= db.me and char and char ~= "" and t[4] then
+            local any = false
+            for ts, copper in t[4]:gmatch("(%d+):(%d+)") do
+                if ns.RecordCharGold(friend, char, tonumber(ts), tonumber(copper)) then any = true end
+            end
+            if any and ns.RefreshUI then ns.RefreshUI() end
+        end
+
     elseif kind == "P" then
         local friend, char = t[2], t[3]
         if ROSTER_SET[friend] and friend ~= db.me and char and char ~= "" then
@@ -3114,7 +3287,7 @@ local function OnAddonMessage(prefix, message, chatType, sender)
         if ns.OnBankMessage then ns.OnBankMessage(t) end
 
     elseif kind == "S" or kind == "B" or kind == "W" or kind == "A"
-        or kind == "R" or kind == "G" or kind == "P" or kind == "E" or kind == "F" then
+        or kind == "R" or kind == "G" or kind == "GC" or kind == "P" or kind == "E" or kind == "F" then
         HandleExtraMessage(kind, t)
 
     elseif kind and kind:sub(1, 1) == "X" then
@@ -3829,8 +4002,8 @@ local function RefreshOverview()
         for i = 1, math.min(2, #sorted) do
             local ev = sorted[i]
             local who = EventFriend(ev) or ev.name
-            local what = ns.L(ev.killer)
-            if ev.ability ~= "" then what = what .. " (" .. ns.L(ev.ability) .. ")" end
+            local what = ns.L(ev.killer or "?") or "?"
+            if ev.ability and ev.ability ~= "" then what = what .. " (" .. ns.L(ev.ability) .. ")" end
             if ev.pvp then what = what .. " |cff80b0ff[PvP]|r" end
             lines[#lines + 1] = string.format(ns.L("%s døde til %s - %s"), ColorName(who, ev.class), what, FormatAgo(ev.time))
         end
@@ -5361,17 +5534,11 @@ do
         return step * 10 * 10000
     end
 
-    -- Målinger for en ven inden for perioden, plus "nu" ud fra vennens karakterer
-    local function GoldSeries(friend, from, stat)
-        local pts = {}
-        for _, smp in ipairs(db.goldHist[friend] or {}) do
-            if smp[1] >= from then pts[#pts + 1] = { smp[1], smp[2] } end
-        end
-        if stat and stat.chars > 0 and stat.seen and stat.seen >= from then
-            local last = pts[#pts]
-            if not last or stat.seen > last[1] then pts[#pts + 1] = { stat.seen, stat.gold } end
-        end
-        return pts
+    -- Rigtige målinger blandt punkterne (trappetrin og "nu"-punktet tæller ikke)
+    local function CountSamples(pts)
+        local n = 0
+        for _, p in ipairs(pts) do if not p[3] then n = n + 1 end end
+        return n
     end
 
     local function BuildGoldPage(page)
@@ -5417,7 +5584,7 @@ do
                     GameTooltip:AddDoubleLine(ns.L("Nu"), FormatGold(last), 0.8, 0.8, 0.8, 1, 1, 1)
                     GameTooltip:AddDoubleLine(ns.L("I perioden"), (diff >= 0 and "+" or "-") .. FormatGold(math.abs(diff)),
                         0.8, 0.8, 0.8, diff >= 0 and 0.4 or 1, diff >= 0 and 0.9 or 0.45, diff >= 0 and 0.5 or 0.45)
-                    GameTooltip:AddDoubleLine(ns.L("Målinger"), tostring(#d.pts), 0.8, 0.8, 0.8, 1, 1, 1)
+                    GameTooltip:AddDoubleLine(ns.L("Målinger"), tostring(CountSamples(d.pts)), 0.8, 0.8, 0.8, 1, 1, 1)
                 end
                 GameTooltip:AddLine(ns.L("Klik for at skjule/vise"), 0.5, 0.8, 1)
                 GameTooltip:Show()
@@ -5491,13 +5658,13 @@ do
         local days = GOLD_RANGES[ns.goldRange].days
         local from = days > 0 and (now - days * 86400) or nil
 
-        local stats = {}
-        for _, s in ipairs(BuildStats()) do stats[s.name] = s end
         if not from then
+            -- "Alt": fra den første guldmåling på nogen karakter
             from = now
             for _, name in ipairs(ROSTER) do
-                local h = db.goldHist[name]
-                if h and h[1] and h[1][1] < from then from = h[1][1] end
+                for _, h in pairs(db.goldChar[name] or {}) do
+                    if h[1] and h[1][1] < from and h[1][1] > 1 then from = h[1][1] end
+                end
             end
             if now - from < 86400 then from = now - 86400 end
         end
@@ -5505,7 +5672,8 @@ do
         local series, maxG, any = {}, 0, false
         ns.ShowFirst(ns.goldFriendBtns, #ROSTER)
         for i, name in ipairs(ROSTER) do
-            local pts = GoldSeries(name, from, stats[name])
+            -- v0.18.7: summen af alle vennens karakterer (ikke de gamle samlede målinger, der hoppede)
+            local pts = ns.GoldTotalSeries(name, from, now)
             local b = ns.goldFriendBtns[i]
             b.data = { pts = pts }
             b.friend = name
@@ -5556,12 +5724,14 @@ do
             local prev
             for _, p in ipairs(s.pts) do
                 local x, y = X(p[1]), Y(p[2])
-                nd = nd + 1
-                local d = GraphDot(g, nd)
-                d:ClearAllPoints()
-                d:SetPoint("CENTER", g, "BOTTOMLEFT", x, y)
-                d:SetColorTexture(s.col[1], s.col[2], s.col[3], 1)
-                d:Show()
+                if not p[3] then
+                    nd = nd + 1
+                    local d = GraphDot(g, nd)
+                    d:ClearAllPoints()
+                    d:SetPoint("CENTER", g, "BOTTOMLEFT", x, y)
+                    d:SetColorTexture(s.col[1], s.col[2], s.col[3], 1)
+                    d:Show()
+                end
                 if prev then
                     nl = nl + 1
                     local l = GraphLine(g, nl)
@@ -6851,6 +7021,10 @@ do
         end
         for name, info in pairs(db.friends) do
             for cn, c in pairs(info.chars or {}) do
+                if c.demo and db.goldChar[name] then db.goldChar[name][cn] = nil end
+            end
+            if db.goldChar[name] and not next(db.goldChar[name]) then db.goldChar[name] = nil end
+            for cn, c in pairs(info.chars or {}) do
                 if c.demo then
                     info.chars[cn] = nil
                     if db.chars[cn] == name then db.chars[cn] = nil end
@@ -6927,6 +7101,19 @@ do
                     for k = 1, math.random(4, 16) do
                         g = math.max(0, g + math.random(-150, 300) * 10000)
                         ns.AddGoldSample(name, now - (17 - k) * math.random(20000, 200000), g, true)
+                    end
+                end
+                -- Guld pr. demo-karakter (det er dem, grafen tegner): en tilfældig tur, der ender i dens guld
+                for cn, c in pairs((db.friends[name] and db.friends[name].chars) or {}) do
+                    if c.demo and c.gold then
+                        local h, g, t = {}, c.gold, c.seen or now
+                        for _ = 1, math.random(3, 12) do
+                            table.insert(h, 1, { t, g, d = true })
+                            t = t - math.random(20000, 250000)
+                            g = math.max(0, g - math.random(-150, 300) * 10000)
+                        end
+                        db.goldChar[name] = db.goldChar[name] or {}
+                        db.goldChar[name][cn] = h
                     end
                 end
 
@@ -7337,6 +7524,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
             wipe(db.runs)
             wipe(db.rolls)
             wipe(db.goldHist)
+            wipe(db.goldChar)
             if ns.ResetPranks then ns.ResetPranks() end
             wipe(db.ach)
             wipe(db.demoAch)
