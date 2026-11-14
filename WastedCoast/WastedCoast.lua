@@ -53,6 +53,10 @@ local addonName, ns = ...
 --             XP-ring, online/offline, tooltip med zone og hvad vennen laver) og en live-ticker med det seneste nye
 --   * v0.20.1: én død giver ikke længere to dødsbeskeder/toasts: PLAYER_DEAD tæller kun én gang pr. død, samme
 --             karakter, der dør igen inden for 30 sekunder, er samme dødsfald, og gamle dubletter ryddes op
+--   * v0.21.0: rolls skelner mellem need, greed og disenchant (deltaget og vundet pr. type) og tæller pass.
+--             Rolls-siden har kolonner for need/greed og pass, sladderen hænger need-goblins og
+--             pass-helgener ud, og tickeren viser, om loot blev vundet på need eller greed. Ældre
+--             versioner sender bare de samlede tal; de nye felter ligger sidst i R-beskeden
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -924,6 +928,8 @@ do
 
     -- =============================================================================
     -- Rolls: db.rolls[ven] = { rolls = deltaget, wins = vundet, sum/cnt = roll-tal, low, high }
+    -- v0.21: + nr/nw (need deltaget/vundet), gr/gw (greed), dr/dw (disenchant), pr (pass).
+    -- Felterne er nil for venner på en ældre version (og for rolls fra før v0.21).
     -- =============================================================================
     local ROLL_MIN = 5   -- færre rolls end dette giver ingen uheldsrating
 
@@ -949,7 +955,28 @@ do
 
     ns.DeathStats = DeathStats
     ns.WhoText = WhoText
+    -- v0.21: felterne for hver roll-type
+    local ROLL_TYPE_KEYS = { need = { "nr", "nw" }, greed = { "gr", "gw" }, de = { "dr", "dw" } }
+    local ROLL_TYPE_FIELDS = { "nr", "nw", "gr", "gw", "dr", "dw", "pr" }
+
+    -- Har vi need/greed-tal for vennen? (nil for venner på en ældre version)
+    local function HasRollTypes(r)
+        return r ~= nil and (r.nr ~= nil or r.gr ~= nil or r.dr ~= nil or r.pr ~= nil)
+    end
+
+    -- Andel af typede rolls, der var need (0-1), eller nil
+    local function NeedShare(r)
+        if not HasRollTypes(r) then return nil end
+        local typed = (r.nr or 0) + (r.gr or 0) + (r.dr or 0)
+        if typed == 0 then return nil end
+        return (r.nr or 0) / typed
+    end
+
     ns.ROLL_MIN = ROLL_MIN
+    ns.ROLL_TYPE_KEYS = ROLL_TYPE_KEYS
+    ns.ROLL_TYPE_FIELDS = ROLL_TYPE_FIELDS
+    ns.HasRollTypes = HasRollTypes
+    ns.NeedShare = NeedShare
     ns.RollEntry = RollEntry
     ns.LossRate = LossRate
     ns.AvgRoll = AvgRoll
@@ -1828,6 +1855,8 @@ local function BuildLootPatterns()
     add("rolled", "need", "LOOT_ROLL_ROLLED_NEED")
     add("rolled", "greed", "LOOT_ROLL_ROLLED_GREED")
     add("rolled", "de", "LOOT_ROLL_ROLLED_DE")
+    add("pass", "pass", "LOOT_ROLL_PASSED_SELF_AUTO")
+    add("pass", "pass", "LOOT_ROLL_PASSED_SELF")
     add("drop", "drop", "LOOT_ITEM_SELF_MULTIPLE")
     add("drop", "drop", "LOOT_ITEM_SELF")
 end
@@ -1885,7 +1914,11 @@ do
     local function SendRollSummary()
         local r = db.me and ns.RollEntry(db.me)
         if r then
-            Send(string.format("R;%s;%d;%d;%d;%d;%d;%d", db.me, r.rolls, r.wins, r.sum, r.cnt, r.low or 0, r.high or 0))
+            -- v0.21: need/greed/de/pass-tallene ligger sidst, så ældre versioner bare overser dem
+            local typed = {}
+            for i, k in ipairs(ns.ROLL_TYPE_FIELDS) do typed[i] = tostring(r[k] or 0) end
+            Send(string.format("R;%s;%d;%d;%d;%d;%d;%d;%s", db.me, r.rolls, r.wins, r.sum, r.cnt, r.low or 0, r.high or 0,
+                table.concat(typed, ";")))
         end
     end
 
@@ -1901,7 +1934,7 @@ do
     end
 
     local lastRollWin = {}   -- itemID -> tidspunkt, så samme sejr ikke tælles to gange
-    local function CountRollWin(it)
+    local function CountRollWin(it, how)
         if not db.me then return end
         local now = GetTime()
         if lastRollWin[it.id] and now - lastRollWin[it.id] < 3 then return end
@@ -1909,13 +1942,32 @@ do
         local r = ns.RollEntry(db.me, true)
         r.wins = r.wins + 1
         if r.rolls < r.wins then r.rolls = r.wins end
+        local k = ns.ROLL_TYPE_KEYS[how]
+        if k then
+            r[k[2]] = (r[k[2]] or 0) + 1
+            if (r[k[1]] or 0) < r[k[2]] then r[k[1]] = r[k[2]] end
+        end
         RollChanged()
     end
 
-    local function CountRollChoice()
+    local function CountRollChoice(how)
         if not db.me then return end
         local r = ns.RollEntry(db.me, true)
         r.rolls = r.rolls + 1
+        local k = ns.ROLL_TYPE_KEYS[how]
+        if k then r[k[1]] = (r[k[1]] or 0) + 1 end
+        RollChanged()
+    end
+
+    -- v0.21: pass tæller ikke som et roll, men huskes for sig
+    local lastPass = {}   -- itemID -> tidspunkt, så samme pass ikke tælles to gange
+    local function CountRollPass(it)
+        if not db.me then return end
+        local now = GetTime()
+        if it and lastPass[it.id] and now - lastPass[it.id] < 3 then return end
+        if it then lastPass[it.id] = now end
+        local r = ns.RollEntry(db.me, true)
+        r.pr = (r.pr or 0) + 1
         RollChanged()
     end
 
@@ -1935,6 +1987,7 @@ do
     ns.SendRollSummary = SendRollSummary
     ns.CountRollWin = CountRollWin
     ns.CountRollChoice = CountRollChoice
+    ns.CountRollPass = CountRollPass
     ns.CountRollValue = CountRollValue
 end
 
@@ -1951,9 +2004,11 @@ local function OnLootMessage(msg)
             end
             local it = ParseLink(msg)
             if not it then return end
-            if p.kind == "choice" then
+            if p.kind == "pass" then
+                ns.CountRollPass(it)
+            elseif p.kind == "choice" then
                 rollChoice[it.id] = { how = p.how, t = GetTime() }
-                ns.CountRollChoice()
+                ns.CountRollChoice(p.how)
             elseif p.kind == "won" then
                 local how = p.how
                 if not how then
@@ -1961,7 +2016,7 @@ local function OnLootMessage(msg)
                     how = (ch and (GetTime() - ch.t) < 180) and ch.how or "roll"
                 end
                 recentRoll[it.id] = GetTime()
-                ns.CountRollWin(it)
+                ns.CountRollWin(it, how)
                 if how == "need" and ns.WatchNeed then ns.WatchNeed(it) end
                 RecordLoot(it, how, false)
             else
@@ -3161,6 +3216,13 @@ local function HandleExtraMessage(kind, t)
                 local low, high = tonumber(t[7]) or 0, tonumber(t[8]) or 0
                 r.low = low > 0 and low or nil
                 r.high = high > 0 and high or nil
+                -- v0.21: need/greed/de/pass (mangler fra ældre versioner, så beholdes det, vi har)
+                if t[9] and t[9] ~= "" then
+                    for i, k in ipairs(ns.ROLL_TYPE_FIELDS) do
+                        local v = tonumber(t[8 + i])
+                        if v and v >= 0 then r[k] = v end
+                    end
+                end
                 r.demo = nil
                 if ns.RefreshUI then ns.RefreshUI() end
             end
@@ -5353,11 +5415,13 @@ do
     -- =============================================================================
     local ROLL_COLS = ns.LT({
         { x = 10,  w = 30,  j = "CENTER", label = "#" },
-        { x = 50,  w = 220, j = "LEFT",   label = "Ven" },
-        { x = 280, w = 90,  j = "CENTER", label = "Rolls" },
-        { x = 380, w = 90,  j = "CENTER", label = "Vundet" },
-        { x = 480, w = 100, j = "CENTER", label = "Tabt" },
-        { x = 590, w = 100, j = "CENTER", label = "Snit" },
+        { x = 50,  w = 170, j = "LEFT",   label = "Ven" },
+        { x = 225, w = 65,  j = "CENTER", label = "Rolls" },
+        { x = 295, w = 65,  j = "CENTER", label = "Vundet" },
+        { x = 365, w = 65,  j = "CENTER", label = "Tabt" },
+        { x = 435, w = 65,  j = "CENTER", label = "Snit" },
+        { x = 505, w = 110, j = "CENTER", label = "Need / Greed" },
+        { x = 620, w = 70,  j = "CENTER", label = "Pass" },
     })
 
     local function BuildStatsPage(page)
@@ -5399,6 +5463,22 @@ do
                     GameTooltip:AddDoubleLine(ns.L("Deltaget i"), Plural(r.rolls, "roll", "rolls"), 0.8, 0.8, 0.8, 1, 1, 1)
                     GameTooltip:AddDoubleLine(ns.L("Vundet"), tostring(r.wins or 0), 0.8, 0.8, 0.8, 0.4, 0.9, 0.5)
                     GameTooltip:AddDoubleLine(ns.L("Tabt"), tostring(math.max(0, r.rolls - (r.wins or 0))), 0.8, 0.8, 0.8, 1, 0.45, 0.45)
+                    if ns.HasRollTypes(r) then
+                        GameTooltip:AddLine(" ")
+                        GameTooltip:AddDoubleLine(ns.L("Need (vundet)"), string.format("%d (%d)", r.nr or 0, r.nw or 0), 0.8, 0.8, 0.8, 1, 0.55, 0.3)
+                        GameTooltip:AddDoubleLine(ns.L("Greed (vundet)"), string.format("%d (%d)", r.gr or 0, r.gw or 0), 0.8, 0.8, 0.8, 0.4, 0.9, 0.5)
+                        if (r.dr or 0) > 0 then
+                            GameTooltip:AddDoubleLine(ns.L("Disenchant (vundet)"), string.format("%d (%d)", r.dr or 0, r.dw or 0), 0.8, 0.8, 0.8, 0.7, 0.5, 1)
+                        end
+                        GameTooltip:AddDoubleLine(ns.L("Pass"), tostring(r.pr or 0), 0.8, 0.8, 0.8, 0.7, 0.7, 0.75)
+                        local share = ns.NeedShare(r)
+                        if share then
+                            GameTooltip:AddDoubleLine(ns.L("Need-andel"), string.format("%d%%", math.floor(share * 100 + 0.5)), 0.8, 0.8, 0.8, 1, 1, 1)
+                        end
+                    else
+                        GameTooltip:AddLine(" ")
+                        GameTooltip:AddLine(ns.L("Need/greed tælles fra version 0.21"), 0.5, 0.5, 0.56)
+                    end
                     local avg = ns.AvgRoll(r)
                     if avg then
                         GameTooltip:AddLine(" ")
@@ -5427,7 +5507,7 @@ do
         ns.rollNote:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 12, 10)
         ns.rollNote:SetWidth(700)
         ns.rollNote:SetTextColor(0.5, 0.5, 0.56)
-        ns.rollNote:SetText(ns.L("Tabt = andel af dine need/greed-rolls, du ikke vandt. Snit = dit gennemsnitlige roll (held er 50,5)."))
+        ns.rollNote:SetText(ns.L("Tabt = andel af dine need/greed-rolls, du ikke vandt. Snit = dit gennemsnitlige roll (held er 50,5). Orange need = gruppens største need-goblin."))
     end
 
     local function RefreshStatsPage()
@@ -5444,6 +5524,14 @@ do
         end)
         local classOf = {}
         for _, s in ipairs(BuildStats()) do classOf[s.name] = s.class end
+        -- v0.21: need-goblinen = højeste need-andel (mindst ROLL_MIN typede rolls)
+        local goblin, goblinShare = nil, 0
+        for _, d in ipairs(list) do
+            local r = d.r
+            local typed = r and ((r.nr or 0) + (r.gr or 0) + (r.dr or 0)) or 0
+            local share = ns.NeedShare(r)
+            if share and typed >= ns.ROLL_MIN and share > goblinShare then goblin, goblinShare = d.name, share end
+        end
 
         ns.ShowFirst(ns.rollRows, #list)
         for i, d in ipairs(list) do
@@ -5463,6 +5551,14 @@ do
                 row.f[5]:SetText("|cff666666-|r")
             end
             row.f[6]:SetText(d.avg and string.format("%.1f", d.avg) or "-")
+            if ns.HasRollTypes(r) then
+                row.f[7]:SetText(string.format("%d / %d", r.nr or 0, r.gr or 0))
+                if d.name == goblin then row.f[7]:SetTextColor(1, 0.55, 0.2) else row.f[7]:SetTextColor(1, 1, 1) end
+                row.f[8]:SetText(tostring(r.pr or 0))
+            else
+                row.f[7]:SetText("|cff666666-|r")
+                row.f[8]:SetText("|cff666666-|r")
+            end
             if d.avg and d.avg < 45 then
                 row.f[6]:SetTextColor(1, 0.5, 0.5)
             elseif d.avg and d.avg > 56 then
@@ -7188,8 +7284,13 @@ do
                 if not db.rolls[name] then
                     local rolls = math.random(4, 40)
                     local cnt = math.random(rolls, rolls * 2)
-                    db.rolls[name] = { rolls = rolls, wins = math.random(0, math.floor(rolls / 2)), cnt = cnt,
-                                       sum = cnt * math.random(35, 65), low = math.random(1, 9), high = math.random(90, 100), demo = true }
+                    local wins = math.random(0, math.floor(rolls / 2))
+                    local nr = math.random(0, rolls)
+                    local nw = math.min(nr, math.random(0, wins))
+                    db.rolls[name] = { rolls = rolls, wins = wins, cnt = cnt,
+                                       sum = cnt * math.random(35, 65), low = math.random(1, 9), high = math.random(90, 100),
+                                       nr = nr, nw = nw, gr = rolls - nr, gw = math.min(rolls - nr, wins - nw), dr = 0, dw = 0,
+                                       pr = math.random(0, 25), demo = true }
                 end
 
                 if not db.goldHist[name] or #db.goldHist[name] == 0 then
@@ -7707,4 +7808,6 @@ ns.core = {
     PlayEventSound = PlayEventSound,
     -- v0.20: bande-baren (Bar.lua)
     ClassName = ClassName, ICON_TEX = ICON_TEX, COL_MUTED = COL_MUTED, FormatAgoShort = FormatAgoShort,
+    -- v0.21: need/greed i tickeren
+    HOW_LABEL = HOW_LABEL,
 }

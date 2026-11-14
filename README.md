@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.20.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.21.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -250,6 +250,14 @@ ikke vandt (fra 5 rolls), og **Snit** er dit gennemsnitlige roll (held er 50,5).
 Den med højest tabt-procent står øverst og får titlen *Uheldsfuglen*. Kun rolls
 fra den nye version tæller.
 
+**Need / Greed og Pass** (fra 0.21): addonet skelner mellem dine valg. Kolonnen
+*Need / Greed* viser, hvor mange gange du har trykket hvad, og *Pass* hvor mange
+items du har passet på (også automatiske pass). Hold musen over en ven for at se,
+hvor mange need-, greed- og disenchant-rolls der blev vundet, og vennens need-andel.
+Den med højest need-andel (mindst 5 rolls) får sit need-tal i orange: gruppens
+need-goblin. Tallene tæller fra 0.21; venner på en ældre version vises med `-`,
+indtil de opdaterer, og deres samlede tal virker som før.
+
 ### Guld
 En graf over hver vens samlede guld over tid. Guldet huskes pr. karakter, og
 grafen lægger alle vennens karakterer sammen, hvor dem, der ikke er logget på,
@@ -338,6 +346,7 @@ den mest pinlige død (fald, lava eller et mob langt under ens eget level), epic
 de flotteste rare items (med navn), hvem der vandt flest need-rolls, rare mobs, der blev nedlagt,
 maxede professions og store skill-hop, ny reputation (Honored, Revered, Exalted), hvem der steg mest
 i item level, hvem der har spillet mest, instanser klaret (og wipes), hvem der rullede og rullede uden at vinde,
+hvem der trykkede Need på alt (og næsten aldrig Greed), hvem der passede mest,
 legacy points (WoW Forever), nye trofæer, dueller, Need-politiets anholdelser, hvem der tjente eller brugte mest guld,
 hvem der bærer Skammens hat, og hvem der ikke har været online i flere dage. Højst 10 linjer, og højst 3 om
 samme ven, så længe der er andet at fortælle.
@@ -591,4 +600,5 @@ python3 tests/test_language.py WastedCoast          # engelsk: ingen dansk tekst
 python3 tests/test_language.py WastedCoast forever  # det samme på WoW Forever
 python3 tests/test_bar.py WastedCoast               # bande-baren: ikoner, XP-ring, tooltip, ticker, flyt og lås
 python3 tests/test_bar.py WastedCoast forever       # det samme på WoW Forever
+python3 tests/test_rolls.py WastedCoast             # need/greed/disenchant/pass i rolls, synk, Rolls-siden og sladder
 ```

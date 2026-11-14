@@ -13,6 +13,7 @@ local L = ns.L
 --              st = { ven -> { prof, rep, il, played, runs, rolls, wins, lp, lc } } (v0.19) }
 -- v0.19: mere "siden sidst": legendary/rare loot med navn, need-goblins, rare mobs,
 -- professions, reputation, item level, spilletid, instanser og wipes, uheldige rolls
+-- v0.21: st.nr, st.gr, st.pr (need, greed og pass) giver need-goblins og pass-helgener
 -- og legacy points. Det hele sammenlignes med øjebliksbilledet fra sidste besøg.
 -- Indlæses efter WastedCoast.lua og bruger dens hjælpefunktioner via ns.core.
 -- =============================================================================
@@ -109,6 +110,8 @@ local function Stats(name)
     end
     local r = db.rolls[name]
     if r then st.rolls, st.wins, any = r.rolls or 0, r.wins or 0, true end
+    -- v0.21: need/greed/pass (kun for venner, der sender dem)
+    if r and ns.HasRollTypes and ns.HasRollTypes(r) then st.nr, st.gr, st.pr = r.nr or 0, r.gr or 0, r.pr or 0 end
     local lg = db.legacy and db.legacy[name]
     if lg then st.lp, st.lc, any = lg.p, lg.c, true end
     return any and st or nil
@@ -346,6 +349,7 @@ local function Collect(since, snapOverride, stOverride, limit)
     -- v0.19: sammenligning med øjebliksbilledet (professions, rep, gear, spilletid, instanser, rolls, legacy)
     local stBefore = stOverride or session.st or {}
     local profMax, profUp, repUp, gearUp, playUp, runUp, wipeUp, rollBad, legUp = {}, {}, {}, {}, {}, {}, {}, {}, {}
+    local needGob, passSaint = {}, {}
     for _, name in ipairs(ROSTER) do
         local b, n = stBefore[name], Stats(name)
         if b and n then
@@ -396,6 +400,12 @@ local function Collect(since, snapOverride, stOverride, limit)
             if b.rolls and n.rolls and n.rolls - b.rolls >= 5 and (n.wins or 0) == (b.wins or 0) then
                 rollBad[#rollBad + 1] = { f = name, n = n.rolls - b.rolls }
             end
+            -- v0.21: need på alt / pass på alt
+            if b.nr and n.nr and b.gr and n.gr then
+                local dn, dg = n.nr - b.nr, n.gr - b.gr
+                if dn >= 5 and dn >= dg * 3 then needGob[#needGob + 1] = { f = name, n = dn, g = dg } end
+            end
+            if b.pr and n.pr and n.pr - b.pr >= 10 then passSaint[#passSaint + 1] = { f = name, n = n.pr - b.pr } end
             -- Legacy (WoW Forever)
             if n.lp and b.lp and n.lp > b.lp then legUp[#legUp + 1] = { f = name, d = n.lp - b.lp, c = (n.lc or 0) - (b.lc or 0) } end
         end
@@ -447,6 +457,20 @@ local function Collect(since, snapOverride, stOverride, limit)
     local b1 = top(rollBad, "n")[1]
     if b1 then
         add(29, string.format(L("%s rullede %d gange og vandt ingenting. RNG hader personen."), Who(b1.f), b1.n))
+    end
+    local ng = top(needGob, "n")[1]
+    if ng then
+        if ng.g == 0 then
+            add(31, string.format(L("%s trykkede Need %d gange og Greed ikke én eneste gang. %s"), Who(ng.f), ng.n,
+                Pick({ L("Alt er en opgradering, hvis man tror nok på det."), L("Need-knappen er slidt op."), L("Grådighed er også en talent-tree.") })))
+        else
+            add(28, string.format(L("%s needede %d gange og greedede kun %d. Need-politiet kigger med."), Who(ng.f), ng.n, ng.g))
+        end
+    end
+    local ps = top(passSaint, "n")[1]
+    if ps then
+        add(21, string.format(L("%s passede %d gange. %s"), Who(ps.f), ps.n,
+            Pick({ L("Wasted Coasts mest gavmilde sjæl."), L("Eller også var der bare ikke noget godt."), L("En helgen blandt goblins.") })))
     end
     local l1 = top(legUp, "d")[1]
     if l1 then

@@ -102,7 +102,10 @@ function Bar.Items(now)
     for _, ev in ipairs(db.loot or {}) do
         local f = (ev.friend and C.ROSTER_SET[ev.friend] and ev.friend) or C.FriendOfChar(ev.char)
         if f and (ev.time or 0) > since and ev.item and ev.name then
-            add(ev.time, "o" .. tostring(ev.id or ev.time), F("%s fik %s", Who(f, ev.class), C.LootLink(ev)))
+            -- v0.21: vundet på need/greed/disenchant står efter itemet
+            local how = (ev.how == "need" or ev.how == "greed" or ev.how == "de") and C.HOW_LABEL and C.HOW_LABEL[ev.how]
+            local tail = how and (" |cff9aa0a6(" .. how .. ")|r") or ""
+            add(ev.time, "o" .. tostring(ev.id or ev.time), F("%s fik %s", Who(f, ev.class), C.LootLink(ev)) .. tail)
         end
     end
 
