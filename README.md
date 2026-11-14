@@ -318,7 +318,7 @@ Fanen samler alt det, der er lavet for at genere hinanden:
   rent held. *Held 80%* betyder, at dine rolls er bedre end 80% af, hvad tilfældighed
   ville give; 50% er helt normalt. Kræver mindst 5 rolls. Den heldigste får titlen
   *Fætter Højben*.
-- **Skammens hat:** den, der døde sidst, bærer hatten (dødningehovedet på kortet),
+- **Skammens hat:** den, der døde sidst, bærer hatten (den grimme lilla troldmandshat på kortet og bande-baren),
   indtil en anden dør. Fanen viser, hvor længe hatten har siddet, og hvem der har
   båret den længst i alt.
 - **Emote-angreb:** klik på en ven (eller skriv `/wc4ever angrib nick`) for at sende en
