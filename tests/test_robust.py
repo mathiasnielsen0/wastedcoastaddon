@@ -94,7 +94,9 @@ do
     check(c.level == 22 and c.xp == 40 and c.class == "HUNTER" and db.friends.Rasmus.session == 7, "livstegn gemmes")
     check(ns.core.IsOnline("Rasmus"), "ven er online lige efter et livstegn")
     NOW = NOW + 151
-    check(not ns.core.IsOnline("Rasmus"), "offline efter 150 sekunder uden livstegn")
+    check(ns.core.IsOnline("Rasmus"), "to mistede livstegn: stadig online (v0.18.5)")
+    NOW = NOW + 180
+    check(not ns.core.IsOnline("Rasmus"), "offline efter 5½ minut uden livstegn")
     msg("H;Rasmus;Rasmuschar;HUNTER;0;5000;Westfall;40;;7", "GUILD", "Rasmuschar")
     check(c.level == 22, "level 0 overskriver ikke et kendt level")
 
@@ -466,7 +468,26 @@ do
     Fire("GUILD_ROSTER_UPDATE")
     NOW = NOW + 200
     check(not C.IsOnline("Nick"), "en gammel guild-liste tæller ikke")
+    -- v0.18.5: et par mistede livstegn gør ikke vennen offline (uden guild-liste)
+    db.friends.Nick.chars.Nickchar.seen, db.friends.Nick.chars.Nickchar.hb = NOW - 200, NOW - 200
+    check(C.IsOnline("Nick"), "200 sek. uden livstegn: stadig online")
+    db.friends.Nick.chars.Nickchar.hb = nil
+    check(not C.IsOnline("Nick"), "fristen gælder kun livstegn, ikke synk-data")
+    db.friends.Nick.chars.Nickchar.seen, db.friends.Nick.chars.Nickchar.hb = NOW - 400, NOW - 400
+    check(not C.IsOnline("Nick"), "400 sek. uden livstegn: offline")
+    -- Guild-listen siger offline efter sidste livstegn: offline med det samme
+    db.friends.Nick.chars.Nickchar.seen = NOW - 30
+    roster[1][2] = false
+    NOW = NOW + 1
+    Fire("GUILD_ROSTER_UPDATE")
+    check(not C.IsOnline("Nick"), "logout i guild-listen vinder over et lidt ældre livstegn")
+    -- Efternavn i guild-listen (Forever) genkendes
+    roster[1] = { "Nickchar Stormhammer", true }
+    Fire("GUILD_ROSTER_UPDATE")
+    check(C.IsOnline("Nick"), "navn med efternavn i guild-listen genkendes")
+    roster[1] = { "Nickchar-Realm", true }
     GetNumGuildMembers, GetGuildRosterInfo = nil, nil
+    NOW = NOW + 400
 
     -- Kanalen er oppe, men vennen er ikke hørt i den: livstegnet skal også i guild
     local oldGCN = GetChannelName

@@ -43,6 +43,8 @@ local addonName, ns = ...
 --             den skjulte kanal), og en ven, der er online i guild-listen, vises som online
 --   * v0.18.3: daglig sladder kommer første gang du logger ind på en ny dato (ikke efter 3 timers pause)
 --   * v0.18.4: dræbt midt i et hop tæller ikke længere som faldskade (kun lange fald med livstab ved landingen)
+--   * v0.18.5: online-status er mere robust: et par mistede livstegn gør ikke en ven offline, guild-listen
+--             viser også logout med det samme, og navne med realm/efternavn i guild-listen genkendes
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -629,47 +631,80 @@ end
 
 -- v0.18.1: online i guild-listen tæller også. Så ses en ven som online, selvom addon-beskederne
 -- ikke når frem (fx en ven med en gammel version, eller hvis den skjulte kanal ikke leverer).
--- Kun karakterer, vi allerede kender som vennens. guild = { at = time(), chars = { navn = true } }
+-- Kun karakterer, vi allerede kender som vennens.
+-- v0.18.5: guild-listen husker også vennernes karakterer, der er offline (så et logout ses med det
+-- samme), navne med realm eller efternavn genkendes, og et par mistede livstegn (loadingskærm,
+-- boss, fyldt kø) gør ikke længere en ven offline: uden guild-listen er der 5½ minuts frist.
+-- guild = { at = time(), chars = { navn = true (online) / false (offline) } }
+do   -- egen blok: hovedfilen er tæt på Luas grænse på 200 lokale variabler
 ns.guild = { at = 0, chars = {} }
-function ns.GuildOnline(char)
+ns.ONLINE_SECS, ns.ONLINE_GRACE = 150, 330
+
+local function GuildState(char)
     local g = ns.guild
-    return (char and g.chars[char] and (time() - g.at) < 150) and true or false
+    if not char or (time() - g.at) >= ns.ONLINE_SECS then return nil end
+    return g.chars[char]
+end
+function ns.GuildOnline(char) return GuildState(char) == true end
+
+-- Er karakteren online? c = karakterens data (c.seen = sidst hørt livstegn)
+function ns.CharOnline(char, c)
+    local age = (c and c.seen) and (time() - c.seen) or math.huge
+    local gs = GuildState(char)
+    if gs == true then return true end
+    -- Guild-listen siger offline, og den er nyere end det sidste livstegn: logget ud
+    if gs == false and c and c.seen and ns.guild.at > c.seen then return false end
+    if age < ns.ONLINE_SECS then return true end
+    -- Fristen gælder kun livstegn hørt direkte fra vennen, ikke "sidst set" videresendt i en synk
+    return gs == nil and c ~= nil and c.hb ~= nil and (time() - c.hb) < ns.ONLINE_GRACE
+end
+
+-- Navnet i guild-listen kan have realm ("Navn-Realm") og på Forever måske efternavn ("Navn Efternavn")
+local function GuildChar(name)
+    local cands = { (Ambiguate and Ambiguate(name, "none")) or name, name:match("^[^%-]+"), name:match("^[^%-%s]+") }
+    for _, n in ipairs(cands) do
+        if n and db.chars[n] then return n, db.chars[n] end
+    end
 end
 
 function ns.ScanGuild()
     local g = ns.guild
     if not db or not (IsInGuild and IsInGuild()) or not GetNumGuildMembers or not GetGuildRosterInfo then return end
     -- Kun vennernes karakterer gemmes. Returnerer true, hvis nogen af dem er kommet/gået.
-    local changed, now = (time() - g.at) >= 150, {}
-    for i = 1, GetNumGuildMembers() or 0 do
+    local changed, now = (time() - g.at) >= ns.ONLINE_SECS, {}
+    local total = GetNumGuildMembers() or 0
+    if total == 0 then return end   -- listen er ikke hentet endnu
+    for i = 1, total do
         local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
         name = GAME.Plain(name)
-        if type(name) == "string" and online then
-            local char = (Ambiguate and Ambiguate(name, "none")) or name:match("^[^%-]+") or name
-            local friend = db.chars[char]
-            if friend and friend ~= db.me then
-                now[char] = true
-                if not g.chars[char] then changed = true end
+        if type(name) == "string" and name ~= "" then
+            local char, friend = GuildChar(name)
+            if char and friend ~= db.me then
+                local on = online and true or false
+                if now[char] ~= true then now[char] = on end   -- samme navn to gange: online vinder
+                if g.chars[char] ~= now[char] then changed = true end
             end
         end
     end
-    for char in pairs(g.chars) do if not now[char] then changed = true end end
+    for char in pairs(g.chars) do if now[char] == nil then changed = true end end
     g.chars, g.at = now, time()
     return changed
 end
 
+local lastRosterAsk = -100
 function ns.RequestGuildRoster()
     local req = (C_GuildInfo and C_GuildInfo.GuildRoster) or GuildRoster
-    if req and IsInGuild and IsInGuild() then pcall(req) end
+    if not req or not (IsInGuild and IsInGuild()) or GetTime() - lastRosterAsk < 10 then return end
+    lastRosterAsk = GetTime()
+    pcall(req)
+end
 end
 
 local function IsOnline(name)
     if name == db.me then return true end
-    local seen = LastSeen(name)
-    if seen and (time() - seen) < 150 then return true end
     local info = db.friends[name]
-    for cn in pairs((info and info.chars) or {}) do
-        if ns.GuildOnline(cn) then return true end
+    for cn, c in pairs((info and info.chars) or {}) do
+        if ns.CharOnline(cn, c) then return true end
     end
     return false
 end
@@ -757,7 +792,7 @@ local function CharList(friend)
             name = name, full = ns.CharFull(friend, name, c.surname),
             class = c.class, level = c.level or 0, xp = c.xp, zone = c.zone, gold = c.gold or 0,
             seen = c.seen, deaths = dBy[name] or 0, pvp = pBy[name] or 0, loot = lBy[name] or 0,
-            online = ((c.seen and (now - c.seen) < 150) or ns.GuildOnline(name)) and true or false,
+            online = ns.CharOnline(name, c),
         }
     end
     table.sort(list, function(a, b)
@@ -3036,10 +3071,11 @@ local function OnAddonMessage(prefix, message, chatType, sender)
             local prev = db.friends[friend] and db.friends[friend].chars and db.friends[friend].chars[char]
             local prevLevel = prev and prev.level
             local level = tonumber(t[5])
-            UpdateChar(friend, char, {
+            local hc = UpdateChar(friend, char, {
                 class = t[4], level = level, gold = tonumber(t[6]), zone = t[7], xp = tonumber(t[8]),
                 surname = t[9],
             }, time())
+            if hc then hc.hb = time() end   -- sidst hørt livstegn direkte fra vennen (se ns.CharOnline)
             if session then db.friends[friend].session = session end
             ns.OnFriendHeartbeat(friend, char, t[4], level, t[7], came, prevLevel)
             if ns.RefreshUI then ns.RefreshUI() end
@@ -7002,6 +7038,7 @@ events:RegisterEvent("PLAYER_XP_UPDATE")
 events:RegisterEvent("PLAYER_FLAGS_CHANGED")
 events:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
 pcall(events.RegisterEvent, events, "GUILD_ROSTER_UPDATE")
+pcall(events.RegisterEvent, events, "PLAYER_GUILD_UPDATE")
 -- Boss-events findes ikke i alle spilversioner: en ukendt event giver ellers en Lua-fejl
 pcall(events.RegisterEvent, events, "ENCOUNTER_END")
 pcall(events.RegisterEvent, events, "BOSS_KILL")
@@ -7115,7 +7152,12 @@ events:SetScript("OnEvent", function(_, event, ...)
     elseif event == "CHAT_MSG_ADDON" then
         OnAddonMessage(...)
 
+    elseif event == "PLAYER_GUILD_UPDATE" then
+        ns.RequestGuildRoster()
+
     elseif event == "GUILD_ROSTER_UPDATE" then
+        -- true = spillet beder om en ny liste (fx når nogen i guilden logger ind eller ud)
+        if (...) then ns.RequestGuildRoster() end
         if db then
             if ns.ScanGuild() and ns.RefreshUI then ns.RefreshUI() end
         end
