@@ -59,6 +59,7 @@ local addonName, ns = ...
 --             versioner sender bare de samlede tal; de nye felter ligger sidst i R-beskeden
 --   * v0.21.1: bande-baren viser kun venner online, Skammens hat på ikonet og de 5 seneste nyheder
 --             fast under ikonerne i stedet for en rullende ticker (loot med itemets tooltip)
+--   * v0.21.2: Skammens hat er en grim lilla troldmandshat (media/hat.tga) i stedet for et kranie
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)

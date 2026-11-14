@@ -24,7 +24,8 @@ local IsEquippableItem = IsEquippableItem or (C_Item and C_Item.IsEquippableItem
 local IsEquippedItem = IsEquippedItem or (C_Item and C_Item.IsEquippedItem)
 local GetItemCount = GetItemCount or (C_Item and C_Item.GetItemCount)
 
-ns.HAT_ICON = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01"
+-- v0.21.2: en grim troldmandshat (media/hat.tga) i stedet for kraniet
+ns.HAT_ICON = "Interface\\AddOns\\WastedCoast\\media\\hat"
 local OBIT_ICON = "Interface\\Icons\\Ability_Rogue_FeignDeath"
 local EMOTE_ICON = "Interface\\Icons\\Ability_Warrior_BattleShout"
 
