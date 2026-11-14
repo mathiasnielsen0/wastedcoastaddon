@@ -108,14 +108,50 @@ do
     CLOCK = CLOCK + 60
     local k, ab, lvl = ns.FindKiller()
     check(k == "Riverpaw Gnoll" and lvl == 17, "dræber fra nameplate uden combat log: " .. tostring(k))
-    -- Ingen fjende, men du faldt lige: faldskade
+    -- Ingen fjende, men du faldt lige langt ned og mistede liv ved landingen: faldskade
     UnitExists = function() return false end
+    local hp = 1000
+    UnitHealth = function() return hp end
+    local function air(secs) -- i luften i secs sekunder, målt hvert 0,1 sekund
+        IsFalling = function() return true end
+        for _ = 0, math.floor(secs * 10 + 0.5) do ns.FallTick() CLOCK = CLOCK + 0.1 end
+        CLOCK = CLOCK - 0.1
+    end
+    local function land() IsFalling = function() return false end CLOCK = CLOCK + 0.1 ns.FallTick() end
     CLOCK = CLOCK + 60
-    IsFalling = function() return true end
-    for _, tk in ipairs(TICKERS) do if tk.d == 0.25 then tk.f() end end
-    IsFalling = function() return false end
+    air(1.6) hp = 0 land()
     k, ab = ns.FindKiller()
     check(k == "Omgivelserne" and ab == ns.core.ENV_NAMES.Falling, "fald uden combat log: " .. tostring(k) .. " " .. tostring(ab))
+    -- Døde i selve landingen, før næste måling så dig på jorden: stadig faldskade
+    CLOCK = CLOCK + 60 hp = 1000
+    air(1.6) hp = 0
+    k, ab = ns.FindKiller()
+    check(k == "Omgivelserne" and ab == ns.core.ENV_NAMES.Falling, "død ved landing: " .. tostring(k) .. " " .. tostring(ab))
+    land()
+    -- Dræbt midt i et almindeligt hop: ikke faldskade
+    CLOCK = CLOCK + 60 hp = 1000
+    air(0.7) hp = 0
+    k, ab = ns.FindKiller()
+    check(not (k == "Omgivelserne" and ab == ns.core.ENV_NAMES.Falling), "død i et hop er ikke faldskade: " .. tostring(k) .. " " .. tostring(ab))
+    land()
+    k = ns.FindKiller()
+    check(k == "Ukendt", "landing efter et hop er ikke faldskade: " .. tostring(k))
+    -- Dræbt lige efter et hop af en fjende, du har i target: fjenden er dræberen
+    CLOCK = CLOCK + 60 hp = 1000
+    UnitCanAttack = function(_, u) return u == "target" end
+    UnitExists = function(u) return u == "target" end
+    UnitName = function(u) if u == "target" then return "Murloc Hunter" end return oldName(u) end
+    air(0.7) land() hp = 0
+    k, ab = ns.FindKiller()
+    check(k == "Murloc Hunter", "dræbt i et hop af dit target: " .. tostring(k) .. " " .. tostring(ab))
+    UnitExists = function() return false end
+    UnitCanAttack = function(_, u) return u == "nameplate3" end
+    -- Langt fald uden at miste liv (fx Slow Fall), så dør du: ikke faldskade
+    CLOCK = CLOCK + 60 hp = 1000
+    air(2) land() hp = 0
+    k = ns.FindKiller()
+    check(k == "Ukendt", "landede uskadt: ikke faldskade: " .. tostring(k))
+    UnitHealth = nil
     CLOCK = CLOCK + 60
     k = ns.FindKiller()
     check(k == "Ukendt", "intet at gå efter: Ukendt")

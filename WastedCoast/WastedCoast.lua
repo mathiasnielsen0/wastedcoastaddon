@@ -42,6 +42,7 @@ local addonName, ns = ...
 --   * v0.18.1: venner i samme guild finder altid hinanden (livstegnet går også i guild, til vennen er hørt i
 --             den skjulte kanal), og en ven, der er online i guild-listen, vises som online
 --   * v0.18.3: daglig sladder kommer første gang du logger ind på en ny dato (ikke efter 3 timers pause)
+--   * v0.18.4: dræbt midt i et hop tæller ikke længere som faldskade (kun lange fald med livstab ved landingen)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -1470,7 +1471,14 @@ end
 local OnPlayerDead
 do
 local lastHostile     -- { name, t, prio (2 = har dig i target, 1 = dit target), lvl, pvp (en spiller eller dennes pet) }
-local lastFall = -100 -- GetTime(), sidst du faldt
+-- Fald: et almindeligt hop er ~0,8 sekund i luften, mens faldskade først kommer efter ~1,2
+-- sekunds frit fald. Vi måler derfor, hvor længe du var i luften, og om du mistede liv ved
+-- landingen, så et hop midt i en kamp ikke længere tæller som faldskade.
+local HARD_FALL = 0.95  -- målt tid i luften (sekunder), før et fald kan give skade
+local fallStart       -- GetTime(), da det nuværende fald begyndte (nil = på jorden)
+local fallLast        -- GetTime(), sidste måling hvor du var i luften
+local fallHP          -- liv ved sidste måling i luften
+local hardLanding     -- { t, dur, hurt (true/false/nil = ved ikke) }, seneste landing efter et langt fald
 local KILLER_WINDOW = 8
 
 local function Yes(v) return GAME.Plain(v) == true end
@@ -1512,10 +1520,42 @@ ns.ScanHostiles = ScanHostiles
 local fallTicker
 function ns.WatchDanger()
     if fallTicker then return end
-    fallTicker = C_Timer.NewTicker(0.25, function()
-        if IsFalling and Yes(IsFalling()) then lastFall = GetTime() end
-    end)
+    fallTicker = C_Timer.NewTicker(0.1, function() pcall(ns.FallTick) end)
 end
+
+local function Health()
+    if not UnitHealth then return nil end
+    local ok, hp = pcall(UnitHealth, "player")
+    hp = ok and GAME.Plain(hp)
+    return type(hp) == "number" and hp or nil
+end
+
+function ns.FallTick()
+    local now = GetTime()
+    if IsFalling and Yes(IsFalling()) then
+        fallStart = fallStart or now
+        fallLast, fallHP = now, Health()
+    elseif fallStart then
+        local dur = (fallLast or now) - fallStart
+        if dur >= HARD_FALL then
+            local hp, hurt = Health(), nil
+            if hp and fallHP then hurt = hp < fallHP end
+            hardLanding = { t = now, dur = dur, hurt = hurt }
+        end
+        fallStart, fallLast, fallHP = nil, nil, nil
+    end
+end
+
+-- Døde du af selve faldet? Kun efter et langt fald, og kun hvis du ikke landede uskadt
+local function DiedFromFall(now)
+    -- Døde lige ved landingen, før næste måling nåede at se, at du stod på jorden
+    if fallStart and fallLast and (now - fallLast) < 0.35 and (fallLast - fallStart) >= HARD_FALL then
+        return true
+    end
+    local l = hardLanding
+    return l ~= nil and (now - l.t) < 1.5 and l.hurt ~= false
+end
+ns.DiedFromFall = function() return DiedFromFall(GetTime()) end
 
 local combatTicker
 function ns.OnCombatState(inCombat)
@@ -1555,7 +1595,7 @@ local function FindKiller()
     local h = lastHostile
     local fresh = h and (now - h.t) < KILLER_WINDOW
     if fresh and h.prio == 2 then return h.name, "", h.lvl, h.pvp == true end
-    if (now - lastFall) < 3 then return "Omgivelserne", ENV_NAMES.Falling, nil, false end
+    if DiedFromFall(now) then return "Omgivelserne", ENV_NAMES.Falling, nil, false end
     if fresh then return h.name, "", h.lvl, h.pvp == true end
     return "Ukendt", "", nil, false
 end
@@ -1563,7 +1603,7 @@ ns.FindKiller = FindKiller
 
 function OnPlayerDead()
     local killer, ability, klvl, pvp = FindKiller()
-    lastDamage, lastHostile = nil, nil
+    lastDamage, lastHostile, hardLanding = nil, nil, nil
 
     local name = UnitName("player")
     local _, class = UnitClass("player")
