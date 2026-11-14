@@ -51,6 +51,8 @@ local addonName, ns = ...
 --             professions, ny reputation, item level, spilletid, instanser og wipes, uheldige rolls og legacy points
 --   * v0.20.0: bande-baren (Bar.lua): en lille bjælke, der altid er på skærmen, med et ikon pr. ven (level,
 --             XP-ring, online/offline, tooltip med zone og hvad vennen laver) og en live-ticker med det seneste nye
+--   * v0.20.1: én død giver ikke længere to dødsbeskeder/toasts: PLAYER_DEAD tæller kun én gang pr. død, samme
+--             karakter, der dør igen inden for 30 sekunder, er samme dødsfald, og gamle dubletter ryddes op
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -1452,9 +1454,69 @@ end
 -- =============================================================================
 -- Dødsfald
 -- =============================================================================
+-- v0.20.1: samme dødsfald registreret to gange (fx når spillet sender PLAYER_DEAD igen et par sekunder
+-- senere, eller fra en ældre version hos en ven) har forskellige ID'er. Samme karakter, der "dør" igen
+-- inden for DEATH_DUP sekunder, er det samme dødsfald. Den udgave med en kendt dræber vinder.
+do
+local DEATH_DUP = 30
+local function KnownKiller(ev) return ev.killer and ev.killer ~= "" and ev.killer ~= "Ukendt" end
+ns.KnownKiller = KnownKiller
+
+local function SameDeath(a, b)
+    return a ~= b and a.name == b.name and (a.sur or "") == (b.sur or "")
+       and math.abs((a.time or 0) - (b.time or 0)) <= DEATH_DUP
+end
+
+-- Finder et allerede gemt dødsfald, der er det samme som ev
+function ns.FindSameDeath(ev)
+    for i = #db.events, 1, -1 do
+        local o = db.events[i]
+        if SameDeath(o, ev) then return o end
+    end
+end
+
+-- Den kendte dræber flyttes over på det dødsfald, vi beholder
+function ns.MergeDeath(keep, dup)
+    if KnownKiller(keep) or not KnownKiller(dup) then return false end
+    keep.killer, keep.ability, keep.klvl, keep.pvp = dup.killer, dup.ability, dup.klvl, dup.pvp
+    return true
+end
+
+-- Rydder dubletter, der allerede ligger i SavedVariables (så dødstallene ikke er pustet op)
+function ns.DedupeDeaths()
+    local byName, removed = {}, 0
+    local list = {}
+    for i, ev in ipairs(db.events) do list[i] = ev end
+    table.sort(list, function(a, b) return (a.time or 0) < (b.time or 0) end)
+    local drop = {}
+    for _, ev in ipairs(list) do
+        local key = (ev.name or "?") .. "|" .. (ev.sur or "")
+        local prev = byName[key]
+        if prev and SameDeath(prev, ev) then
+            ns.MergeDeath(prev, ev)
+            drop[ev] = true
+            removed = removed + 1
+        else
+            byName[key] = ev
+        end
+    end
+    if removed > 0 then
+        for i = #db.events, 1, -1 do
+            if drop[db.events[i]] then table.remove(db.events, i) end
+        end
+    end
+    return removed
+end
+end
+
 local function AddDeath(ev)
     if db.seen[ev.id] then return false end   -- allerede set
     db.seen[ev.id] = true
+    local same = ns.FindSameDeath(ev)
+    if same then
+        if ns.MergeDeath(same, ev) and ns.RefreshUI then ns.RefreshUI() end
+        return false
+    end
     table.insert(db.events, ev)
 
     if ev.friend and ROSTER_SET[ev.friend] then
@@ -1649,7 +1711,18 @@ local function FindKiller()
 end
 ns.FindKiller = FindKiller
 
+-- v0.20.1: spillet kan sende PLAYER_DEAD mere end én gang for samme død (fx igen, når man trykker
+-- Release). Et nyt dødsfald tæller først, når du har været i live igen siden det sidste.
+local deadSince   -- GetTime() for det sidste dødsfald, du ikke er kommet til live efter endnu
+function ns.OnRevived()
+    if UnitIsGhost and GAME.Plain(UnitIsGhost("player")) == true then return end   -- spøgelse = stadig samme død
+    deadSince = nil
+end
+
 function OnPlayerDead()
+    local now = GetTime()
+    if deadSince and (now - deadSince) < 900 then return end   -- samme død igen
+    deadSince = now
     local killer, ability, klvl, pvp = FindKiller()
     lastDamage, lastHostile, hardLanding = nil, nil, nil
 
@@ -7255,6 +7328,8 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_DEAD")
+pcall(events.RegisterEvent, events, "PLAYER_ALIVE")
+pcall(events.RegisterEvent, events, "PLAYER_UNGHOST")
 events:RegisterEvent("PLAYER_LEVEL_UP")
 events:RegisterEvent("CHAT_MSG_ADDON")
 events:RegisterEvent("CHAT_MSG_LOOT")
@@ -7289,6 +7364,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         local loaded = ...
         if loaded ~= addonName then return end
         InitDB()
+        ns.DedupeDeaths()
         ns.SetLanguage(db.settings.lang)
         BuildLootPatterns()
         if RegisterPrefix then RegisterPrefix(PREFIX) end
@@ -7378,6 +7454,9 @@ events:SetScript("OnEvent", function(_, event, ...)
 
     elseif event == "PLAYER_DEAD" then
         OnPlayerDead()
+
+    elseif event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
+        ns.OnRevived()
 
     elseif event == "CHAT_MSG_LOOT" then
         OnLootMessage((...))

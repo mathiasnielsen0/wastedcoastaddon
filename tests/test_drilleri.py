@@ -88,7 +88,7 @@ CLOCK = CLOCK + 10
 NOW = NOW + 60
 CombatLogGetCurrentEventInfo = function() return 0, "SWING_DAMAGE", nil, nil, "Defias Thug", nil, nil, "guid", PLAYER end
 Fire("COMBAT_LOG_EVENT_UNFILTERED")
-Fire("PLAYER_DEAD")
+Fire("PLAYER_UNGHOST") Fire("PLAYER_DEAD")
 local d = findSent("D;")
 check(d and d:match(";45$"), "killer-level sendes: " .. tostring(d))
 check(ns.HatHolder() == "Mathias", "hatten går videre til Mathias")
@@ -707,7 +707,7 @@ do
     check(k == "Grimgor" and lvl == 41 and pvp == true, "spiller på nameplate er PvP: " .. tostring(k) .. " " .. tostring(pvp))
     SENT = {}
     NOW = NOW + 60
-    Fire("PLAYER_DEAD")
+    Fire("PLAYER_UNGHOST") Fire("PLAYER_DEAD")
     local d = findSent("D;")
     check(d and d:match(";1$"), "PvP sendes som felt 13: " .. tostring(d))
     local ev = db.events[#db.events]
@@ -745,7 +745,7 @@ do
     local pvpLine
     for i = #PRINTS, math.max(1, #PRINTS - 5), -1 do if PRINTS[i]:find("døde til") then pvpLine = PRINTS[i] break end end
     check(pvpLine and pvpLine:find("Zugzug") and pvpLine:find("PvP"), "PvP i chatbeskeden: " .. tostring(pvpLine))
-    NOW = NOW + 1
+    NOW = NOW + 60   -- mere end 30 sek. senere, ellers er det samme død
     Fire("CHAT_MSG_ADDON", "WCOAST", table.concat({ "D", "Nickchar-" .. NOW, "Nickchar", "WARRIOR", "Murloc", "Nærkamp", 30, "Westfall", NOW, "Nick", 12 }, ";"), "GUILD", "Nickchar")
     check(db.events[#db.events].pvp == nil, "gammelt format er PvE")
 

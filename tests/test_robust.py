@@ -147,7 +147,7 @@ if not FOREVER then
     NOW = NOW + 100
     CombatLogGetCurrentEventInfo = function() return 0, "ENVIRONMENTAL_DAMAGE", nil, nil, nil, nil, nil, "guid", PLAYER, nil, nil, "FALLING", 500 end
     Fire("COMBAT_LOG_EVENT_UNFILTERED")
-    Fire("PLAYER_DEAD")
+    Fire("PLAYER_UNGHOST") Fire("PLAYER_DEAD")
     local ev = db.events[#db.events]
     check(ev.killer == "Omgivelserne" and ev.ability == "Faldskade" and not ev.pvp, "FALLING fra combat loggen er faldskade: " .. tostring(ev.ability))
     local d = findSent("D;")
@@ -157,17 +157,75 @@ if not FOREVER then
     NOW = NOW + 100
     CombatLogGetCurrentEventInfo = function() return 0, "SPELL_DAMAGE", nil, "Player-1-AAA", "Gankeren", 0x548, nil, "guid", PLAYER, nil, nil, 133, "Fireball" end
     Fire("COMBAT_LOG_EVENT_UNFILTERED")
-    Fire("PLAYER_DEAD")
+    Fire("PLAYER_UNGHOST") Fire("PLAYER_DEAD")
     ev = db.events[#db.events]
     check(ev.killer == "Gankeren" and ev.ability == "Fireball" and ev.pvp == true, "spiller med kontrol-flag er PvP")
     CLOCK = CLOCK + 100
     NOW = NOW + 100
     CombatLogGetCurrentEventInfo = function() return 0, "SPELL_PERIODIC_DAMAGE", nil, "guid", PLAYER, 0x511, nil, "guid", PLAYER, nil, nil, 1, "Hellfire" end
     Fire("COMBAT_LOG_EVENT_UNFILTERED")
-    Fire("PLAYER_DEAD")
+    Fire("PLAYER_UNGHOST") Fire("PLAYER_DEAD")
     ev = db.events[#db.events]
     check(ev.killer == PLAYER and not ev.pvp, "egen skade er ikke PvP")
     CombatLogGetCurrentEventInfo = nil
+end
+
+-- v0.20.1: én død = ét dødsfald, selv når spillet sender PLAYER_DEAD to gange
+do
+    CLOCK = CLOCK + 100
+    NOW = NOW + 100
+    Fire("PLAYER_UNGHOST")
+    local nEv, nT, nP = #db.events, #toasts, #PRINTS
+    Fire("PLAYER_DEAD")
+    local first = db.events[#db.events]
+    check(#db.events == nEv + 1, "første PLAYER_DEAD giver et dødsfald")
+    -- Seks sekunder senere (fx ved Release) kommer PLAYER_DEAD igen, nu uden kendt dræber
+    CLOCK = CLOCK + 6
+    NOW = NOW + 6
+    UnitIsGhost = function() return true end   -- Release: PLAYER_ALIVE, men man er stadig spøgelse
+    Fire("PLAYER_ALIVE")
+    Fire("PLAYER_DEAD")
+    check(#db.events == nEv + 1, "PLAYER_DEAD igen for samme død tæller ikke: " .. (#db.events - nEv))
+    local deaths = 0
+    for i = nP + 1, #PRINTS do if PRINTS[i]:find("døde til") then deaths = deaths + 1 end end
+    check(deaths == 1, "kun én dødsbesked i chatten: " .. deaths)
+    -- Genoplivet ved spirit healeren: næste død tæller igen
+    UnitIsGhost = function() return false end
+    Fire("PLAYER_UNGHOST")
+    UnitIsGhost = nil
+    CLOCK = CLOCK + 60
+    NOW = NOW + 60
+    Fire("PLAYER_DEAD")
+    check(#db.events == nEv + 2, "ny død efter genoplivning tæller")
+    check(db.events[#db.events] ~= first, "det er et nyt dødsfald")
+
+    -- En ven på en ældre version sender samme død to gange med forskellige ID'er: én gang,
+    -- og den kendte dræber vinder, selv når den kommer sidst
+    nEv, nT = #db.events, #toasts
+    NOW = NOW + 100
+    local function dline(t, killer, pvp)
+        return table.concat({ "D", "Søren-" .. t, "Sørenx", "MAGE", killer, "", 30, "Arathi Highlands", t, "Søren", 31, "", pvp or "" }, ";")
+    end
+    msg(dline(NOW, "Ukendt"), "GUILD", "Sørenx")
+    msg(dline(NOW + 6, "Nick", "1"), "GUILD", "Sørenx")
+    check(#db.events == nEv + 1, "vennens dobbelte død tælles én gang: " .. (#db.events - nEv))
+    local ev = db.events[#db.events]
+    check(ev.killer == "Nick" and ev.pvp == true, "den kendte dræber vinder: " .. tostring(ev.killer))
+    msg(dline(NOW + 12, "Ukendt"), "GUILD", "Sørenx")
+    check(#db.events == nEv + 1 and db.events[#db.events].killer == "Nick", "en senere 'Ukendt' overskriver ikke dræberen")
+    msg(dline(NOW + 120, "Hogger"), "GUILD", "Sørenx")
+    check(#db.events == nEv + 2, "en død to minutter senere er en ny død")
+
+    -- Gamle dubletter i SavedVariables ryddes op, og den med kendt dræber bliver
+    local n0 = #db.events
+    table.insert(db.events, { id = "Gammel-1", name = "Gammelchar", friend = "Frode", killer = "Ukendt", time = NOW - 5000 })
+    table.insert(db.events, { id = "Gammel-2", name = "Gammelchar", friend = "Frode", killer = "Defias Pillager", ability = "Nærkamp", time = NOW - 4994 })
+    table.insert(db.events, { id = "Gammel-3", name = "Gammelchar", friend = "Frode", killer = "Murloc", time = NOW - 3000 })
+    check(ns.DedupeDeaths() == 1 and #db.events == n0 + 2, "én gammel dublet fjernes")
+    local kept
+    for _, e in ipairs(db.events) do if e.id == "Gammel-1" then kept = e end end
+    check(kept and kept.killer == "Defias Pillager" and kept.ability == "Nærkamp", "den gemte død får den kendte dræber")
+    check(ns.DedupeDeaths() == 0, "ingen dubletter tilbage")
 end
 
 -- Samme dødsfald via to kanaler tælles én gang, og et gammelt dødsfald giver ingen toast
