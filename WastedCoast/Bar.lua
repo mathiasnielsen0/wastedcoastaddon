@@ -59,10 +59,13 @@ end
 -- =============================================================================
 -- Ticker: det seneste nye fra de data, vi har. Hver linje = { t, key, text }
 -- =============================================================================
-function Bar.Items(now)
+-- v0.23: maxItems og maxAge kan sættes (nyhedspanelet i hovedvinduet viser de 100 seneste uden
+-- aldersgrænse); uden dem er det tickerens 12 fra det seneste døgn.
+function Bar.Items(now, maxItems, maxAge)
     local db = DB()
     now = now or time()
-    local since = now - MAX_AGE
+    maxItems = maxItems or MAX_ITEMS
+    local since = now - (maxAge or MAX_AGE)
     local out = {}
     local function add(t, key, text, link)
         if t and t > since and t <= now + 60 and text then out[#out + 1] = { t = t, key = key, text = text, link = link } end
@@ -164,7 +167,7 @@ function Bar.Items(now)
         if a.t ~= b.t then return a.t > b.t end
         return a.key < b.key
     end)
-    while #out > MAX_ITEMS do table.remove(out) end
+    for i = #out, maxItems + 1, -1 do out[i] = nil end
     return out
 end
 
@@ -491,8 +494,8 @@ end
 -- itemets egen tooltip.
 local function RowEnter(self)
     local it = self.line and self.line.item
-    if not it or bar.moving or not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    if not it or (bar and bar.moving) or not GameTooltip then return end
+    GameTooltip:SetOwner(self, self.anchor or "ANCHOR_BOTTOM")
     if it.link and GameTooltip.SetHyperlink and pcall(GameTooltip.SetHyperlink, GameTooltip, it.link) then
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine(it.text .. " |cff888888(" .. C.FormatAgo(it.t) .. ")|r", 0.8, 0.8, 0.84, true)
@@ -603,6 +606,135 @@ function ns.BuildBar()
     ns.barFrame = bar
     bar:SetShown(S().bar ~= false)
     Bar.Refresh()
+end
+
+-- =============================================================================
+-- v0.23: nyhedspanelet i hovedvinduet. Samme nyheder som på baren, men de 100 seneste
+-- (uden aldersgrænse) i en liste, man kan scrolle i. Står i højre side af vinduet,
+-- uanset hvilken fane der er valgt.
+-- =============================================================================
+local PANEL_MAX = 100
+local PANEL_ROW_H = 30       -- plads til to linjer pr. nyhed
+local PANEL_HEAD = 24
+local panel
+Bar.PANEL_MAX = PANEL_MAX
+
+-- De linjer, der kan ses fra offset (antal rows). Giver også det rettede offset og det største.
+function Bar.PanelLines(items, offset, rows)
+    local total = #items
+    local maxOff = math.max(0, total - rows)
+    offset = math.max(0, math.min(math.floor(offset or 0), maxOff))
+    if total == 0 then return Bar.NewsLines(items), 0, 0 end
+    local out = {}
+    for i = 1, math.min(rows, total - offset) do
+        local it = items[offset + i]
+        out[i] = { text = it.text .. " |cff7a7a86(" .. Ago(it.t) .. ")|r", item = it }
+    end
+    return out, offset, maxOff
+end
+
+local function MakePanelRow(i)
+    local row = CreateFrame("Button", nil, panel.list)
+    row.line = false
+    row.anchor = "ANCHOR_RIGHT"
+    row:SetHeight(PANEL_ROW_H)
+    row:SetPoint("TOPLEFT", panel.list, "TOPLEFT", 0, -(i - 1) * PANEL_ROW_H)
+    row:SetPoint("TOPRIGHT", panel.list, "TOPRIGHT", 0, -(i - 1) * PANEL_ROW_H)
+    row.fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.fs:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -3)
+    row.fs:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 2)
+    row.fs:SetJustifyH("LEFT")
+    row.fs:SetJustifyV("TOP")
+    row.fs:SetWordWrap(true)
+    if row.fs.SetMaxLines then row.fs:SetMaxLines(2) end
+    local sep = row:CreateTexture(nil, "BORDER")
+    sep:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 2, 0)
+    sep:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 0)
+    sep:SetHeight(1)
+    sep:SetColorTexture(1, 1, 1, 0.05)
+    local hl = row:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(row)
+    hl:SetColorTexture(1, 0.85, 0.45, 0.07)
+    row:SetScript("OnEnter", RowEnter)
+    row:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    row:SetScript("OnClick", RowClick)
+    return row
+end
+
+function ns.RefreshNewsPanel()
+    if not panel or not panel:IsShown() then return end
+    local items = Bar.Items(nil, PANEL_MAX, math.huge)
+    local lines, off, maxOff = Bar.PanelLines(items, panel.offset, panel.nRows)
+    panel.offset, panel.maxOffset, panel.total = off, maxOff, #items
+    for i, row in ipairs(panel.rows) do
+        local line = lines[i]
+        row:SetShown(line ~= nil)
+        row.line = line or false
+        row.fs:SetText(line and line.text or "")
+    end
+    panel.count:SetText(#items > 0 and tostring(#items) or "")
+    -- Rullebjælken: kun når der er mere, end der kan ses
+    local trackH = panel.nRows * PANEL_ROW_H
+    if maxOff > 0 then
+        local h = math.max(16, trackH * panel.nRows / #items)
+        panel.thumb:SetHeight(h)
+        panel.thumb:ClearAllPoints()
+        panel.thumb:SetPoint("TOPRIGHT", panel.list, "TOPRIGHT", 7, -((trackH - h) * off / maxOff))
+    end
+    panel.track:SetShown(maxOff > 0)
+    panel.thumb:SetShown(maxOff > 0)
+end
+
+function Bar.ScrollPanel(delta)
+    if not panel then return end
+    panel.offset = (panel.offset or 0) - delta * 2
+    ns.RefreshNewsPanel()
+end
+
+-- Bygges af hovedvinduet: parent er en tom frame i højre side, height dens højde
+function ns.BuildNewsPanel(parent, height)
+    if panel then return panel end
+    panel = C.MakeBox("Frame", parent, C.COL_PANEL, C.COL_BORDER)
+    panel:SetAllPoints(parent)
+    panel.offset, panel.maxOffset, panel.total = 0, 0, 0
+    panel.nRows = math.max(1, math.floor((height - PANEL_HEAD - 8) / PANEL_ROW_H))
+
+    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -6)
+    title:SetJustifyH("LEFT")
+    title:SetText(L("Nyheder"))
+    title:SetTextColor(C.COL_GOLD[1], C.COL_GOLD[2], C.COL_GOLD[3])
+    panel.title = title
+    panel.count = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    panel.count:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -8)
+    panel.count:SetJustifyH("RIGHT")
+    panel.count:SetTextColor(0.5, 0.5, 0.56)
+    local line = panel:CreateTexture(nil, "ARTWORK")
+    line:SetPoint("TOPLEFT", panel, "TOPLEFT", 6, -PANEL_HEAD + 2)
+    line:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -6, -PANEL_HEAD + 2)
+    line:SetHeight(1)
+    line:SetColorTexture(C.COL_GOLD[1], C.COL_GOLD[2], C.COL_GOLD[3], 0.3)
+
+    panel.list = CreateFrame("Frame", nil, panel)
+    panel.list:SetPoint("TOPLEFT", panel, "TOPLEFT", 2, -PANEL_HEAD - 2)
+    panel.list:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -12, -PANEL_HEAD - 2)
+    panel.list:SetHeight(panel.nRows * PANEL_ROW_H)
+
+    panel.track = panel:CreateTexture(nil, "ARTWORK")
+    panel.track:SetPoint("TOPRIGHT", panel.list, "TOPRIGHT", 7, 0)
+    panel.track:SetSize(3, panel.nRows * PANEL_ROW_H)
+    panel.track:SetColorTexture(1, 1, 1, 0.06)
+    panel.thumb = panel:CreateTexture(nil, "OVERLAY")
+    panel.thumb:SetWidth(3)
+    panel.thumb:SetColorTexture(C.COL_GOLD[1], C.COL_GOLD[2], C.COL_GOLD[3], 0.6)
+
+    panel.rows = {}
+    for i = 1, panel.nRows do panel.rows[i] = MakePanelRow(i) end
+
+    panel:EnableMouseWheel(true)
+    panel:SetScript("OnMouseWheel", function(_, delta) Bar.ScrollPanel(delta) end)
+    ns.newsPanel = panel
+    return panel
 end
 
 -- =============================================================================

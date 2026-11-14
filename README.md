@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.22.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.23.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -70,6 +70,11 @@ nogle små undersider lige under fanerne:
 | **Sjov** | Trofæer, Drilleri |
 
 Klik på en vens kort for at se vennens karakterer.
+
+I højre side af vinduet står **nyhedspanelet**, uanset hvilken fane du er på. Det er de samme
+nyheder som på bande-baren (levels, dødsfald, loot, trofæer, rare mobs, dueller og stomi), men
+de **100 seneste**, også dem ældre end et døgn. Scroll med musehjulet. Musen over en loot-linje
+viser itemets tooltip, og shift-klik linker itemet i chatten.
 
 På WoW Forever bruger vinduet spillets egne rammer, faner og knapper, så det ligner resten
 af Forevers UI: titellinje med logoet som portræt, fanerne hængende under vinduet og røde
@@ -623,4 +628,6 @@ python3 tests/test_language.py WastedCoast forever  # det samme på WoW Forever
 python3 tests/test_bar.py WastedCoast               # bande-baren: ikoner, XP-ring, tooltip, nyheder, hat, flyt og lås
 python3 tests/test_bar.py WastedCoast forever       # det samme på WoW Forever
 python3 tests/test_rolls.py WastedCoast             # need/greed/disenchant/pass i rolls, synk, Rolls-siden og sladder
+python3 tests/test_news.py WastedCoast              # nyhedspanelet i hovedvinduet og "[Loot]"-rettelsen
+python3 tests/test_news.py WastedCoast forever      # det samme på WoW Forever
 ```

@@ -62,6 +62,9 @@ local addonName, ns = ...
 --   * v0.21.2: Skammens hat er en grim lilla troldmandshat (media/hat.tga) i stedet for et kranie
 --   * v0.22.0: stomi-fælden (Stomi.lua): en popup med en stor JA under musen og en lokkemad, der skifter til
 --             "HAR DU STOMI?", når man trykker. Ja = stomi i 24 timer (pose på bande-baren, toast, sladder)
+--   * v0.23.0: nyhedspanel i højre side af hovedvinduet (de 100 seneste nyheder, scroll, på alle faner).
+--             Loot vundet på roll hed "[Loot]" på nyere klienter (et loot-historik-link foran itemet);
+--             navnet tages nu fra selve item-linket, og gamle "Loot"-navne slås op igen
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -428,14 +431,17 @@ end
 -- =============================================================================
 local function ParseLink(text)
     if type(text) ~= "string" then return nil end
-    local itemString = text:match("|H(item:[^|]+)|h")
+    -- v0.23: navnet skal tages fra selve item-linket. Nyere klienter sætter et
+    -- |HlootHistory:..|h[Loot]|h-link foran i roll-beskederne, og så hed alt "[Loot]".
+    local start, _, itemString, name = text:find("|H(item:[^|]+)|h%[(.-)%]|h")
     if not itemString then return nil end
     local id = tonumber(itemString:match("^item:(%d+)"))
-    local name = text:match("|h%[(.-)%]|h")
-    local color = text:match("|c%x%x(%x%x%x%x%x%x)")
+    -- Farven er den sidste før item-linket (ikke farven på et andet link foran)
+    local before = text:sub(1, start - 1)
+    local color = before:match(".*|c%x%x(%x%x%x%x%x%x)")
     local quality = color and HEX_QUALITY[color:lower()]
     -- Nyere klienter farver links med kvaliteten direkte: |cnIQ4:...|r
-    if not quality then quality = tonumber(text:match("|cnIQ(%d):")) end
+    if not quality then quality = tonumber(before:match(".*|cnIQ(%d):")) end
     if not quality then
         local _, _, q = GAME.ItemInfo(itemString)
         quality = q
@@ -444,8 +450,22 @@ local function ParseLink(text)
     return { id = id, itemString = itemString, name = name, quality = quality }
 end
 
+-- v0.23: loot fra før rettelsen (og fra venner på en ældre version) kan hedde "Loot".
+-- Så slås det rigtige navn op, og det gemmes, når spillet kender itemet.
+-- (main-chunken har næsten 200 lokale variabler, så funktionerne ligger på ns)
+function ns.BadLootName(name)
+    return name == nil or name == "" or name == "Loot" or (type(LOOT) == "string" and name == LOOT)
+end
+
+function ns.FixLootName(ev)
+    if not ns.BadLootName(ev.name) or type(ev.item) ~= "string" then return ev.name end
+    local ok, real = pcall(GAME.ItemInfo, ev.item)
+    if ok and type(real) == "string" and real ~= "" and not ns.BadLootName(real) then ev.name = real:sub(1, 40) end
+    return ev.name
+end
+
 local function LootLink(ev)
-    return string.format("|cff%s|H%s|h[%s]|h|r", QUALITY_HEX[ev.quality] or "ffffff", ev.item, ev.name)
+    return string.format("|cff%s|H%s|h[%s]|h|r", QUALITY_HEX[ev.quality] or "ffffff", ev.item, ns.FixLootName(ev) or "?")
 end
 
 local function LootItemID(ev)
@@ -1999,11 +2019,14 @@ end
 local function OnLootMessage(msg)
     msg = GAME.Plain(msg)
     if type(msg) ~= "string" then return end
+    -- v0.23: mønstrene matches uden farvekoder (et farvet [Loot]-link foran må ikke spænde ben);
+    -- itemet læses stadig fra den oprindelige besked
+    local bare = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[^:|]*:", ""):gsub("|r", "")
     for _, p in ipairs(LOOT_PATTERNS) do
-        if msg:find(p.pattern) then
+        if bare:find(p.pattern) then
             if p.kind == "rolled" then
                 -- "Need Roll - 54 for [item] by Navn"
-                local value, _, who = msg:match(p.pattern)
+                local value, _, who = bare:match(p.pattern)
                 ns.CountRollValue(tonumber(value), who)
                 return
             end
@@ -6705,6 +6728,7 @@ function ns.RefreshUI()
     elseif EXTRA_PAGES[ns.tab] then
         EXTRA_PAGES[ns.tab].refresh()
     end
+    if ns.RefreshNewsPanel then ns.RefreshNewsPanel() end
     if ns.options and ns.options:IsShown() then ns.RefreshOptions() end
 end
 
@@ -6861,8 +6885,10 @@ local function BuildUI()
         Gradient(right, "HORIZONTAL", r, g, b, a, r, g, b, 0)
     end
 
+    -- v0.23: vinduet er bredere, så nyhedspanelet kan stå i højre side ved siden af siderne
+    local NEWS_W, NEWS_GAP = 240, 10
     local f = MakeBox("Frame", UIParent, COL_BG, COL_BORDER, "WastedCoastFrame")
-    f:SetSize(760, 612)
+    f:SetSize(760 + NEWS_W + NEWS_GAP, 612)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetMovable(true)
@@ -7031,7 +7057,15 @@ local function BuildUI()
     -- Sider
     local content = CreateFrame("Frame", nil, f)
     content:SetPoint("TOPLEFT", f, "TOPLEFT", 14, ns.native and -74 or -112)
-    content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 36)
+    content:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14 - NEWS_W - NEWS_GAP, 36)
+
+    -- v0.23: nyhedspanelet i højre side, synligt på alle faner (klassisk: fra fanernes top)
+    local newsTop = ns.native and -74 or -42
+    local news = CreateFrame("Frame", nil, f)
+    news:SetPoint("TOPRIGHT", f, "TOPRIGHT", -14, newsTop)
+    news:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 36)
+    news:SetWidth(NEWS_W)
+    if ns.BuildNewsPanel then ns.BuildNewsPanel(news, 612 + newsTop - 36) end
 
     ns.pages = {}
     local nPages = 0
