@@ -1,4 +1,4 @@
-# Test af bande-baren (Bar.lua): ikoner, XP-ring, tooltip, live-ticker, flytning og indstillinger.
+# Test af bande-baren (Bar.lua): ikoner, XP-ring, tooltip, nyheder, Skammens hat, flytning og indstillinger.
 # Kør: pip install lupa && python3 tests/test_bar.py WastedCoast [forever]
 import sys, lupa.lua51 as L
 from wowmock import MOCK, load_addon
@@ -47,7 +47,8 @@ local bar, Bar = ns.barFrame, ns.Bar
 check(bar ~= nil and Bar ~= nil, "baren bygges ved login")
 Bar.Tick()   -- første tik efter login: vennelisten er nu kendt
 check(bar.shown == true and db.settings.bar == nil, "baren er slået til som standard")
-check(#bar.icons == #ns.core.ROSTER and #bar.icons == 8, "et ikon pr. ven (8)")
+local function shownIcons() local n = 0 for _, b in ipairs(bar.icons) do if b.shown then n = n + 1 end end return n end
+check(#ns.core.ROSTER == 8 and shownIcons() == 1, "kun venner online har et ikon (lige nu kun dig)")
 
 -- -----------------------------------------------------------------------------
 -- Ikoner: online/offline, level og XP-ring
@@ -56,12 +57,12 @@ hb("Nick", "Nickchar", "MAGE", 34, "Duskwood", 50)
 db.friends.Jeppe = { chars = { Jepchar = { class = "ROGUE", level = 20, xp = 10, zone = "Westfall", seen = NOW - 7200 } } }
 db.chars.Jepchar = "Jeppe"
 Bar.Refresh()
-local function icon(friend) for _, b in ipairs(bar.icons) do if b.friend == friend then return b end end end
-local nick, jep, me = icon("Nick"), icon("Jeppe"), icon("Mathias")
-check(nick and jep and me, "ikonerne hører til de rigtige venner")
+local function icon(friend) for _, b in ipairs(bar.icons) do if b.shown and b.friend == friend then return b end end end
+local nick, me = icon("Nick"), icon("Mathias")
+check(nick and me and shownIcons() == 2, "ikonerne hører til de rigtige venner, kun dem online")
 check(nick.online == true and nick.dot.shown == true, "en ven med et frisk livstegn lyser og har en grøn prik")
-check(jep.online == false and jep.dot.shown == false, "en ven, der ikke er set i 2 timer, er slukket")
-check(nick.level.text_ == "34" and jep.level.text_ == "20", "level står på ikonet")
+check(icon("Jeppe") == nil, "en ven, der ikke er set i 2 timer, har intet ikon")
+check(nick.level.text_ == "34", "level står på ikonet")
 check(me.online == true, "du selv er altid online")
 
 local p, max = Bar.RingValue(34, 50)
@@ -71,7 +72,10 @@ check(p == 1 and max == true, "fuld guld ring på max level")
 check(Bar.RingValue(0, nil) == 0, "tom ring, når level ikke kendes")
 check(nick.ring.fill[1].shown and nick.ring.fill[2].shown and not nick.ring.fill[3].shown and not nick.ring.fill[4].shown,
       "50% XP fylder de to første kanter af ringen")
-check(jep.ring.fill[1].shown and not jep.ring.fill[2].shown, "10% XP fylder kun et stykke af den første kant")
+hb("Frode", "Frochar", "PRIEST", 20, "Westfall", 10)
+Bar.Refresh()
+local fro = icon("Frode")
+check(fro.ring.fill[1].shown and not fro.ring.fill[2].shown, "10% XP fylder kun et stykke af den første kant")
 
 -- -----------------------------------------------------------------------------
 -- Tooltip: zone og hvad vennen laver
@@ -90,8 +94,10 @@ TT = {}
 nick.scripts.OnEnter(nick)
 check(ttHas("I en dungeon") and ttHas("Døde til Defias Pillager"), "tooltippen: i en dungeon og døde for nylig")
 check(ttHas("Døde i dag | |cffff60601|r"), "dagens dødsfald tælles")
+local jstat
+for _, st in ipairs(ns.core.BuildStats()) do if st.name == "Jeppe" then jstat = st end end
 TT = {}
-jep.scripts.OnEnter(jep)
+for _, l in ipairs(Bar.TooltipLines(jstat)) do TT[#TT + 1] = l[1] .. " | " .. tostring(l[2]) end
 check(ttHas("Offline") and ttHas("Sidst set") and ttHas("Westfall"), "offline: sidst set og hvor")
 
 -- Klik åbner vennens karakterer
@@ -127,31 +133,46 @@ check(nd == 1, "samme duel vises kun én gang")
 check(not all:find("dingede 12") and not all:find("dingede 10"), "gættede og gamle levels er ikke med")
 for i = 2, #items do check(items[i - 1].t >= items[i].t, "sorteret efter tid") end
 
--- Ny begivenhed: tickeren starter forfra med det samme
-Bar.UpdateTicker(true)
-rawset(bar.tick, "GetStringWidth", function() return 2000 end)
-bar.clipW = 300
-bar.scripts.OnUpdate(bar, 1)
-check(bar.offset > 0, "tickeren ruller")
-local before = bar.tick.text_
+-- Nyhederne: de 5 seneste står fast under ikonerne
+Bar.Refresh()
+local rows = {}
+for _, r in ipairs(bar.rows) do if r.shown then rows[#rows + 1] = r end end
+check(#rows == 5, "fem nyheder under ikonerne (" .. #rows .. ")")
+check(rows[1].fs.text_:find("dingede 34") and rows[1].fs.text_:find("%(nu%)"), "nyeste øverst med tid")
+-- Loot: itemets navn står på linjen, og musen over viser itemets tooltip
+local lootRow
+for _, r in ipairs(rows) do if r.line.item and r.line.item.link then lootRow = r end end
+check(lootRow and lootRow.fs.text_:find("[Big Sword]", 1, true), "loot-linjen viser itemet")
+local linked
+GameTooltip.SetHyperlink = function(_, l) linked = l end
+TT = {}
+lootRow.scripts.OnEnter(lootRow)
+check(linked == "item:1:0" and ttHas("Big Sword"), "musen over loot viser itemets tooltip")
+TT = {}
+rows[1].scripts.OnEnter(rows[1])
+check(ttHas("dingede 34"), "musen over en anden nyhed viser hele teksten")
+-- Ny begivenhed kommer øverst med det samme
 db.levelAt.Rasmus = { l = 41, t = NOW }
-db.friends.Rasmus = { chars = { Raschar = { class = "WARRIOR", level = 41, seen = NOW } } }
-Bar.UpdateTicker(false)
-check(bar.offset == 0 and bar.tick.text_ ~= before and bar.tick.text_:find("dingede 41"), "nyt øverst: starter forfra")
--- Uden nyt venter en ny tekst, til runden er færdig
-bar.scripts.OnUpdate(bar, 2)
-local mid = bar.offset
-bar.pending = "ny tekst"
-bar.scripts.OnUpdate(bar, 1)
-check(bar.tick.text_ ~= "ny tekst" and bar.offset > mid, "teksten skifter ikke midt i en runde")
-bar.scripts.OnUpdate(bar, 100)
-check(bar.tick.text_ == "ny tekst" and bar.offset == 0, "ny tekst, når runden er færdig")
+db.friends.Rasmus = { chars = { Raschar = { class = "WARRIOR", level = 41, seen = NOW - 9000 } } }
+Bar.UpdateTicker()
+check(bar.rows[1].fs.text_:find("dingede 41"), "ny nyhed øverst")
+
+-- Skammens hat: Nick døde sidst
+Bar.Refresh()
+check(icon("Nick").hat.shown and not icon("Mathias").hat.shown, "Skammens hat sidder på den, der døde sidst")
+TT = {}
+nick = icon("Nick")
+nick.scripts.OnEnter(nick)
+check(ttHas("Skammens hat"), "tooltippen nævner hatten")
+table.insert(db.events, { id = "bar-3", name = "Mathiasx", friend = "Mathias", class = "WARRIOR", killer = "Murloc", time = NOW - 5 })
+Bar.Refresh()
+check(icon("Mathias").hat.shown and not icon("Nick").hat.shown, "hatten flytter, når en anden dør")
 
 -- Ingen nyheder
 local saved = { db.events, db.loot, db.levelAt, db.ach, db.rareLog, db.duels }
 db.events, db.loot, db.levelAt, db.ach, db.rareLog, db.duels = {}, {}, {}, {}, {}, {}
-local t, newest = Bar.TickerText(Bar.Items())
-check(t:find("Stille på kysten") and newest == "", "stille dag: en pladsholder")
+local lines = Bar.NewsLines(Bar.Items())
+check(#lines == 1 and lines[1].text:find("Stille på kysten"), "stille dag: en pladsholder")
 db.events, db.loot, db.levelAt, db.ach, db.rareLog, db.duels = unpack(saved)
 
 -- -----------------------------------------------------------------------------
@@ -176,10 +197,10 @@ nick.scripts.OnDragStart(nick)
 nick.scripts.OnDragStop(nick)
 check(MOVES == 2, "træk i et ikon flytter baren")
 
-slash("bar ticker")
-check(db.settings.barTicker == false and bar.clip.shown == false, "tickeren kan slås fra")
-slash("bar ticker")
-check(db.settings.barTicker == true and bar.clip.shown == true, "og til igen")
+slash("bar nyheder")
+check(db.settings.barTicker == false and bar.news.shown == false, "nyhederne kan slås fra")
+slash("bar nyheder")
+check(db.settings.barTicker == true and bar.news.shown == true, "og til igen")
 slash("bar")
 check(db.settings.bar == false and bar.shown == false, "/wc4ever bar skjuler baren")
 slash("bar")
@@ -187,11 +208,11 @@ check(db.settings.bar == true and bar.shown == true, "og viser den igen")
 slash("bar nulstil")
 check(db.settings.barPos == nil and bar.shown, "bar nulstil flytter den tilbage")
 
--- Indstillinger: tre nye afkrydsninger (bar, lås, ticker)
+-- Indstillinger: tre nye afkrydsninger (bar, lås, nyheder)
 local opts = ns.options
 local found = {}
 for _, cb in ipairs(opts.checks) do found[cb.label.text_] = cb end
-check(found["Bande-bar"] and found["Lås"] and found["Ticker"], "indstillingerne har bar, lås og ticker")
+check(found["Bande-bar"] and found["Lås"] and found["Nyheder"], "indstillingerne har bar, lås og nyheder")
 rawset(found["Bande-bar"], "GetChecked", function() return false end)
 found["Bande-bar"].scripts.OnClick(found["Bande-bar"])
 check(db.settings.bar == false and not bar.shown, "afkrydsningen skjuler baren")

@@ -8,8 +8,9 @@ local L = ns.L
 --     nuværende level (fuld og guld på max level).
 --   * Hold musen over et ikon: karakter, level, zone, hvad vennen laver (dungeon, død for
 --     nylig, ny loot ...) og dagens dødsfald. Klik åbner vennens karakterer i hovedvinduet.
---   * Under ikonerne ruller en live-ticker med det seneste nye: levels, dødsfald, loot,
---     trofæer, rare mobs og dueller. Det nyeste kommer først.
+--   * v0.21.1: kun venner, der er online, har et ikon. Den, der bærer Skammens hat, har en lille hat.
+--   * Under ikonerne står de 5 seneste nyheder (levels, dødsfald, loot, trofæer, rare mobs og
+--     dueller), det nyeste øverst. Musen over loot viser itemets tooltip.
 --   * Træk for at flytte (med mindre den er låst), højreklik åbner indstillingerne.
 -- Bygger kun på data, addonet allerede har og synker, så baren sender ingen beskeder.
 -- db.settings.bar (false = skjult), barLocked, barTicker (false = uden ticker),
@@ -22,11 +23,11 @@ local GAME, Name = C.GAME, C.Name
 local ICON, GAP, PAD = 24, 4, 4      -- ikonstørrelse, afstand og kant
 local RING = 2                       -- XP-ringens tykkelse
 local TICK_H = 14
-local SPEED = 38                     -- tickerens fart i pixels pr. sekund
+local ROWS = 5                       -- v0.21.1: de seneste 5 nyheder står fast under ikonerne
+local MIN_W = 300                    -- baren er mindst så bred, når nyhederne er med
 local MAX_ITEMS = 12
 local MAX_AGE = 86400                -- ticker: kun det seneste døgn
 local ACTIVE_AGE = 1800              -- tooltip: "laver lige nu" = sidste halve time
-local SEP = "   |cff5a5a66-|r   "
 
 local bar
 local Bar = {}
@@ -63,8 +64,8 @@ function Bar.Items(now)
     now = now or time()
     local since = now - MAX_AGE
     local out = {}
-    local function add(t, key, text)
-        if t and t > since and t <= now + 60 and text then out[#out + 1] = { t = t, key = key, text = text } end
+    local function add(t, key, text, link)
+        if t and t > since and t <= now + 60 and text then out[#out + 1] = { t = t, key = key, text = text, link = link } end
     end
 
     -- Dødsfald
@@ -105,7 +106,11 @@ function Bar.Items(now)
             -- v0.21: vundet på need/greed/disenchant står efter itemet
             local how = (ev.how == "need" or ev.how == "greed" or ev.how == "de") and C.HOW_LABEL and C.HOW_LABEL[ev.how]
             local tail = how and (" |cff9aa0a6(" .. how .. ")|r") or ""
-            add(ev.time, "o" .. tostring(ev.id or ev.time), F("%s fik %s", Who(f, ev.class), C.LootLink(ev)) .. tail)
+            -- v0.21.1: itemets ikon foran linket, og musen over viser itemets tooltip
+            local id = tonumber(ev.item:match("^item:(%d+)"))
+            local icon = id and ((C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id)) or (GetItemIcon and GetItemIcon(id)))
+            local item = (icon and ("|T" .. tostring(icon) .. ":12:12:0:0|t ") or "") .. C.LootLink(ev)
+            add(ev.time, "o" .. tostring(ev.id or ev.time), F("%s fik %s", Who(f, ev.class), item) .. tail, ev.item)
         end
     end
 
@@ -156,13 +161,17 @@ function Bar.Items(now)
     return out
 end
 
-function Bar.TickerText(items)
-    if #items == 0 then return L("Stille på kysten. Nogen må gøre noget dumt snart."), "" end
-    local parts = {}
-    for i, it in ipairs(items) do
-        parts[i] = it.text .. " |cff7a7a86(" .. Ago(it.t) .. ")|r"
+-- Nyhedslinjerne: { text, item } pr. linje (højst ROWS). En stille dag giver én pladsholder.
+function Bar.NewsLines(items)
+    if #items == 0 then
+        return { { text = "|cff888888" .. L("Stille på kysten. Nogen må gøre noget dumt snart.") .. "|r" } }
     end
-    return table.concat(parts, SEP) .. SEP, items[1].key
+    local out = {}
+    for i = 1, math.min(ROWS, #items) do
+        local it = items[i]
+        out[i] = { text = it.text .. " |cff7a7a86(" .. Ago(it.t) .. ")|r", item = it }
+    end
+    return out
 end
 
 -- =============================================================================
@@ -223,6 +232,7 @@ function Bar.TooltipLines(s, now)
     end
     local d = DeathsToday(s.name, now)
     add(L("Døde i dag"), d > 0 and ("|cffff6060" .. d .. "|r") or "0", 0.6, 0.6, 0.66)
+    if ns.HatHolder and ns.HatHolder() == s.name then add(L("Bærer |cffffd100Skammens hat|r (døde sidst)"), nil, 1, 0.5, 0.5) end
     if s.chars and s.chars > 1 then add(L("Karakterer"), tostring(s.chars), 0.6, 0.6, 0.66) end
     add(" ")
     add(L("Klik: se vennens karakterer"), nil, 0.5, 0.5, 0.56)
@@ -347,6 +357,12 @@ local function MakeIcon()
     btn.dot:SetSize(5, 5)
     btn.dot:SetPoint("TOPRIGHT", btn, "TOPRIGHT", -3, -3)
     btn.dot:SetColorTexture(0.25, 0.95, 0.35, 1)
+    -- Skammens hat: en lille hat oven på ikonet hos den, der døde sidst
+    btn.hat = btn:CreateTexture(nil, "OVERLAY", nil, 7)
+    btn.hat:SetSize(16, 16)
+    btn.hat:SetPoint("CENTER", btn, "TOP", 0, 1)
+    btn.hat:SetTexture(ns.HAT_ICON or "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01")
+    btn.hat:Hide()
     local hl = btn:CreateTexture(nil, "HIGHLIGHT")
     hl:SetPoint("TOPLEFT", btn.icon, "TOPLEFT", 0, 0)
     hl:SetPoint("BOTTOMRIGHT", btn.icon, "BOTTOMRIGHT", 0, 0)
@@ -386,23 +402,37 @@ local function Layout()
     local logoW = 22
     local w = PAD * 2 + logoW + GAP + n * outer + (n - 1) * GAP
     local tickerOn = S().barTicker ~= false
-    local h = PAD * 2 + outer + (tickerOn and (TICK_H + 2) or 0)
+    if tickerOn then w = math.max(w, MIN_W) end
+    local nRows = 0
+    for _, r in ipairs(bar.rows) do if r:IsShown() then nRows = nRows + 1 end end
+    local h = PAD * 2 + outer + (tickerOn and (nRows * TICK_H + 3) or 0)
     bar:SetSize(w, h)
-    for i, b in ipairs(bar.icons) do
+    local i = 0
+    for _, b in ipairs(bar.icons) do
         b:ClearAllPoints()
-        b:SetPoint("TOPLEFT", bar, "TOPLEFT", PAD + logoW + GAP + (i - 1) * (outer + GAP), -PAD)
+        if b:IsShown() then
+            b:SetPoint("TOPLEFT", bar, "TOPLEFT", PAD + logoW + GAP + i * (outer + GAP), -PAD)
+            i = i + 1
+        end
     end
-    bar.clip:SetShown(tickerOn)
-    bar.clip:SetSize(w - PAD * 2, TICK_H)
-    bar.clipW = w - PAD * 2
+    bar.news:SetShown(tickerOn)
+    bar.news:SetSize(w - PAD * 2, math.max(1, nRows * TICK_H))
+    for _, r in ipairs(bar.rows) do
+        r:SetWidth(w - PAD * 2)
+        r.fs:SetWidth(w - PAD * 2)
+    end
 end
 
--- Ikonerne: én pr. ven i vennelistens rækkefølge
+-- Ikonerne: én pr. ven, der er online (v0.21.1), i vennelistens rækkefølge
 function Bar.Refresh()
     if not bar or not DB() then return end
-    local list = C.BuildStats()
+    local list = {}
+    for _, s in ipairs(C.BuildStats()) do
+        if s.online then list[#list + 1] = s end
+    end
     for i = #bar.icons + 1, #list do bar.icons[i] = MakeIcon() end
     local online = 0
+    local hat = ns.HatHolder and ns.HatHolder()
     for i, b in ipairs(bar.icons) do
         local s = list[i]
         b:SetShown(s ~= nil)
@@ -430,47 +460,70 @@ function Bar.Refresh()
                 SetRing(b, p, r, g, bl, s.online and 1 or 0.4)
             end
             b.online = s.online
+            b.hat:SetShown(hat ~= nil and hat == s.name)
         end
     end
     bar.online = online
     bar.logoText:SetText(online > 0 and tostring(online) or "")
+    Bar.UpdateTicker()
     Layout()
-    Bar.UpdateTicker(false)
 end
 
--- Ticker: ny tekst med det samme, når der er sket noget nyt; ellers først når runden er færdig
-function Bar.UpdateTicker(force)
+-- Nyhederne: faste linjer under ikonerne. Musen over en linje viser det hele, og for loot
+-- itemets egen tooltip.
+local function RowEnter(self)
+    local it = self.line and self.line.item
+    if not it or bar.moving or not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    if it.link and GameTooltip.SetHyperlink and pcall(GameTooltip.SetHyperlink, GameTooltip, it.link) then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(it.text .. " |cff888888(" .. C.FormatAgo(it.t) .. ")|r", 0.8, 0.8, 0.84, true)
+        GameTooltip:AddLine(L("Shift-klik for at sende linket i chatten"), 0.5, 0.5, 0.56)
+    else
+        GameTooltip:AddLine(it.text, 1, 1, 1, true)
+        GameTooltip:AddLine(C.FormatAgo(it.t), 0.6, 0.6, 0.66)
+    end
+    GameTooltip:Show()
+end
+local function RowClick(self)
+    local it = self.line and self.line.item
+    if not (it and it.link and IsShiftKeyDown and IsShiftKeyDown() and ChatEdit_InsertLink) then return end
+    for _, ev in ipairs(DB().loot or {}) do
+        if ev.item == it.link then ChatEdit_InsertLink(C.LootLink(ev)) return end
+    end
+end
+
+local function MakeRow(i)
+    local row = CreateFrame("Button", nil, bar.news)
+    row.line = false
+    row:SetHeight(TICK_H)
+    row:SetPoint("TOPLEFT", bar.news, "TOPLEFT", 0, -(i - 1) * TICK_H)
+    row.fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.fs:SetWordWrap(false)
+    row.fs:SetJustifyH("LEFT")
+    row.fs:SetPoint("LEFT", row, "LEFT", 0, 0)
+    local hl = row:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(row)
+    hl:SetColorTexture(1, 0.85, 0.45, 0.07)
+    row:RegisterForDrag("LeftButton")
+    row:SetScript("OnDragStart", StartMove)
+    row:SetScript("OnDragStop", StopMove)
+    row:SetScript("OnEnter", RowEnter)
+    row:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    row:SetScript("OnClick", RowClick)
+    return row
+end
+
+function Bar.UpdateTicker()
     if not bar then return end
-    local text, newest = Bar.TickerText(Bar.Items())
-    bar.pending = text
-    if force or newest ~= bar.newest or not bar.tickText then
-        bar.newest = newest
-        bar.tickText = text
-        bar.tick:SetText(text)
-        bar.offset = 0
+    local lines = Bar.NewsLines(Bar.Items())
+    for i = #bar.rows + 1, #lines do bar.rows[i] = MakeRow(i) end
+    for i, row in ipairs(bar.rows) do
+        local line = lines[i]
+        row:SetShown(line ~= nil)
+        row.line = line or false
+        row.fs:SetText(line and line.text or "")
     end
-end
-
-local function OnUpdate(_, elapsed)
-    if not bar.clip:IsShown() then return end
-    local tw = bar.tick.GetStringWidth and bar.tick:GetStringWidth() or 0
-    local cw = bar.clipW or 0
-    if not tw or tw <= 0 then return end
-    if tw <= cw and bar.newest == "" then          -- kort, stille tekst: står stille
-        bar.tick:ClearAllPoints()
-        bar.tick:SetPoint("LEFT", bar.clip, "LEFT", 0, 0)
-        return
-    end
-    bar.offset = (bar.offset or 0) + SPEED * (elapsed or 0)
-    if bar.offset > tw + cw then
-        bar.offset = 0
-        if bar.pending ~= bar.tickText then
-            bar.tickText = bar.pending
-            bar.tick:SetText(bar.pending)
-        end
-    end
-    bar.tick:ClearAllPoints()
-    bar.tick:SetPoint("LEFT", bar.clip, "LEFT", cw - bar.offset, 0)
 end
 
 function ns.BuildBar()
@@ -487,8 +540,7 @@ function ns.BuildBar()
         if button == "RightButton" and ns.OpenOptions then ns.OpenOptions() end
     end)
     bar.icons = {}
-    bar.moving, bar.online, bar.offset, bar.clipW = false, 0, 0, 0
-    bar.tickText, bar.newest, bar.pending = false, false, false
+    bar.moving, bar.online = false, 0
 
     -- Logoet: klik åbner hovedvinduet. Tallet = venner online.
     local logo = CreateFrame("Button", nil, bar)
@@ -524,15 +576,10 @@ function ns.BuildBar()
     end)
     logo:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
 
-    -- Tickeren: tekst, der glider ind fra højre i et felt, der klipper alt uden for kanten
-    bar.clip = CreateFrame("Frame", nil, bar)
-    bar.clip:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", PAD, PAD - 1)
-    if bar.clip.SetClipsChildren then bar.clip:SetClipsChildren(true) end
-    bar.tick = bar.clip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    bar.tick:SetWordWrap(false)
-    bar.tick:SetJustifyH("LEFT")
-    bar.tick:SetPoint("LEFT", bar.clip, "LEFT", 0, 0)
-    bar:SetScript("OnUpdate", OnUpdate)
+    -- Nyhederne: de seneste 5 begivenheder under ikonerne
+    bar.news = CreateFrame("Frame", nil, bar)
+    bar.news:SetPoint("TOPLEFT", bar, "TOPLEFT", PAD, -(PAD + ICON + RING * 2 + 3))
+    bar.rows = {}
 
     Place()
     ns.barFrame = bar
@@ -565,9 +612,9 @@ function ns.BarSlash(arg)
     if arg == "lås" or arg == "laas" or arg == "lock" or arg == "unlock" then
         ns.SetBarLocked(not S().barLocked)
         P(S().barLocked and L("Bande-baren er låst.") or L("Bande-baren kan flyttes igen."))
-    elseif arg == "ticker" then
+    elseif arg == "ticker" or arg == "nyheder" or arg == "news" then
         ns.SetBarTicker(S().barTicker == false)
-        P(L("Live-tickeren er ") .. ((S().barTicker ~= false) and L("slået til") or L("slået fra")) .. ".")
+        P(L("Nyhederne på baren er ") .. ((S().barTicker ~= false) and L("slået til") or L("slået fra")) .. ".")
     elseif arg == "nulstil" or arg == "reset" then
         S().barPos = nil
         if bar then Place() end

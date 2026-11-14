@@ -57,6 +57,8 @@ local addonName, ns = ...
 --             Rolls-siden har kolonner for need/greed og pass, sladderen hænger need-goblins og
 --             pass-helgener ud, og tickeren viser, om loot blev vundet på need eller greed. Ældre
 --             versioner sender bare de samlede tal; de nye felter ligger sidst i R-beskeden
+--   * v0.21.1: bande-baren viser kun venner online, Skammens hat på ikonet og de 5 seneste nyheder
+--             fast under ikonerne i stedet for en rullende ticker (loot med itemets tooltip)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -6497,7 +6499,7 @@ do
         -- v0.20: bande-baren (Bar.lua) med lås og ticker på samme linje
         do
             local S = db.settings
-            local cb = MakeCheck(p, ns.L("Bande-bar"), ns.L("Altid synlig bjælke med vennerne og en live-ticker. Træk for at flytte."),
+            local cb = MakeCheck(p, ns.L("Bande-bar"), ns.L("Altid synlig bjælke med vennerne online og de seneste nyheder. Træk for at flytte."),
                 function() return S.bar ~= false end, function(v) if ns.SetBarShown then ns.SetBarShown(v) end end)
             cb:SetPoint("TOPLEFT", p, "TOPLEFT", 16, -60 - #checks * 44)
             cb.tip:SetWidth(250)
@@ -6506,7 +6508,7 @@ do
                 function(v) if ns.SetBarLocked then ns.SetBarLocked(v) end end)
             lock:SetPoint("TOPLEFT", p, "TOPLEFT", 300, -60 - #checks * 44)
             p.checks[#p.checks + 1] = lock
-            local tick = MakeCheck(p, "Ticker", "", function() return S.barTicker ~= false end,
+            local tick = MakeCheck(p, ns.L("Nyheder"), "", function() return S.barTicker ~= false end,
                 function(v) if ns.SetBarTicker then ns.SetBarTicker(v) end end)
             tick:SetPoint("TOPLEFT", p, "TOPLEFT", 380, -60 - #checks * 44)
             p.checks[#p.checks + 1] = tick
@@ -7768,7 +7770,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print(ns.L("  /wc4ever sound        - slå lyd til/fra  (|cffffd100sound <event>|r tester en lyd)"))
         print(ns.L("  /wc4ever toast        - slå popups (online, wipe, level) til/fra"))
         print(ns.L("  /wc4ever minimap      - vis/skjul WC4ever-knappen ved minimappet"))
-        print(ns.L("  /wc4ever bar          - vis/skjul bande-baren  (|cffffd100bar lås|r, |cffffd100bar ticker|r, |cffffd100bar nulstil|r)"))
+        print(ns.L("  /wc4ever bar          - vis/skjul bande-baren  (|cffffd100bar lås|r, |cffffd100bar nyheder|r, |cffffd100bar nulstil|r)"))
         print(ns.L("  /wc4ever stil         - skift mellem spillets egne rammer og addonets egen stil"))
         print(ns.L("  /wc4ever testtoast    - vis eksempler på popups"))
         print(ns.L("  /wc4ever efternavn X  - sæt din karakters efternavn (auto = find selv)"))
