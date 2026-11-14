@@ -643,6 +643,33 @@ do
         check(want == sum, "seneste punkt i grafen = summen af alle karakterers guld (" .. want .. " / " .. sum .. ")")
     end
 
+    -- v0.23.1: grafen starter, hvor målingerne pr. karakter begyndte, ikke ved en alts gamle "sidst set"
+    check(type(db.goldCharSince) == "number", "starttidspunkt for guld pr. karakter gemmes")
+    db.friends.Rasmus = nil
+    db.goldChar.Rasmus = nil
+    local oldSince = db.goldCharSince
+    db.goldCharSince = NOW - 7200
+    msg("C;Rasmus;Rasmusalt;HUNTER;20;" .. (8 * G) .. ";Westfall;" .. (NOW - 6 * 86400) .. ";5", "GUILD", "Rasmuschar")
+    msg("H;Rasmus;Rasmusmain;WARRIOR;30;" .. (3 * G) .. ";Barrens;0;;21", "GUILD", "Rasmusmain")
+    ns.goldRange = 1   -- 7 dage
+    ns.goldHidden = {}
+    ns.frame:Show()
+    ns.ShowTab(9)   -- guldsiden
+    local rb
+    for _, b in ipairs(ns.goldFriendBtns) do if b.friend == "Rasmus" then rb = b end end
+    check(rb and rb.data.pts[1][1] >= NOW - 7200, "linjen trækkes ikke tilbage til altens gamle 'sidst set': "
+        .. tostring(rb and rb.data.pts[1] and (rb.data.pts[1][1] - NOW)) .. " " .. tostring(ns.tab))
+    check(rb and rb.data.pts[1][2] == 11 * G, "altens sidst kendte guld tæller med fra start: " .. (rb and rb.data.pts[1][2] / G or -1))
+    check(ns.goldGraph.xlab[1]:GetText():find("^%d%d:%d%d$") ~= nil, "kort periode: klokkeslæt på x-aksen, ikke dato")
+    db.goldCharSince = oldSince
+
+    -- Ældre måling, der lander i de samme 10 minutter som en, vi har (andet ur): ingen hak
+    db.goldChar.Andreas = nil
+    ns.RecordCharGold("Andreas", "Andychar", 9000000, 100 * G)
+    ns.RecordCharGold("Andreas", "Andychar", 9003600, 120 * G)
+    check(not ns.RecordCharGold("Andreas", "Andychar", 9003590, 90 * G), "måling fra et lidt skævt ur giver ingen hak")
+    check(#db.goldChar.Andreas.Andychar == 2, "historikken er uændret")
+
     -- Dine egne karakterer sendes som GC i synk
     SENT = {}
     ns.RecordCharGold("Mathias", "Mathchar", NOW - 100, 42 * G)

@@ -65,6 +65,9 @@ local addonName, ns = ...
 --   * v0.23.0: nyhedspanel i højre side af hovedvinduet (de 100 seneste nyheder, scroll, på alle faner).
 --             Loot vundet på roll hed "[Loot]" på nyere klienter (et loot-historik-link foran itemet);
 --             navnet tages nu fra selve item-linket, og gamle "Loot"-navne slås op igen
+--   * v0.23.1: guldgrafen starter, hvor målingerne pr. karakter begyndte (ingen flade linjer trukket tilbage
+--             fra en alts gamle "sidst set"), klokkeslæt på x-aksen for korte perioder, ingen hak fra en vens
+--             lidt skæve ur, og en ødelagt guldværdi kan ikke længere fryse guldsiden
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -491,6 +494,20 @@ local function InitDB()
     db.rolls = db.rolls or {}        -- ven -> { rolls, wins, sum, cnt, low, high }
     db.goldHist = db.goldHist or {}  -- ven -> { { tid, kobber }, ... } sorteret efter tid (samlet sum, kun til ældre versioner)
     db.goldChar = db.goldChar or {}  -- ven -> karakter -> { { tid, kobber }, ... } (v0.18.7, guldgrafen bygger på den)
+    -- v0.23.1: hvornår guld pr. karakter begyndte at blive målt. Grafen starter her: ældre målinger
+    -- (fx en alts "sidst set" fra synk) bruges kun som udgangspunkt og trækkes ikke bagud som flade linjer.
+    if not db.goldCharSince then
+        local since
+        for _, byChar in pairs(db.goldChar) do
+            for _, h in pairs(byChar) do
+                for _, smp in ipairs(h) do
+                    -- 1794682800 = 14/11-2026 19:00 UTC, da v0.18.7 kom ud
+                    if not smp.d and smp[1] >= 1794682800 and (not since or smp[1] < since) then since = smp[1] end
+                end
+            end
+        end
+        db.goldCharSince = since or time()
+    end
     db.legacy = db.legacy or {}      -- ven -> { p = legacy points, c = klarede challenges, t } (kun WoW Forever)
     if db.settings.toasts == nil then db.settings.toasts = true end
     if db.settings.lootToasts == nil then db.settings.lootToasts = true end
@@ -2340,6 +2357,12 @@ do
             return true
         end
         if prev and prev[2] == copper then return false end   -- uændret
+        -- En ældre måling, der lander midt i historikken (fx fra en vens synk med et lidt andet ur):
+        -- har vi allerede en måling under 10 minutter fra den, beholdes den, så grafen ikke hakker.
+        local nxt = h[pos]
+        if nxt and ((prev and t - prev[1] < CHAR_GOLD_BUCKET) or nxt[1] - t < CHAR_GOLD_BUCKET) then
+            return false
+        end
         if pos == #h + 1 and prev and pos > 2 and math.floor(prev[1] / CHAR_GOLD_BUCKET) == math.floor(t / CHAR_GOLD_BUCKET) then
             prev[1], prev[2] = t, copper   -- samme 10 minutter: ret den seneste måling
             if h[pos - 2][2] == copper then table.remove(h, pos - 1) end
@@ -2371,7 +2394,7 @@ do
                 -- demo-karakterer tæller ikke med i sladderen
             elseif h and #h > 0 then
                 lists[#lists + 1] = h
-            elseif c.gold then
+            elseif type(c.gold) == "number" and c.gold >= 0 and c.gold < 1e15 then   -- ikke "1e400" fra en ødelagt besked
                 lists[#lists + 1] = { { c.seen or 1, c.gold } }
             end
         end
@@ -5730,6 +5753,7 @@ do
     -- Rundt tal over max (i kobber), så akserne får pæne trin
     local function NiceMax(copper)
         local g = math.max(1, copper / 10000)
+        if g ~= g or g > 1e12 then return 1e12 * 10000 end   -- uendeligt eller ugyldigt: ellers en evig løkke
         local step = 1
         while step * 10 <= g do step = step * 10 end
         for _, m in ipairs({ 1, 2, 2.5, 5, 10 }) do
@@ -5860,18 +5884,15 @@ do
         local g = ns.goldGraph
         local now = time()
         local days = GOLD_RANGES[ns.goldRange].days
-        local from = days > 0 and (now - days * 86400) or nil
-
-        if not from then
-            -- "Alt": fra den første guldmåling på nogen karakter
-            from = now
-            for _, name in ipairs(ROSTER) do
-                for _, h in pairs(db.goldChar[name] or {}) do
-                    if h[1] and h[1][1] < from and h[1][1] > 1 then from = h[1][1] end
-                end
+        -- v0.23.1: grafen starter, hvor målingerne pr. karakter begyndte (demo-data må gå længere tilbage)
+        local since = db.goldCharSince or now
+        for _, name in ipairs(ROSTER) do
+            for _, h in pairs(db.goldChar[name] or {}) do
+                if h[1] and h[1].d and h[1][1] < since then since = h[1][1] end
             end
-            if now - from < 86400 then from = now - 86400 end
         end
+        local from = days > 0 and math.max(now - days * 86400, since) or since
+        if now - from < 3600 then from = now - 3600 end
 
         local series, maxG, any = {}, 0, false
         ns.ShowFirst(ns.goldFriendBtns, #ROSTER)
@@ -5918,7 +5939,7 @@ do
             local t = from + (now - from) * frac
             g.xlab[i]:ClearAllPoints()
             g.xlab[i]:SetPoint("TOP", g, "BOTTOMLEFT", GRAPH_L + w * frac, GRAPH_B - 4)
-            g.xlab[i]:SetText(i == 5 and ns.L("nu") or date("%d/%m", t))
+            g.xlab[i]:SetText(i == 5 and ns.L("nu") or date((now - from) < 2 * 86400 and "%H:%M" or "%d/%m", t))
         end
 
         local function X(t) return GRAPH_L + w * ((t - from) / math.max(1, now - from)) end
@@ -7779,6 +7800,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
             wipe(db.rolls)
             wipe(db.goldHist)
             wipe(db.goldChar)
+            db.goldCharSince = time()
             if ns.ResetPranks then ns.ResetPranks() end
             wipe(db.ach)
             wipe(db.demoAch)

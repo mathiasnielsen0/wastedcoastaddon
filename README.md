@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.23.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.23.1. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -269,8 +269,9 @@ En graf over hver vens samlede guld over tid. Guldet huskes pr. karakter, og
 grafen lægger alle vennens karakterer sammen, hvor dem, der ikke er logget på,
 tæller med deres senest kendte guld. Så hopper grafen ikke, når nogen spiller en
 alt. Der måles, mens du spiller (højst hvert 10. minut pr. karakter, og kun når
-guldet har ændret sig), og målingerne sendes til vennerne. Vælg 7, 30 eller 90
-dage eller det hele, og klik på et navn for at skjule eller vise vennen. Hold
+guldet har ændret sig), og målingerne sendes til vennerne. Grafen starter, da
+målingerne pr. karakter begyndte, så en kort periode vises med klokkeslæt. Vælg
+7, 30 eller 90 dage eller det hele, og klik på et navn for at skjule eller vise vennen. Hold
 musen over et navn for at se, hvor meget vennen har tjent eller brugt i perioden.
 
 ### Professions
