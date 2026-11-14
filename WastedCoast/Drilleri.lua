@@ -629,6 +629,10 @@ function ns.HandlePrankMessage(kind, t)
                        why = t[8], time = at, name = (t[10] or "?"):sub(1, 40) })
         end
 
+    elseif kind == "XS" or kind == "XT" then
+        -- v0.22: stomi-fælden (Stomi.lua)
+        if ns.HandleStomiMessage then ns.HandleStomiMessage(kind, t) end
+
     elseif kind == "XD" then
         if ns.HandleDuelMessage then ns.HandleDuelMessage(t) end
 
@@ -677,6 +681,7 @@ function ns.SendPrankExtras(light)
     -- Den lette synk (hvert 10. minut) springer historikken over: den sendes, når den sker
     if light then return end
     if ns.SendDuels then ns.SendDuels() end
+    if ns.Stomi then ns.Stomi.SendLog() end
     local sent = 0
     for i = #db.needShame, 1, -1 do
         local e = db.needShame[i]
@@ -783,20 +788,43 @@ local function BuildPage(page)
     -- Højre øverst: emote-angreb
     local emo = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
     emo:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
-    emo:SetSize(362, 62 + math.ceil(ns.MAX_MEMBERS / 2) * 28)
-    SubText(emo, Header(emo, L("Emote-angreb")), L("en tilfældig fornærmelse"))
+    emo:SetSize(362, 78 + math.ceil(ns.MAX_MEMBERS / 2) * 28)
+    SubText(emo, Header(emo, L("Emote-angreb")), L("højreklik: stomi-fælden"))
     ui.emoteBtns = {}
     for i = 1, ns.MAX_MEMBERS do
-        local b = MakeButton(emo, 166, 24, "", function(self) if self.friend then ns.EmoteAttack(self.friend) end end)
+        local b = MakeButton(emo, 166, 24, "", function(self, button)
+            if not self.friend then return end
+            if button == "RightButton" and ns.StomiTrap then ns.StomiTrap(self.friend) else ns.EmoteAttack(self.friend) end
+        end)
+        b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        -- v0.22: tooltip med begge muligheder (oven i kantfarven fra MakeButton)
+        if b.HookScript then
+            b:HookScript("OnEnter", function(self)
+                if not self.friend or self.friend == WastedCoastDB.me or not GameTooltip then return end
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:AddLine(Name(self.friend), 1, 1, 1)
+                GameTooltip:AddLine(L("Klik: emote-angreb"), 0.8, 0.8, 0.84)
+                GameTooltip:AddLine(L("Højreklik: stomi-fælden"), 0.85, 0.7, 0.55)
+                local e = ns.StomiHas and ns.StomiHas(self.friend)
+                if e then GameTooltip:AddLine(string.format(L("Har stomi i %s endnu"), ns.Stomi.Hours(ns.Stomi.Remaining(self.friend))), 1, 0.5, 0.5) end
+                GameTooltip:Show()
+            end)
+            b:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+        end
         local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
         b:SetPoint("TOPLEFT", emo, "TOPLEFT", 10 + col * 176, -40 - row * 28)
         ui.emoteBtns[i] = b
     end
     ui.emoteStats = Txt(emo, "GameFontHighlightSmall")
-    ui.emoteStats:SetPoint("BOTTOMLEFT", emo, "BOTTOMLEFT", 12, 8)
+    ui.emoteStats:SetPoint("BOTTOMLEFT", emo, "BOTTOMLEFT", 12, 24)
     ui.emoteStats:SetWidth(338)
     ui.emoteStats:SetWordWrap(false)
     ui.emoteStats:SetTextColor(0.6, 0.6, 0.66)
+    ui.stomiStats = Txt(emo, "GameFontHighlightSmall")
+    ui.stomiStats:SetPoint("BOTTOMLEFT", emo, "BOTTOMLEFT", 12, 8)
+    ui.stomiStats:SetWidth(338)
+    ui.stomiStats:SetWordWrap(false)
+    ui.stomiStats:SetTextColor(0.6, 0.6, 0.66)
 
     -- Højre nederst: Need-politiet
     local need = MakeBox("Frame", page, COL_PANEL, COL_BORDER)
@@ -918,6 +946,7 @@ local function RefreshPage()
     else
         ui.emoteStats:SetText(L("Ingen angreb endnu. Vær den første."))
     end
+    if ns.Stomi then ui.stomiStats:SetText(ns.Stomi.Summary()) end
 
     -- Need-politiet
     local shames = {}
@@ -977,12 +1006,14 @@ function ns.MakePrankDemo()
     end
     if ns.MakeDuelDemo then ns.MakeDuelDemo() end
     if ns.MakeBankDemo then ns.MakeBankDemo() end
+    if ns.Stomi then ns.Stomi.MakeDemo() end
 end
 
 function ns.ClearPrankDemo()
     local db = DB()
     if ns.ClearDuelDemo then ns.ClearDuelDemo() end
     if ns.ClearBankDemo then ns.ClearBankDemo() end
+    if ns.Stomi then ns.Stomi.ClearDemo() end
     for friend, e in pairs(db.levelAt) do
         if e.d then db.levelAt[friend] = nil end
     end
@@ -999,6 +1030,7 @@ function ns.ResetPranks()
     wipe(db.levelAt)
     if ns.ResetDuels then ns.ResetDuels() end
     if ns.ResetBank then ns.ResetBank() end
+    if ns.Stomi then ns.Stomi.Reset() end
 end
 
 -- Eksempler på de nye popups (gemmes og sendes ikke)
@@ -1032,6 +1064,7 @@ end
 -- Returnerer true, hvis kommandoen blev klaret her
 function ns.PrankSlash(cmd, arg)
     local db = DB()
+    if ns.StomiSlash and ns.StomiSlash(cmd, arg) then return true end
     if cmd == "angrib" or cmd == "emote" or cmd == "attack" then
         local name = FindFriend(arg)
         if name then ns.EmoteAttack(name) else Print(L("Hvem? Skriv fx |cffffd100/wc4ever angrib nick|r.")) end

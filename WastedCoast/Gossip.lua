@@ -545,6 +545,23 @@ local function Collect(since, snapOverride, stOverride, limit)
         add(31, string.format(L("%s brugte |cffffd100%s|r. Det må have været noget vigtigt. Eller repairs."), Who(down), C.FormatGold(downN)))
     end
 
+    -- v0.22: stomi-fælden
+    local stomiY, stomiN = 0, 0
+    for _, e in ipairs((db.stomi and db.stomi.log) or {}) do
+        if (e.t or 0) > since and not e.demo and ROSTER_SET[e.to] and ROSTER_SET[e.from] then
+            if e.r == "y" and stomiY < 2 then
+                stomiY = stomiY + 1
+                local by = (e.from == db.me) and L("dig") or Name(e.from)
+                add(47 - stomiY, string.format(L("%s fik |cffd9b38cstomi|r af %s. %s"), Who(e.to), by,
+                    Pick({ L("Sagde ja uden at tænke sig om."), L("Posen sidder der i 24 timer."), L("Det var en gratis gave. Troede personen.") })))
+            elseif (e.r == "n" or e.r == "d") and stomiN < 1 then
+                stomiN = stomiN + 1
+                local by = (e.from == db.me) and L("dig") or Name(e.from)
+                add(22, string.format(L("%s gennemskuede en stomi-fælde fra %s og ramte den lille nej."), Who(e.to), by))
+            end
+        end
+    end
+
     -- Skammens hat
     local hat = ns.HatHolder and ns.HatHolder()
     if hat and deaths[hat] then

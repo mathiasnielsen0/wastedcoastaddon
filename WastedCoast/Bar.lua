@@ -153,6 +153,13 @@ function Bar.Items(now)
         end
     end
 
+    -- v0.22: stomi
+    for _, e in ipairs((db.stomi and db.stomi.log) or {}) do
+        if e.r == "y" and C.ROSTER_SET[e.to] and C.ROSTER_SET[e.from] then
+            add(e.t, "s" .. tostring(e.id), F("%s fik |cffd9b38cstomi|r af %s", Who(e.to), Who(e.from)))
+        end
+    end
+
     table.sort(out, function(a, b)
         if a.t ~= b.t then return a.t > b.t end
         return a.key < b.key
@@ -233,6 +240,10 @@ function Bar.TooltipLines(s, now)
     local d = DeathsToday(s.name, now)
     add(L("Døde i dag"), d > 0 and ("|cffff6060" .. d .. "|r") or "0", 0.6, 0.6, 0.66)
     if ns.HatHolder and ns.HatHolder() == s.name then add(L("Bærer |cffffd100Skammens hat|r (døde sidst)"), nil, 1, 0.5, 0.5) end
+    local st = ns.StomiHas and ns.StomiHas(s.name, now)
+    if st then
+        add(string.format(L("Har |cffd9b38cstomi|r (fra %s, %s tilbage)"), Name(st.from), ns.Stomi.Hours(ns.Stomi.Remaining(s.name, now))), nil, 0.85, 0.7, 0.55)
+    end
     if s.chars and s.chars > 1 then add(L("Karakterer"), tostring(s.chars), 0.6, 0.6, 0.66) end
     add(" ")
     add(L("Klik: se vennens karakterer"), nil, 0.5, 0.5, 0.56)
@@ -363,6 +374,12 @@ local function MakeIcon()
     btn.hat:SetPoint("CENTER", btn, "TOP", 0, 3)
     btn.hat:SetTexture(ns.HAT_ICON or "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01")
     btn.hat:Hide()
+    -- v0.22: stomipose nederst til venstre hos den, der har stomi
+    btn.stomi = btn:CreateTexture(nil, "OVERLAY", nil, 7)
+    btn.stomi:SetSize(14, 14)
+    btn.stomi:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", -3, -3)
+    btn.stomi:SetTexture(ns.Stomi and ns.Stomi.ICON or "Interface\\Icons\\INV_Misc_Bag_10")
+    btn.stomi:Hide()
     local hl = btn:CreateTexture(nil, "HIGHLIGHT")
     hl:SetPoint("TOPLEFT", btn.icon, "TOPLEFT", 0, 0)
     hl:SetPoint("BOTTOMRIGHT", btn.icon, "BOTTOMRIGHT", 0, 0)
@@ -461,6 +478,7 @@ function Bar.Refresh()
             end
             b.online = s.online
             b.hat:SetShown(hat ~= nil and hat == s.name)
+            b.stomi:SetShown(ns.StomiHas ~= nil and ns.StomiHas(s.name) ~= nil)
         end
     end
     bar.online = online

@@ -60,6 +60,8 @@ local addonName, ns = ...
 --   * v0.21.1: bande-baren viser kun venner online, Skammens hat på ikonet og de 5 seneste nyheder
 --             fast under ikonerne i stedet for en rullende ticker (loot med itemets tooltip)
 --   * v0.21.2: Skammens hat er en grim lilla troldmandshat (media/hat.tga) i stedet for et kranie
+--   * v0.22.0: stomi-fælden (Stomi.lua): en popup med en stor JA under musen og en lokkemad, der skifter til
+--             "HAR DU STOMI?", når man trykker. Ja = stomi i 24 timer (pose på bande-baren, toast, sladder)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -4740,6 +4742,7 @@ local TOAST_STYLE = {
     obit        = { border = { 0.55, 0.55, 0.60 }, bg = { 0.02, 0.02, 0.03 } },
     police      = { border = { 0.25, 0.45, 1.00 }, bg = { 0.04, 0.05, 0.12 } },
     emote       = { border = { 1.00, 0.45, 0.75 }, bg = { 0.10, 0.04, 0.08 } },
+    stomi       = { border = { 0.85, 0.70, 0.55 }, bg = { 0.10, 0.08, 0.05 } },   -- v0.22
     -- v0.16: loot efter kvalitet og sjældne mobs
     rareloot    = { border = { 0.00, 0.44, 0.87 }, bg = { 0.03, 0.06, 0.12 } },
     epicloot    = { border = { 0.64, 0.21, 0.93 }, bg = { 0.08, 0.04, 0.12 } },
@@ -6515,8 +6518,16 @@ do
             p.checks[#p.checks + 1] = tick
         end
 
+        -- v0.22: stomi-fælden (Stomi.lua)
+        do
+            local cb = MakeCheck(p, ns.L("Stomi-fælden"), ns.L("Vennerne kan sende dig stomi-popuppen. Slå fra, så kommer den aldrig."),
+                function() return db.settings.stomi ~= false end, function(v) if v then db.settings.stomi = nil else db.settings.stomi = false end end)
+            cb:SetPoint("TOPLEFT", p, "TOPLEFT", 16, -60 - (#checks + 1) * 44)
+            p.checks[#p.checks + 1] = cb
+        end
+
         local qh = Txt(p, "GameFontNormal")
-        qh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -288)
+        qh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -332)
         qh:SetText(ns.L("Minimumskvalitet for loot"))
         local qs = Txt(p, "GameFontHighlightSmall")
         qs:SetPoint("TOPLEFT", qh, "BOTTOMLEFT", 0, -2)
@@ -6530,12 +6541,12 @@ do
                 if ns.RefreshUI then ns.RefreshUI() end
             end)
             b.q = q
-            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -324)
+            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -368)
             p.qualityBtns[i] = b
         end
 
         local mh = Txt(p, "GameFontNormal")
-        mh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -370)
+        mh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -414)
         mh:SetText(ns.L("Din gruppe og dit navn"))
         p.meText = Txt(p, "GameFontHighlightSmall")
         p.meText:SetPoint("TOPLEFT", mh, "BOTTOMLEFT", 0, -2)
@@ -6543,12 +6554,12 @@ do
         local gb = MakeButton(p, 220, 24, ns.L("Gruppe, kode og navn ..."), function()
             if ns.ShowGroupWindow then ns.ShowGroupWindow() end
         end)
-        gb:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -424)
+        gb:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -468)
 
         local open = MakeButton(p, 150, 24, ns.L("Åbn WC4ever"), function()
             if ns.frame then ns.frame:Show() end
         end)
-        open:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -480)
+        open:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -524)
         local test = MakeButton(p, 150, 24, ns.L("Vis test-popups"), function()
             SlashCmdList["WASTEDCOAST"]("testtoast")
         end)
@@ -6559,7 +6570,7 @@ do
         sync:SetPoint("LEFT", test, "RIGHT", 8, 0)
 
         local lh = Txt(p, "GameFontNormal")
-        lh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -526)
+        lh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -570)
         lh:SetText(ns.L("Sprog / Language"))
         local ls = Txt(p, "GameFontHighlightSmall")
         ls:SetPoint("TOPLEFT", lh, "BOTTOMLEFT", 0, -2)
@@ -6569,11 +6580,11 @@ do
         for i, lang in ipairs(ns.LANGS) do
             local b = MakeButton(p, 110, 24, ns.LANG_NAMES[lang], function() ns.ChooseLanguage(lang) end)
             b.lang = lang
-            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -562)
+            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -606)
             p.langBtns[i] = b
         end
         p.reloadBtn = MakeButton(p, 150, 24, ns.L("Genindlæs UI"), function() if ReloadUI then ReloadUI() end end)
-        p.reloadBtn:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + #ns.LANGS * 116 + 8, -562)
+        p.reloadBtn:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + #ns.LANGS * 116 + 8, -606)
         p.reloadBtn:Hide()
 
         p:SetScript("OnShow", RefreshOptions)
@@ -6590,7 +6601,7 @@ do
             p:SetBackdrop(FLAT)
             p:SetBackdropColor(COL_BG[1], COL_BG[2], COL_BG[3], COL_BG[4])
             p:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
-            p:SetSize(520, 600)
+            p:SetSize(520, 650)
             p:SetPoint("CENTER")
             p:SetFrameStrata("DIALOG")
             p:EnableMouse(true)
@@ -7778,6 +7789,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print(ns.L("  /wc4ever announce     - slå chat-beskeder til/fra"))
         print(ns.L("  /wc4ever sladder      - vis dagens sladder igen  (|cffffd100sladder fra|r/|cffffd100til|r ved login)"))
         print(ns.L("  /wc4ever angrib <ven> - send et emote-angreb til en ven"))
+        print(ns.L("  /wc4ever stomi <ven>  - sæt en stomi-fælde for en ven  (|cffffd100stomi test|r, |cffffd100stomi fra|r)"))
         print(ns.L("  /wc4ever annonce      - slå dødsannoncer til/fra"))
         print(ns.L("  /wc4ever emotes       - slå popups for emote-angreb mod dig til/fra"))
         print(ns.L("  /wc4ever testannonce  - vis en test-dødsannonce"))

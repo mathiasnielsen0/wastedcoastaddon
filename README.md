@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.21.2. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.22.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` og (fra 0.20) `Bar.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` og (fra 0.22) `Stomi.lua` og `media/stomi.tga`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -333,6 +333,26 @@ Fanen samler alt det, der er lavet for at genere hinanden:
   *Level-snegl*. Hold musen over kortet for at se, hvor længe det er siden sidste
   level. Står der "mindst", har addonet ikke set selve level-up'et endnu.
 
+### Stomi-fælden
+Den gamle leg, bare i WoW. **Højreklik** på en ven under Sjov > Drilleri (eller skriv
+`/wc4ever stomi nick`) for at sætte en fælde:
+
+1. Vennen får en popup med noget, man har lyst til at sige ja til: en gave med et rigtigt
+   item fra din taske, lidt af dit guld, en summon til din zone, en gruppe-invite, en
+   dungeon-carry eller (hvis vennen er død, og du kan rezze) en rez. Navnet er din karakters.
+2. Popuppen dukker op med en **stor JA-knap lige under musen** og en **lille "nej"** i hjørnet.
+3. I samme øjeblik vennen trykker ned på JA, skifter spørgsmålet til **"HAR DU STOMI?"**.
+   Slipper vennen knappen, er det et ja. Den eneste udvej er den lille nej.
+4. Ja = **stomi i 24 timer**: en stomipose på vennens ikon i bande-baren, en toast og en
+   besked hos alle, en linje i nyhederne og i dagens sladder, og tællere for flest givne og
+   flest modtagne stomier nederst i Emote-angreb-boksen.
+
+Du kan sætte én fælde hver **6. time**, og en ven, der allerede har stomi, kan ikke få en til.
+Popuppen kommer aldrig midt i kamp (den venter, til kampen er slut), og knapperne gør intet
+i spillet: der bliver ikke invitet, summonet, rezzet eller handlet noget. Vil du være fri,
+så slå **Stomi-fælden** fra i indstillingerne (eller `/wc4ever stomi fra`). Se, hvordan
+den ser ud, med `/wc4ever stomi test` (giver ikke stomi og sendes ikke).
+
 ### Dødsannoncer
 Når en ven dør, får alle en popup med en dødsannonce, fx *"Nick blev overlistet af
 en level 12 Murloc Forager"*. Annoncen afhænger af, hvordan man døde (fald, drukning,
@@ -439,6 +459,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
 | `/wc4ever sladder` | Vis sladderen siden sidst igen (`sladder fra`/`til` styrer den ved login) |
 | `/wc4ever angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
+| `/wc4ever stomi <ven>` | Sæt en stomi-fælde for en ven (`stomi test` viser popuppen, `stomi fra`/`til` slår den fra/til hos dig) |
 | `/wc4ever annonce` | Slå dødsannoncer til/fra |
 | `/wc4ever emotes` | Slå popups for emote-angreb mod dig til/fra |
 | `/wc4ever testannonce` | Vis eksempler på dødsannonce, Need-politi og emote-angreb |
