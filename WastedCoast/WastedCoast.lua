@@ -49,6 +49,8 @@ local addonName, ns = ...
 --             ikke længere hopper ned til altens guld, når nogen logger en alt på
 --   * v0.19.0: mere i dagens sladder: legendary og rare loot med navn, need-goblins, rare mobs, maxede
 --             professions, ny reputation, item level, spilletid, instanser og wipes, uheldige rolls og legacy points
+--   * v0.20.0: bande-baren (Bar.lua): en lille bjælke, der altid er på skærmen, med et ikon pr. ven (level,
+--             XP-ring, online/offline, tooltip med zone og hvad vennen laver) og en live-ticker med det seneste nye
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -171,6 +173,8 @@ local function Inst(name, final, ...)
     BOSSES[name] = info
     BOSS_BY_NORM[Norm(name)] = info
 end
+-- v0.20: er zonen en kendt dungeon eller raid? (bande-baren viser "i en dungeon")
+function ns.IsInstanceZone(zone) return zone ~= nil and zone ~= "" and BOSS_BY_NORM[Norm(zone)] ~= nil end
 
 -- TBC-instanser. Forever har sin egen "Hyjal Summit" (en anden raid), så de må ikke blandes.
 if not GAME.isForever then
@@ -6321,9 +6325,26 @@ do
             cb:SetPoint("TOPLEFT", p, "TOPLEFT", 16, -60 - (i - 1) * 44)
             p.checks[i] = cb
         end
+        -- v0.20: bande-baren (Bar.lua) med lås og ticker på samme linje
+        do
+            local S = db.settings
+            local cb = MakeCheck(p, ns.L("Bande-bar"), ns.L("Altid synlig bjælke med vennerne og en live-ticker. Træk for at flytte."),
+                function() return S.bar ~= false end, function(v) if ns.SetBarShown then ns.SetBarShown(v) end end)
+            cb:SetPoint("TOPLEFT", p, "TOPLEFT", 16, -60 - #checks * 44)
+            cb.tip:SetWidth(250)
+            p.checks[#p.checks + 1] = cb
+            local lock = MakeCheck(p, ns.L("Lås"), "", function() return S.barLocked end,
+                function(v) if ns.SetBarLocked then ns.SetBarLocked(v) end end)
+            lock:SetPoint("TOPLEFT", p, "TOPLEFT", 300, -60 - #checks * 44)
+            p.checks[#p.checks + 1] = lock
+            local tick = MakeCheck(p, "Ticker", "", function() return S.barTicker ~= false end,
+                function(v) if ns.SetBarTicker then ns.SetBarTicker(v) end end)
+            tick:SetPoint("TOPLEFT", p, "TOPLEFT", 380, -60 - #checks * 44)
+            p.checks[#p.checks + 1] = tick
+        end
 
         local qh = Txt(p, "GameFontNormal")
-        qh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -244)
+        qh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -288)
         qh:SetText(ns.L("Minimumskvalitet for loot"))
         local qs = Txt(p, "GameFontHighlightSmall")
         qs:SetPoint("TOPLEFT", qh, "BOTTOMLEFT", 0, -2)
@@ -6337,12 +6358,12 @@ do
                 if ns.RefreshUI then ns.RefreshUI() end
             end)
             b.q = q
-            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -280)
+            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -324)
             p.qualityBtns[i] = b
         end
 
         local mh = Txt(p, "GameFontNormal")
-        mh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -326)
+        mh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -370)
         mh:SetText(ns.L("Din gruppe og dit navn"))
         p.meText = Txt(p, "GameFontHighlightSmall")
         p.meText:SetPoint("TOPLEFT", mh, "BOTTOMLEFT", 0, -2)
@@ -6350,12 +6371,12 @@ do
         local gb = MakeButton(p, 220, 24, ns.L("Gruppe, kode og navn ..."), function()
             if ns.ShowGroupWindow then ns.ShowGroupWindow() end
         end)
-        gb:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -380)
+        gb:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -424)
 
         local open = MakeButton(p, 150, 24, ns.L("Åbn WC4ever"), function()
             if ns.frame then ns.frame:Show() end
         end)
-        open:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -436)
+        open:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -480)
         local test = MakeButton(p, 150, 24, ns.L("Vis test-popups"), function()
             SlashCmdList["WASTEDCOAST"]("testtoast")
         end)
@@ -6366,7 +6387,7 @@ do
         sync:SetPoint("LEFT", test, "RIGHT", 8, 0)
 
         local lh = Txt(p, "GameFontNormal")
-        lh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -482)
+        lh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -526)
         lh:SetText(ns.L("Sprog / Language"))
         local ls = Txt(p, "GameFontHighlightSmall")
         ls:SetPoint("TOPLEFT", lh, "BOTTOMLEFT", 0, -2)
@@ -6376,11 +6397,11 @@ do
         for i, lang in ipairs(ns.LANGS) do
             local b = MakeButton(p, 110, 24, ns.LANG_NAMES[lang], function() ns.ChooseLanguage(lang) end)
             b.lang = lang
-            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -518)
+            b:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + (i - 1) * 116, -562)
             p.langBtns[i] = b
         end
         p.reloadBtn = MakeButton(p, 150, 24, ns.L("Genindlæs UI"), function() if ReloadUI then ReloadUI() end end)
-        p.reloadBtn:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + #ns.LANGS * 116 + 8, -518)
+        p.reloadBtn:SetPoint("TOPLEFT", p, "TOPLEFT", 18 + #ns.LANGS * 116 + 8, -562)
         p.reloadBtn:Hide()
 
         p:SetScript("OnShow", RefreshOptions)
@@ -6397,7 +6418,7 @@ do
             p:SetBackdrop(FLAT)
             p:SetBackdropColor(COL_BG[1], COL_BG[2], COL_BG[3], COL_BG[4])
             p:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
-            p:SetSize(520, 556)
+            p:SetSize(520, 600)
             p:SetPoint("CENTER")
             p:SetFrameStrata("DIALOG")
             p:EnableMouse(true)
@@ -7274,6 +7295,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         BuildUI()
         ns.BuildMinimapButton()
         ns.BuildOptions()
+        if ns.BuildBar then ns.BuildBar() end
         ns.InitFallbackFilters()
         StartPump()
         Print(ns.L("indlæst (") .. GAME.label .. ns.L("). Skriv /wc4ever for at åbne vinduet."))
@@ -7406,6 +7428,8 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         db.settings.minimapHide = not db.settings.minimapHide
         if ns.minimapButton then ns.minimapButton:SetShown(not db.settings.minimapHide) end
         Print(ns.L("Knappen ved minimappet er ") .. (db.settings.minimapHide and ns.L("skjult") or ns.L("vist igen")) .. ".")
+    elseif (cmd == "bar" or cmd == "bande") and ns.BarSlash then
+        ns.BarSlash(arg)
     elseif cmd == "jeg" or cmd == "gruppe" or cmd == "navn" or cmd == "group" or cmd == "name" then
         ns.ShowGroupWindow()
     elseif cmd == "config" or cmd == "indstillinger" or cmd == "options" or cmd == "settings" then
@@ -7564,6 +7588,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print(ns.L("  /wc4ever sound        - slå lyd til/fra  (|cffffd100sound <event>|r tester en lyd)"))
         print(ns.L("  /wc4ever toast        - slå popups (online, wipe, level) til/fra"))
         print(ns.L("  /wc4ever minimap      - vis/skjul WC4ever-knappen ved minimappet"))
+        print(ns.L("  /wc4ever bar          - vis/skjul bande-baren  (|cffffd100bar lås|r, |cffffd100bar ticker|r, |cffffd100bar nulstil|r)"))
         print(ns.L("  /wc4ever stil         - skift mellem spillets egne rammer og addonets egen stil"))
         print(ns.L("  /wc4ever testtoast    - vis eksempler på popups"))
         print(ns.L("  /wc4ever efternavn X  - sæt din karakters efternavn (auto = find selv)"))
@@ -7601,4 +7626,6 @@ ns.core = {
     UpdateChar = UpdateChar,
     -- v0.16: sjældne mobs (Rares.lua)
     PlayEventSound = PlayEventSound,
+    -- v0.20: bande-baren (Bar.lua)
+    ClassName = ClassName, ICON_TEX = ICON_TEX, COL_MUTED = COL_MUTED, FormatAgoShort = FormatAgoShort,
 }

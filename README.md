@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.19.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.20.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua` og (fra 0.18) `Locale.lua` og `Locale_en.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` og (fra 0.20) `Bar.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -129,6 +129,25 @@ dæmpet kort med "OFFLINE", karakteren og hvornår de sidst var online (senest s
 øverst). Hold musen over et kort for at se alle vennens karakterer, "værste fjende"
 og seneste loot. Klik på et kort for at se alle karakterer. Nederst står de seneste
 dødsfald og det seneste loot, når der er plads.
+
+### Bande-baren
+En lille bjælke, der altid er på skærmen (som standard øverst i midten), også når
+hovedvinduet er lukket:
+
+- **Ét ikon pr. ven** i klassefarve. Ikonet lyser og har en grøn prik, når vennen er online,
+  og er gråt, når vennen er offline. Level står i hjørnet, og en tynd ring rundt om ikonet
+  fyldes med XP'en i det nuværende level (fuld guldring på max level).
+- **Hold musen over et ikon** for at se karakter, level, zone, hvad vennen laver (i en dungeon,
+  døde lige til en kylling, fik ny loot, dingede ...) og hvor mange gange vennen er død i dag.
+  Klik for at åbne vennens karakterer.
+- **Live-ticker** under ikonerne: det seneste døgns levels, dødsfald (de pinlige bliver kaldt
+  pinlige), loot, trofæer, rare mobs og dueller ruller forbi, det nyeste først.
+- WC4ever-logoet til venstre åbner hovedvinduet, og tallet ved det er antal venner online.
+
+Træk i baren for at flytte den, og højreklik for indstillingerne. Under **Indstillinger** kan
+du slå baren og tickeren til og fra og låse baren. Det kan også gøres med `/wc4ever bar`
+(vis/skjul), `/wc4ever bar lås`, `/wc4ever bar ticker` og `/wc4ever bar nulstil` (tilbage
+øverst på skærmen). Baren bygger kun på data, addonet allerede har, så den sender intet ekstra.
 
 ### Scoreboard
 Alle venner i en rangliste. Klik på en kolonne for at sortere (klik igen for at
@@ -329,7 +348,7 @@ med `/wc4ever sladder fra`.
 
 ### Indstillinger
 Under **Options > AddOns > Wasted Coast Forever** kan du slå lyd, chatbeskeder og popups
-til og fra, slå synk uden guild til og fra, vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
+til og fra, slå synk uden guild til og fra, slå bande-baren og dens ticker til og fra (og låse den), vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
 knapper til at åbne vinduet, vise test-popups og synkronisere.
 
 ### Sprog / Language
@@ -570,4 +589,6 @@ python3 tests/test_robust.py WastedCoast            # fejlrettelser, synk og ød
 python3 tests/test_robust.py WastedCoast forever    # det samme som WoW Forever (ingen combat log, kun C_Item)
 python3 tests/test_language.py WastedCoast          # engelsk: ingen dansk tekst nogen steder; dansk er standard
 python3 tests/test_language.py WastedCoast forever  # det samme på WoW Forever
+python3 tests/test_bar.py WastedCoast               # bande-baren: ikoner, XP-ring, tooltip, ticker, flyt og lås
+python3 tests/test_bar.py WastedCoast forever       # det samme på WoW Forever
 ```
