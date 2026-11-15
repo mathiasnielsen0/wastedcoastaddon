@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.30.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.30.1. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -154,8 +154,8 @@ hovedvinduet er lukket:
   bliver kaldt pinlige), loot, trofæer, rare mobs og dueller. Hver linje har et lille ikon for
   typen (kranie, sværd, item ...), så man kan se dødsfaldene uden at læse, og tiden står for sig
   selv yderst til højre. Navne står i klassefarve og det vigtige (dræberen, itemet, trofæet) lyser
-  op. Musen over en loot-linje viser itemets tooltip, og shift-klik linker itemet i chatten. Musen
-  over et frisk dødsfald viser **Prut**, og et klik prutter af vennen.
+  op. Musen over en loot-linje viser itemets tooltip, og shift-klik linker itemet i chatten. Prut og
+  gz sker kun fra popupperne, ikke ved at klikke på nyhederne.
 - WC4ever-logoet til venstre åbner hovedvinduet. Til højre står, hvor mange venner der er online
   (uden nyhederne står tallet ved logoet).
 - **Pilen øverst til højre** folder nyhederne ind og ud, og valget huskes. Foldet ind står kun den
@@ -400,9 +400,7 @@ Et klik sender vennen en hilsen, fx *"Mathias klapper ad dig. Level 31!"* eller 
 rækker dig en kold en for level 31."*, som popup med ding-lyden og i chatten. Rammer vennen max
 level, er teksten lidt mere højtidelig.
 
-- På bande-baren bliver tiden til **Gz**, når musen er over en frisk level-nyhed, og et klik
-  siger tillykke. Det kan også gøres med `/wc4ever gz` (den ven, der dingede senest) eller
-  `/wc4ever gz nick`.
+- Det kan også gøres med `/wc4ever gz` (den ven, der dingede senest) eller `/wc4ever gz nick`.
 - Kun i **15 minutter** efter levelet, **ét gz pr. level** fra hver ven og højst ét gz hvert
   **10. sekund**.
 - Gz tælles: bande-barens tooltip viser gz givet og fået, og nyhederne viser

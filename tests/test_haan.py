@@ -203,11 +203,11 @@ for _, it in ipairs(ns.Bar.Items(nil, 100)) do if it.dead == "Jeppe" then deadLi
 check(found, "prutter står i nyhederne")
 check(deadLine ~= nil, "dødsfald i nyhederne ved, hvem der døde")
 
--- Klik på et frisk dødsfald i nyhederne prutter
+-- v0.30.1: klik på et frisk dødsfald i nyhederne prutter IKKE (kun dødsannoncens knap gør)
 die("Rasmus", "Raschar", "HUNTER", NOW + 40)
 local rl
 for _, it in ipairs(ns.Bar.Items(nil, 100)) do if it.dead == "Rasmus" then rl = it end end
-check(rl and ns.Bar.CanTaunt(rl), "et frisk dødsfald kan bruges til at prutte")
+check(rl ~= nil and ns.Bar.CanTaunt == nil, "dødsfaldet står i nyhederne, men baren kan ikke prutte")
 CLOCK = CLOCK + Haan.COOLDOWN + 1
 SENT = {}
 if ns.BuildBar then ns.BuildBar() end
@@ -218,22 +218,19 @@ for _, f in ipairs(FRAMES) do
     if f.scripts.OnClick and f.scripts.OnDragStart and rawget(f, "line") ~= nil and rawget(f, "fs") and not rowClick then rowClick = f.scripts.OnClick end
 end
 check(rowClick ~= nil, "nyhedsrækken kan klikkes")
--- v0.26: over et dødsfald, man kan prutte af, bliver tiden til "Prut"
+-- Musen over et dødsfald viser bare tiden, og et klik sender ingenting
 ns.Bar.UpdateTicker()
 local real = ns.barFrame.rows[1]
 real.line = { text = "x", ago = "1m", item = rl }
+local before = real.time.text_
 real.scripts.OnEnter(real)
-check(real.time.text_ == "Prut" and real.chip.shown, "musen over et dødsfald viser Prut i tids-kolonnen")
-real.scripts.OnLeave(real)
-check(real.time.text_ == "1m" and not real.chip.shown, "og tiden kommer tilbage bagefter")
-real.line = { text = "x", ago = "2m", item = { t = NOW, text = "x" } }
-real.scripts.OnEnter(real)
-check(real.time.text_ == "2m", "andre nyheder viser bare tiden")
+check(real.time.text_ == before, "musen over et dødsfald viser bare tiden")
 real.scripts.OnLeave(real)
 rowClick(row)
-local m = sentWith("XH;")
-check(#m == 1 and split(m[1])[3] == "Rasmus", "klik på dødsfaldet sender en prut til Rasmus")
-check(not ns.Bar.CanTaunt(rl), "bagefter kan den ikke bruges igen")
+check(#sentWith("XH;") == 0, "klik på dødsfaldet i nyhederne sender ingen prut")
+check(Haan.Can("Rasmus"), "man kan stadig prutte af Rasmus fra dødsannoncen")
+ns.HaanSend("Rasmus")
+check(#sentWith("XH;") == 1, "prut sendt på anden vis")
 
 -- Tooltip på bande-baren
 local s
