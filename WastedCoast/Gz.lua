@@ -14,7 +14,9 @@ local L = ns.L
 --
 -- Besked:
 --   XG;fra;til;level;nonce;tekst;tid
--- db.gz = { log = { { id, from, to, l, line, t } }, lastSent = GetTime-tid (kun i sessionen) }
+-- db.gz = { log = { { id, from, to, l, line, t } } }
+-- Cooldown for dine egne afsendelser ligger i en lokal variabel (GetTime nulstilles ved genstart af pc'en,
+-- så den må aldrig gemmes i db)
 -- db.settings.gz = false: ingen lyd eller popup, når nogen siger tillykke til dig
 -- =============================================================================
 
@@ -52,8 +54,10 @@ local function DB()
     local db = WastedCoastDB
     db.gz = db.gz or {}
     db.gz.log = db.gz.log or {}
+    db.gz.lastSent = nil   -- gammel version gemte GetTime-tid i db; den giver timelange ventetider efter genstart
     return db, db.gz
 end
+local lastSent   -- GetTime() for din seneste afsendelse, kun i denne session
 
 local function ClassOf(friend)
     local best, lvl
@@ -116,7 +120,7 @@ function Gz.Can(friend)
     local e = Gz.FreshDing(friend)
     if not e then return nil, nil, string.format(L("%s er ikke steget i level for nylig."), Name(friend)) end
     if Given(db.me, friend, e.l) then return nil, e, string.format(L("Du har allerede sagt tillykke til %s."), Name(friend)) end
-    local wait = g.lastSent and (g.lastSent + Gz.COOLDOWN - GetTime()) or 0
+    local wait = lastSent and (lastSent + Gz.COOLDOWN - GetTime()) or 0
     if wait > 0 then return nil, e, string.format(L("Rolig nu. Du kan sige tillykke igen om %d sek."), math.ceil(wait)) end
     return true, e
 end
@@ -184,7 +188,7 @@ function ns.GzSend(friend)
         return false
     end
     local db, g = DB()
-    g.lastSent = GetTime()
+    lastSent = GetTime()
     local nonce = tostring(math.random(100000, 999999))
     local e = { id = db.me .. "-" .. nonce, from = db.me, to = friend, l = ding.l, nonce = nonce,
                 line = math.random(#Lines(ding.l)), t = time() }
@@ -262,7 +266,7 @@ end
 function Gz.Reset()
     local _, g = DB()
     wipe(g.log)
-    g.lastSent = nil
+    lastSent = nil
 end
 
 local function FindFriend(arg)

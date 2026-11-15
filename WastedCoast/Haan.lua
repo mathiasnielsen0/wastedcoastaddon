@@ -22,7 +22,9 @@ local L = ns.L
 --
 -- Besked:
 --   XH;fra;til;dødsfald-id;nonce;tekst;lyd;tid
--- db.haan = { log = { { id, from, to, death, line, snd, t } }, lastSent = GetTime-tid (kun i sessionen) }
+-- db.haan = { log = { { id, from, to, death, line, snd, t } } }
+-- Cooldown for dine egne afsendelser ligger i en lokal variabel (GetTime nulstilles ved genstart af pc'en,
+-- så den må aldrig gemmes i db)
 -- db.settings.haan = false: ingen lyd eller popup, når nogen prutter af dig (men en straffeprut hvert 5. min)
 --   XR;ven;1|0;siden;straffeprutter   (prut-nægter-status, sendes ved skift og ved synk)
 -- db.haan.refusers = { ven -> { on = true|nil, since, n } }, db.haan.penalty = { n, last }
@@ -64,8 +66,10 @@ local function DB()
     db.haan = db.haan or {}
     db.haan.log = db.haan.log or {}
     db.haan.refusers = db.haan.refusers or {}
+    db.haan.lastSent = nil   -- gammel version gemte GetTime-tid i db; den giver timelange ventetider efter genstart
     return db, db.haan
 end
+local lastSent   -- GetTime() for din seneste afsendelse, kun i denne session
 
 -- Vennens klasse: den karakter med højest level
 local function ClassOf(friend)
@@ -133,7 +137,7 @@ function Haan.Can(friend)
     local ev = Haan.FreshDeath(friend)
     if not ev then return nil, nil, string.format(L("%s er ikke død for nylig. Prutter er kun til de døde."), Name(friend)) end
     if Taunted(db.me, ev.id) then return nil, ev, string.format(L("Du har allerede pruttet af %s for det dødsfald."), Name(friend)) end
-    local wait = h.lastSent and (h.lastSent + Haan.COOLDOWN - GetTime()) or 0
+    local wait = lastSent and (lastSent + Haan.COOLDOWN - GetTime()) or 0
     if wait > 0 then return nil, ev, string.format(L("Rolig nu. Du kan prutte igen om %d sek."), math.ceil(wait)) end
     return true, ev
 end
@@ -255,7 +259,7 @@ function ns.HaanSend(friend)
         return false
     end
     local db, h = DB()
-    h.lastSent = GetTime()
+    lastSent = GetTime()
     local nonce = tostring(math.random(100000, 999999))
     local e = { id = db.me .. "-" .. nonce, from = db.me, to = friend, death = ev.id, nonce = nonce,
                 line = math.random(#LINES), snd = math.random(Haan.SOUNDS), t = time() }
@@ -417,7 +421,7 @@ function Haan.Reset()
     local _, h = DB()
     wipe(h.log)
     wipe(h.refusers)
-    h.lastSent = nil
+    lastSent = nil
     h.penalty = nil
 end
 
