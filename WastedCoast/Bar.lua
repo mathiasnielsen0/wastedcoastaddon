@@ -68,7 +68,11 @@ function Bar.Items(now, maxItems, maxAge)
     local since = now - (maxAge or MAX_AGE)
     local out = {}
     local function add(t, key, text, link, dead)
-        if t and t > since and t <= now + 60 and text then out[#out + 1] = { t = t, key = key, text = text, link = link, dead = dead } end
+        if t and t > since and t <= now + 60 and text then
+            local it = { t = t, key = key, text = text, link = link, dead = dead }
+            out[#out + 1] = it
+            return it
+        end
     end
 
     -- Dødsfald
@@ -86,7 +90,8 @@ function Bar.Items(now, maxItems, maxAge)
                 text = F("%s døde til %s", Who(f, ev.class), killer)
             end
             -- v0.24: dead = vennen, så linjen kan bruges til at prutte (Haan.lua)
-            add(ev.time, "d" .. tostring(ev.id or ev.time), text, nil, f)
+            local it = add(ev.time, "d" .. tostring(ev.id or ev.time), text, nil, f)
+            if it and ev.pvp == true then it.pvp = true end
         end
     end
 
@@ -114,7 +119,8 @@ function Bar.Items(now, maxItems, maxAge)
             local id = tonumber(ev.item:match("^item:(%d+)"))
             local icon = id and ((C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id)) or (GetItemIcon and GetItemIcon(id)))
             local item = (icon and ("|T" .. tostring(icon) .. ":12:12:0:0|t ") or "") .. C.LootLink(ev)
-            add(ev.time, "o" .. tostring(ev.id or ev.time), F("%s fik %s", Who(f, ev.class), item) .. tail, ev.item)
+            local it = add(ev.time, "o" .. tostring(ev.id or ev.time), F("%s fik %s", Who(f, ev.class), item) .. tail, ev.item)
+            if it and icon then it.icon = icon end
         end
     end
 
@@ -652,14 +658,56 @@ end
 -- v0.23: nyhedspanelet i hovedvinduet. Samme nyheder som på baren, men de 100 seneste
 -- (uden aldersgrænse) i en liste, man kan scrolle i. Står i højre side af vinduet,
 -- uanset hvilken fane der er valgt.
+-- v0.26: ikon pr. slags nyhed, tiden i sin egen kolonne og filterknapper øverst.
 -- =============================================================================
 local PANEL_MAX = 100
 local PANEL_ROW_H = 30       -- plads til to linjer pr. nyhed
 local PANEL_HEAD = 24
+local CHIP_H = 18
+local LIST_TOP = PANEL_HEAD + CHIP_H + 8
+local TIME_W = 30
 local panel
 Bar.PANEL_MAX = PANEL_MAX
 
+local IC = "Interface\\Icons\\"
+-- Hvilken slags nyhed (første bogstav i nøglen) og ikonet til den
+Bar.KIND = { d = "death", o = "loot", l = "level", a = "fun", r = "fun", u = "fun", s = "fun", h = "fun", w = "fun" }
+Bar.KIND_ICON = {
+    d = IC .. "INV_Misc_Bone_HumanSkull_01", o = IC .. "INV_Misc_Bag_10", l = IC .. "Spell_Holy_SurgeOfLight",
+    a = IC .. "Spell_Holy_DivineIntervention", r = IC .. "INV_Misc_Head_Dragon_01", u = IC .. "Ability_Warrior_Challange",
+    s = IC .. "Spell_Shadow_AnimateDead", h = IC .. "Spell_Nature_Cyclone", w = IC .. "Spell_Holy_DivineIntervention",
+}
+Bar.PVP_ICON = IC .. "INV_Sword_27"
+Bar.FILTERS = {
+    { key = "all",   label = "Alle" },
+    { key = "death", label = "Død" },
+    { key = "loot",  label = "Loot" },
+    { key = "level", label = "Level" },
+    { key = "fun",   label = "Sjov" },
+}
+
+function Bar.KindOf(it)
+    return it and it.key and Bar.KIND[it.key:sub(1, 1)] or "fun"
+end
+
+function Bar.IconOf(it)
+    if not it or not it.key then return nil end
+    if it.icon then return it.icon end
+    if it.pvp then return Bar.PVP_ICON end
+    return Bar.KIND_ICON[it.key:sub(1, 1)]
+end
+
+function Bar.Filter(items, filter)
+    if not filter or filter == "all" then return items end
+    local out = {}
+    for _, it in ipairs(items) do
+        if Bar.KindOf(it) == filter then out[#out + 1] = it end
+    end
+    return out
+end
+
 -- De linjer, der kan ses fra offset (antal rows). Giver også det rettede offset og det største.
+-- Hver linje: { text, time, icon, item }. Itemets ikon står i ikonkolonnen, ikke inde i teksten.
 function Bar.PanelLines(items, offset, rows)
     local total = #items
     local maxOff = math.max(0, total - rows)
@@ -668,7 +716,9 @@ function Bar.PanelLines(items, offset, rows)
     local out = {}
     for i = 1, math.min(rows, total - offset) do
         local it = items[offset + i]
-        out[i] = { text = it.text .. " |cff7a7a86(" .. Ago(it.t) .. ")|r", item = it }
+        local text = it.text
+        if it.icon then text = text:gsub("|T[^|]*|t ", "", 1) end
+        out[i] = { text = text, time = Ago(it.t), icon = Bar.IconOf(it), item = it }
     end
     return out, offset, maxOff
 end
@@ -680,9 +730,18 @@ local function MakePanelRow(i)
     row:SetHeight(PANEL_ROW_H)
     row:SetPoint("TOPLEFT", panel.list, "TOPLEFT", 0, -(i - 1) * PANEL_ROW_H)
     row:SetPoint("TOPRIGHT", panel.list, "TOPRIGHT", 0, -(i - 1) * PANEL_ROW_H)
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(16, 16)
+    row.icon:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -3)
+    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    row.time = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.time:SetPoint("TOPRIGHT", row, "TOPRIGHT", -2, -4)
+    row.time:SetWidth(TIME_W)
+    row.time:SetJustifyH("RIGHT")
+    row.time:SetTextColor(0.55, 0.55, 0.6)
     row.fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.fs:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -3)
-    row.fs:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 2)
+    row.fs:SetPoint("TOPLEFT", row, "TOPLEFT", 25, -4)
+    row.fs:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -(TIME_W + 6), 2)
     row.fs:SetJustifyH("LEFT")
     row.fs:SetJustifyV("TOP")
     row.fs:SetWordWrap(true)
@@ -701,9 +760,42 @@ local function MakePanelRow(i)
     return row
 end
 
+-- Filterknap: guldkant og guldtekst, når den er valgt
+local function MakeChip(parent, key, label)
+    local b = C.MakeBox("Button", parent, C.COL_BTN, C.COL_BORDER)
+    b:SetHeight(CHIP_H)
+    b.key = key
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    b.text:SetPoint("CENTER", b, "CENTER", 0, 0)
+    b.text:SetText(L(label))
+    function b:SetActive(on)
+        self.active = on
+        if on then
+            self:SetBackdropBorderColor(C.COL_GOLD[1], C.COL_GOLD[2], C.COL_GOLD[3], 1)
+            self.text:SetTextColor(C.COL_GOLD[1], C.COL_GOLD[2], C.COL_GOLD[3])
+        else
+            self:SetBackdropBorderColor(C.COL_BORDER[1], C.COL_BORDER[2], C.COL_BORDER[3], 1)
+            self.text:SetTextColor(0.78, 0.78, 0.82)
+        end
+    end
+    b:SetScript("OnEnter", function(self) if not self.active then self.text:SetTextColor(1, 1, 1) end end)
+    b:SetScript("OnLeave", function(self) self:SetActive(self.active) end)
+    b:SetScript("OnClick", function(self) Bar.SetPanelFilter(self.key) end)
+    b:SetActive(false)
+    return b
+end
+
+function Bar.SetPanelFilter(key)
+    if not panel then return end
+    panel.filter = key or "all"
+    panel.offset = 0
+    for _, chip in ipairs(panel.chips) do chip:SetActive(chip.key == panel.filter) end
+    ns.RefreshNewsPanel()
+end
+
 function ns.RefreshNewsPanel()
     if not panel or not panel:IsShown() then return end
-    local items = Bar.Items(nil, PANEL_MAX, math.huge)
+    local items = Bar.Filter(Bar.Items(nil, PANEL_MAX, math.huge), panel.filter)
     local lines, off, maxOff = Bar.PanelLines(items, panel.offset, panel.nRows)
     panel.offset, panel.maxOffset, panel.total = off, maxOff, #items
     for i, row in ipairs(panel.rows) do
@@ -711,6 +803,13 @@ function ns.RefreshNewsPanel()
         row:SetShown(line ~= nil)
         row.line = line or false
         row.fs:SetText(line and line.text or "")
+        row.time:SetText(line and line.time or "")
+        if line and line.icon then
+            row.icon:SetTexture(line.icon)
+            row.icon:Show()
+        else
+            row.icon:Hide()
+        end
     end
     panel.count:SetText(#items > 0 and tostring(#items) or "")
     -- Rullebjælken: kun når der er mere, end der kan ses
@@ -731,13 +830,13 @@ function Bar.ScrollPanel(delta)
     ns.RefreshNewsPanel()
 end
 
--- Bygges af hovedvinduet: parent er en tom frame i højre side, height dens højde
-function ns.BuildNewsPanel(parent, height)
+-- Bygges af hovedvinduet: parent er en tom frame i højre side, width og height dens størrelse
+function ns.BuildNewsPanel(parent, height, width)
     if panel then return panel end
     panel = C.MakeBox("Frame", parent, C.COL_PANEL, C.COL_BORDER)
     panel:SetAllPoints(parent)
-    panel.offset, panel.maxOffset, panel.total = 0, 0, 0
-    panel.nRows = math.max(1, math.floor((height - PANEL_HEAD - 8) / PANEL_ROW_H))
+    panel.offset, panel.maxOffset, panel.total, panel.filter = 0, 0, 0, "all"
+    panel.nRows = math.max(1, math.floor((height - LIST_TOP - 8) / PANEL_ROW_H))
 
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -6)
@@ -749,15 +848,28 @@ function ns.BuildNewsPanel(parent, height)
     panel.count:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -8)
     panel.count:SetJustifyH("RIGHT")
     panel.count:SetTextColor(0.5, 0.5, 0.56)
+
+    -- Filterknapperne deler bredden
+    panel.chips = {}
+    local n, gap = #Bar.FILTERS, 3
+    local cw = ((width or 240) - 12 - (n - 1) * gap) / n
+    for i, fl in ipairs(Bar.FILTERS) do
+        local chip = MakeChip(panel, fl.key, fl.label)
+        chip:SetWidth(cw)
+        chip:SetPoint("TOPLEFT", panel, "TOPLEFT", 6 + (i - 1) * (cw + gap), -PANEL_HEAD)
+        panel.chips[i] = chip
+    end
+    panel.chips[1]:SetActive(true)
+
     local line = panel:CreateTexture(nil, "ARTWORK")
-    line:SetPoint("TOPLEFT", panel, "TOPLEFT", 6, -PANEL_HEAD + 2)
-    line:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -6, -PANEL_HEAD + 2)
+    line:SetPoint("TOPLEFT", panel, "TOPLEFT", 6, -LIST_TOP + 3)
+    line:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -6, -LIST_TOP + 3)
     line:SetHeight(1)
     line:SetColorTexture(C.COL_GOLD[1], C.COL_GOLD[2], C.COL_GOLD[3], 0.3)
 
     panel.list = CreateFrame("Frame", nil, panel)
-    panel.list:SetPoint("TOPLEFT", panel, "TOPLEFT", 2, -PANEL_HEAD - 2)
-    panel.list:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -12, -PANEL_HEAD - 2)
+    panel.list:SetPoint("TOPLEFT", panel, "TOPLEFT", 2, -LIST_TOP)
+    panel.list:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -12, -LIST_TOP)
     panel.list:SetHeight(panel.nRows * PANEL_ROW_H)
 
     panel.track = panel:CreateTexture(nil, "ARTWORK")

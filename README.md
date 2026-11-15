@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.25.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.26.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -69,12 +69,17 @@ nogle små undersider lige under fanerne:
 | **Død** | Statistik, Instanser |
 | **Sjov** | Trofæer, Drilleri, Ugens pokaler |
 
-Klik på en vens kort for at se vennens karakterer.
+Klik på en vens kort for at se vennens karakterer. Venner online har en grøn kant. De offline står
+tre på en række med, hvornår de sidst var online, i hjørnet. Er der plads til flere i gruppen, står
+der et **Inviter en ven**-kort til sidst, som åbner gruppevinduet med koden.
 
 I højre side af vinduet står **nyhedspanelet**, uanset hvilken fane du er på. Det er de samme
 nyheder som på bande-baren (levels, dødsfald, loot, trofæer, rare mobs, dueller og stomi), men
-de **100 seneste**, også dem ældre end et døgn. Scroll med musehjulet. Musen over en loot-linje
-viser itemets tooltip, og shift-klik linker itemet i chatten.
+de **100 seneste**, også dem ældre end et døgn. Hver nyhed har et ikon for, hvad der skete (loot
+viser itemets ikon), og tiden står i sin egen kolonne. Knapperne øverst filtrerer: **Alle**,
+**Død**, **Loot**, **Level** og **Sjov** (trofæer, rares, dueller, stomi, prutter og pokaler).
+Scroll med musehjulet. Musen over en loot-linje viser itemets tooltip, og shift-klik linker
+itemet i chatten.
 
 På WoW Forever bruger vinduet spillets egne rammer, faner og knapper, så det ligner resten
 af Forevers UI: titellinje med logoet som portræt, fanerne hængende under vinduet og røde

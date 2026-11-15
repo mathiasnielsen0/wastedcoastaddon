@@ -75,6 +75,9 @@ local addonName, ns = ...
 --             pinligste død, loot- og need-goblin, nolifer, ding-maskine, dueller, rares, stomi, prutter, udødelig).
 --             Pokal på kortet i en uge, toast, nyhed, Sjov > Ugens pokaler og et pokalskab. XW = egen
 --             spilletid og levels i ugen
+--   * v0.26.0: nyt udseende på forsiden: online-kort med grøn kant, offline-kort tre på en række med tiden
+--             i hjørnet (ingen "OFFLINE"), et "Inviter en ven"-kort, undersider som lette faner uden kasse,
+--             og nyhedspanelet (280 bredt) med ikon pr. nyhed, tidskolonne og filterknapper
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -3798,6 +3801,7 @@ local BAR_W = CARD_W - 20
 -- smallere og står fem på en række (732 px bredt indhold)
 -- (ligger i ns, fordi hovedfilen har nået Luas grænse på 200 lokale variabler)
 ns.NARROW = { cols = 5 }
+ns.COL_ONLINE_BORDER = { 0.25, 0.62, 0.32, 1 }
 ns.NARROW.w = math.floor((732 - (ns.NARROW.cols - 1) * GAP) / ns.NARROW.cols)
 
 function ns.NARROW.SetCardWidth(card, w)
@@ -3911,6 +3915,7 @@ local function BuildCard(parent, index, friend)
 
     card:SetScript("OnClick", function(self) if self.friend then ns.SelectTarget(self.friend) end end)
     card:SetScript("OnEnter", function(self)
+        self.hover = true
         self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine(Name(self.friend), 1, 1, 1)
@@ -3963,7 +3968,9 @@ local function BuildCard(parent, index, friend)
         GameTooltip:Show()
     end)
     card:SetScript("OnLeave", function(self)
-        self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
+        self.hover = nil
+        local bc = self.baseBorder or COL_BORDER
+        self:SetBackdropBorderColor(bc[1], bc[2], bc[3], 1)
         GameTooltip:Hide()
     end)
     ns.NARROW.SetCardWidth(card, CARD_W)
@@ -3972,26 +3979,31 @@ end
 
 local BuildOverview
 do
-local HEAD_H, OFF_H, OFF_GAP = 16, 36, 6   -- gruppe-overskrift og de små offline-kort
+-- v0.26: offline-kortene står tre på en række og er højere, så navn, karakter, tid og pokal
+-- hver har deres egen plads (før overlappede de)
+local HEAD_H, OFF_H, OFF_GAP, OFF_COLS = 16, 42, 6, 3
+local OFF_W = math.floor((732 - (OFF_COLS - 1) * GAP) / OFF_COLS)
 
 -- Lille kort til en ven, der er offline: dæmpet, med navn, karakter og hvornår vi sidst så dem
 local function BuildMiniCard(parent, template)
     local card = MakeBox("Button", parent, COL_BG, COL_BORDER)
-    card:SetSize(CARD_W, OFF_H)
+    card:SetSize(OFF_W, OFF_H)
 
     card.icon = card:CreateTexture(nil, "ARTWORK")
-    card.icon:SetSize(24, 24)
+    card.icon:SetSize(30, 30)
     card.icon:SetPoint("LEFT", card, "LEFT", 7, 0)
 
     card.name = Txt(card, "GameFontNormal")
-    card.name:SetPoint("TOPLEFT", card, "TOPLEFT", 38, -5)
-    card.name:SetWidth(CARD_W - 96)
+    card.name:SetPoint("TOPLEFT", card, "TOPLEFT", 44, -7)
+    card.name:SetWidth(OFF_W - 44 - 60)
     card.name:SetWordWrap(false)
+    card.name:SetJustifyH("LEFT")
 
+    -- Hvornår vennen sidst var online (overskriften siger allerede "Offline")
     card.state = Txt(card, "GameFontHighlightSmall")
-    card.state:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -6)
+    card.state:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -8)
     card.state:SetJustifyH("RIGHT")
-    card.state:SetText("|cff888888OFFLINE|r")
+    card.state:SetTextColor(0.55, 0.55, 0.6)
 
     card.hat = card:CreateTexture(nil, "OVERLAY")
     card.hat:SetSize(16, 16)
@@ -4000,10 +4012,11 @@ local function BuildMiniCard(parent, template)
     card.hat:Hide()
 
     card.sub = Txt(card, "GameFontHighlightSmall")
-    card.sub:SetPoint("TOPLEFT", card, "TOPLEFT", 38, -20)
-    card.sub:SetWidth(CARD_W - 44)
+    card.sub:SetPoint("TOPLEFT", card, "TOPLEFT", 44, -23)
+    card.sub:SetWidth(OFF_W - 44 - 44)
     card.sub:SetWordWrap(false)
-    card.sub:SetTextColor(0.5, 0.5, 0.55)
+    card.sub:SetJustifyH("LEFT")
+    card.sub:SetTextColor(0.55, 0.55, 0.6)
 
     -- Samme klik og tooltip som de store kort
     card:SetScript("OnClick", template:GetScript("OnClick"))
@@ -4033,6 +4046,30 @@ function BuildOverview(page)
     for i = 1, ns.MAX_MEMBERS do
         ns.offCards[i] = BuildMiniCard(page, ns.cards[1])
     end
+
+    -- v0.26: tom plads i gruppen bliver til et kort, der åbner gruppevinduet med koden
+    local inv = MakeBox("Button", page, COL_BG, COL_BORDER)
+    inv:SetSize(OFF_W, OFF_H)
+    inv.text = Txt(inv, "GameFontHighlight")
+    inv.text:SetPoint("CENTER", inv, "CENTER", 0, 0)
+    inv.text:SetText(ns.L("+ Inviter en ven"))
+    inv.text:SetTextColor(0.6, 0.6, 0.65)
+    inv:SetScript("OnClick", function() if ns.ShowGroupWindow then ns.ShowGroupWindow() end end)
+    inv:SetScript("OnEnter", function(self)
+        self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
+        self.text:SetTextColor(1, 1, 1)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(ns.L("Inviter en ven"), 1, 1, 1)
+        GameTooltip:AddLine(ns.L("Åbner gruppevinduet, hvor koden står klar til at kopiere."), 0.7, 0.7, 0.76, true)
+        GameTooltip:Show()
+    end)
+    inv:SetScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
+        self.text:SetTextColor(0.6, 0.6, 0.65)
+        GameTooltip:Hide()
+    end)
+    inv:Hide()
+    ns.inviteCard = inv
     ns.onHead = GroupHead(page, { 0.25, 0.88, 0.38 })
     ns.offHead = GroupHead(page, { 0.55, 0.55, 0.6 })
     ns.onEmpty = Txt(page, "GameFontHighlightSmall")
@@ -4081,21 +4118,30 @@ function ns.LayoutOverview(on, off)
     local rows = math.ceil(#on / cols)
     if rows > 0 then y = y - rows * CARD_H - (rows - 1) * GAP end
 
+    -- Plads til flere i gruppen: et "Inviter en ven"-kort efter de offline (kun når der er plads)
+    local invite = (#on + #off) < ns.MAX_MEMBERS and ns.inviteCard
+    local nOff = #off + (invite and 1 or 0)
+    if ns.inviteCard then ns.inviteCard:SetShown(invite and true or false) end
+
     ns.offHead:SetShown(#off > 0)
-    if #off > 0 then
+    if nOff > 0 then
         y = y - OFF_GAP
-        ns.offHead:ClearAllPoints()
-        ns.offHead:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
-        ns.offHead:SetText(string.format("Offline (%d)", #off))
-        y = y - HEAD_H
-        for i, card in ipairs(ns.offCards) do
-            if i <= #off then
-                local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
-                card:ClearAllPoints()
-                card:SetPoint("TOPLEFT", page, "TOPLEFT", col * (CARD_W + GAP), y - row * (OFF_H + OFF_GAP))
-            end
+        if #off > 0 then
+            ns.offHead:ClearAllPoints()
+            ns.offHead:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
+            ns.offHead:SetText(string.format("Offline (%d)", #off))
+            y = y - HEAD_H
         end
-        local orows = math.ceil(#off / 4)
+        local function place(card, i)
+            local col, row = (i - 1) % OFF_COLS, math.floor((i - 1) / OFF_COLS)
+            card:ClearAllPoints()
+            card:SetPoint("TOPLEFT", page, "TOPLEFT", col * (OFF_W + GAP), y - row * (OFF_H + OFF_GAP))
+        end
+        for i, card in ipairs(ns.offCards) do
+            if i <= #off then place(card, i) end
+        end
+        if invite then place(invite, #off + 1) end
+        local orows = math.ceil(nOff / OFF_COLS)
         y = y - orows * OFF_H - (orows - 1) * OFF_GAP
     end
     ns.offHead.line:SetShown(#off > 0)
@@ -4141,9 +4187,11 @@ local function RefreshOverview()
         if card.icon.SetDesaturated then card.icon:SetDesaturated(true) end
         card.icon:SetAlpha(0.6)
         if s.class then
-            card.sub:SetText(string.format("%s - %s", s.charFull or s.char or "?", FormatAgo(s.seen)))
+            card.sub:SetText(s.charFull or s.char or "?")
+            card.state:SetText(FormatAgo(s.seen))
         else
             card.sub:SetText(ns.L("Ikke set endnu"))
+            card.state:SetText("")
         end
         card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == ns.L("Skammens hat"))
         if ns.WeeklyCard then ns.WeeklyCard(card, s.name, true) end
@@ -4156,6 +4204,12 @@ local function RefreshOverview()
         local r, g, b = ClassColor(s.class)
         card.bar:SetColorTexture(r, g, b, 1)
         Gradient(card.wash, "VERTICAL", r, g, b, 0, r, g, b, s.online and 0.22 or 0.10)
+        -- v0.26: online-kort får en grøn kant (musen over giver stadig guld)
+        card.baseBorder = s.online and ns.COL_ONLINE_BORDER or nil
+        if not card.hover then
+            local bc = card.baseBorder or COL_BORDER
+            card:SetBackdropBorderColor(bc[1], bc[2], bc[3], 1)
+        end
         card.iconFrame:SetColorTexture(r * 0.5, g * 0.5, b * 0.5, 1)
         card.name:SetTextColor(r, g, b)
         card.name:SetText(s.disp .. ((ns.snailHolder == s.name) and (" " .. ns.SNAIL_ICON) or ""))
@@ -6939,7 +6993,16 @@ local function BuildUI()
             self.accent:SetShown(on)
             self.icon:SetDesaturated(not on)
             self.icon:SetAlpha(on and 1 or 0.75)
-            if on then
+            if self.flat then
+                -- v0.26: undersider er lette faner uden kasse, så de ikke ligner hovedfanerne
+                self:SetBackdropColor(0, 0, 0, 0)
+                self:SetBackdropBorderColor(0, 0, 0, 0)
+                if on then
+                    self.text:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
+                else
+                    self.text:SetTextColor(0.72, 0.72, 0.76)
+                end
+            elseif on then
                 self:SetBackdropColor(0.17, 0.15, 0.09, 1)
                 self:SetBackdropBorderColor(0.55, 0.45, 0.18, 1)
                 self.text:SetTextColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3])
@@ -6973,7 +7036,8 @@ local function BuildUI()
     end
 
     -- v0.23: vinduet er bredere, så nyhedspanelet kan stå i højre side ved siden af siderne
-    local NEWS_W, NEWS_GAP = 240, 10
+    -- v0.26: 280 bredt, så tiden kan stå i sin egen kolonne
+    local NEWS_W, NEWS_GAP = 280, 10
     local f = MakeBox("Frame", UIParent, COL_BG, COL_BORDER, "WastedCoastFrame")
     f:SetSize(760 + NEWS_W + NEWS_GAP, 612)
     f:SetPoint("CENTER")
@@ -7125,12 +7189,14 @@ local function BuildUI()
             local sb
             if ns.native then
                 -- Til højre for portrættet
-                sb = MakeTab(f, 104, 22, grp.names[si], nil, function() ns.ShowTab(pg) end, "GameFontHighlightSmall")
+                sb = MakeTab(f, 104, 22, grp.names[si], nil, function() ns.ShowTab(pg) end, "GameFontHighlight")
                 sb:SetPoint("TOPLEFT", f, "TOPLEFT", 62 + (si - 1) * 108, -36)
             else
-                sb = MakeTab(f, 112, 20, grp.names[si], nil, function() ns.ShowTab(pg) end, "GameFontHighlightSmall")
+                sb = MakeTab(f, 112, 20, grp.names[si], nil, function() ns.ShowTab(pg) end, "GameFontHighlight")
                 sb:SetPoint("TOPLEFT", f, "TOPLEFT", 14 + (si - 1) * 116, -79)
             end
+            sb.flat = true
+            sb:SetActive(false)
             ns.subTabs[gi][si] = sb
         end
     end
@@ -7152,7 +7218,7 @@ local function BuildUI()
     news:SetPoint("TOPRIGHT", f, "TOPRIGHT", -14, newsTop)
     news:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 36)
     news:SetWidth(NEWS_W)
-    if ns.BuildNewsPanel then ns.BuildNewsPanel(news, 612 + newsTop - 36) end
+    if ns.BuildNewsPanel then ns.BuildNewsPanel(news, 612 + newsTop - 36, NEWS_W) end
 
     ns.pages = {}
     local nPages = 0

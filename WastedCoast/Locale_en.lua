@@ -912,6 +912,10 @@ ns.EN = {
     ["Bande-bar"] = "Gang bar",
     ["Altid synlig bjælke med vennerne online og de seneste nyheder. Træk for at flytte."] = "Always-visible bar with your online friends and the latest news. Drag to move.",
     ["Nyheder"] = "News",
+    -- v0.26: forsiden og nyhedspanelet
+    ["+ Inviter en ven"] = "+ Invite a friend",
+    ["Inviter en ven"] = "Invite a friend",
+    ["Åbner gruppevinduet, hvor koden står klar til at kopiere."] = "Opens the group window, where the code is ready to copy.",
     ["Nyhederne på baren er "] = "The news on the bar is ",
     ["Bærer |cffffd100Skammens hat|r (døde sidst)"] = "Wears the |cffffd100Hat of Shame|r (died last)",
     ["Lås"] = "Lock",
