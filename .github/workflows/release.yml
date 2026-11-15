@@ -86,7 +86,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: BigWigsMods/packager@v2
         with:
-          args: -p 1760154
+          # Filnavn og visningsnavn på CurseForge: WastedCoastForever-v0.30.0 osv.
+          args: -p 1760154 -n "WastedCoastForever-{project-version}:WastedCoastForever-{project-version}"
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
@@ -95,5 +96,5 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: WastedCoast-${{ steps.version.outputs.tag }}
+          name: WastedCoastForever-${{ steps.version.outputs.tag }}
           path: .release/*.zip
