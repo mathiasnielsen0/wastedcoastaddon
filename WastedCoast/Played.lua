@@ -59,7 +59,7 @@ local function PlayedNow(friend, char, c)
         end
         return p.t
     end
-    if p.at and c.seen and (now - c.seen) < 150 then
+    if p.at and c.seen and ns.CharOnline(char, c) then
         return p.t + math.max(0, math.min(now - p.at, MAX_EXTRA))
     end
     return p.t
@@ -96,7 +96,7 @@ function ns.PlayedChars(friend)
         list[#list + 1] = {
             name = name, full = C.CharFull(friend, name, c.surname), class = c.class, level = c.level or 0,
             secs = secs, levelSecs = c.played and c.played.l, at = c.played and c.played.at,
-            deaths = d, pvp = pv, dph = Rate(d, secs), pveDph = Rate(d - pv, secs), pvpDph = Rate(pv, secs), online = c.seen and (time() - c.seen) < 150,
+            deaths = d, pvp = pv, dph = Rate(d, secs), pveDph = Rate(d - pv, secs), pvpDph = Rate(pv, secs), online = ns.CharOnline(name, c),
         }
     end
     table.sort(list, function(a, b)

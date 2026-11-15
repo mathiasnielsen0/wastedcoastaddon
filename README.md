@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.18.3. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.26.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua` og (fra 0.18) `Locale.lua` og `Locale_en.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` og (fra 0.25) `Weekly.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -67,9 +67,19 @@ nogle små undersider lige under fanerne:
 | **Rangliste** | Scoreboard, Spilletid, Race, Dueller, Bank & repair |
 | **Loot** | Loot, Rolls |
 | **Død** | Statistik, Instanser |
-| **Sjov** | Trofæer, Drilleri |
+| **Sjov** | Trofæer, Drilleri, Ugens pokaler |
 
-Klik på en vens kort for at se vennens karakterer.
+Klik på en vens kort for at se vennens karakterer. Venner online har en grøn kant. De offline står
+tre på en række med, hvornår de sidst var online, i hjørnet. Er der plads til flere i gruppen, står
+der et **Inviter en ven**-kort til sidst, som åbner gruppevinduet med koden.
+
+I højre side af vinduet står **nyhedspanelet**, uanset hvilken fane du er på. Det er de samme
+nyheder som på bande-baren (levels, dødsfald, loot, trofæer, rare mobs, dueller og stomi), men
+de **100 seneste**, også dem ældre end et døgn. Hver nyhed har et ikon for, hvad der skete (loot
+viser itemets ikon), og tiden står i sin egen kolonne. Knapperne øverst filtrerer: **Alle**,
+**Død**, **Loot**, **Level** og **Sjov** (trofæer, rares, dueller, stomi, prutter og pokaler).
+Scroll med musehjulet. Musen over en loot-linje viser itemets tooltip, og shift-klik linker
+itemet i chatten.
 
 På WoW Forever bruger vinduet spillets egne rammer, faner og knapper, så det ligner resten
 af Forevers UI: titellinje med logoet som portræt, fanerne hængende under vinduet og røde
@@ -129,6 +139,26 @@ dæmpet kort med "OFFLINE", karakteren og hvornår de sidst var online (senest s
 øverst). Hold musen over et kort for at se alle vennens karakterer, "værste fjende"
 og seneste loot. Klik på et kort for at se alle karakterer. Nederst står de seneste
 dødsfald og det seneste loot, når der er plads.
+
+### Bande-baren
+En lille bjælke, der altid er på skærmen (som standard øverst i midten), også når
+hovedvinduet er lukket:
+
+- **Ét ikon pr. ven, der er online**, i klassefarve. Level står i hjørnet, og en tynd ring rundt
+  om ikonet fyldes med XP'en i det nuværende level (fuld guldring på max level). Den, der bærer
+  **Skammens hat** (døde sidst), har en lille hat på ikonet.
+- **Hold musen over et ikon** for at se karakter, level, zone, hvad vennen laver (i en dungeon,
+  døde lige til en kylling, fik ny loot, dingede ...) og hvor mange gange vennen er død i dag.
+  Klik for at åbne vennens karakterer.
+- **De 5 seneste nyheder** står under ikonerne, det nyeste øverst: levels, dødsfald (de pinlige
+  bliver kaldt pinlige), loot, trofæer, rare mobs og dueller. Musen over en loot-linje viser
+  itemets tooltip, og shift-klik linker itemet i chatten.
+- WC4ever-logoet til venstre åbner hovedvinduet, og tallet ved det er antal venner online.
+
+Træk i baren for at flytte den, og højreklik for indstillingerne. Under **Indstillinger** kan
+du slå baren og nyhederne til og fra og låse baren. Det kan også gøres med `/wc4ever bar`
+(vis/skjul), `/wc4ever bar lås`, `/wc4ever bar nyheder` og `/wc4ever bar nulstil` (tilbage
+øverst på skærmen). Baren bygger kun på data, addonet allerede har, så den sender intet ekstra.
 
 ### Scoreboard
 Alle venner i en rangliste. Klik på en kolonne for at sortere (klik igen for at
@@ -231,11 +261,22 @@ ikke vandt (fra 5 rolls), og **Snit** er dit gennemsnitlige roll (held er 50,5).
 Den med højest tabt-procent står øverst og får titlen *Uheldsfuglen*. Kun rolls
 fra den nye version tæller.
 
+**Need / Greed og Pass** (fra 0.21): addonet skelner mellem dine valg. Kolonnen
+*Need / Greed* viser, hvor mange gange du har trykket hvad, og *Pass* hvor mange
+items du har passet på (også automatiske pass). Hold musen over en ven for at se,
+hvor mange need-, greed- og disenchant-rolls der blev vundet, og vennens need-andel.
+Den med højest need-andel (mindst 5 rolls) får sit need-tal i orange: gruppens
+need-goblin. Tallene tæller fra 0.21; venner på en ældre version vises med `-`,
+indtil de opdaterer, og deres samlede tal virker som før.
+
 ### Guld
-En graf over hver vens samlede guld (alle karakterer) over tid. Der måles, mens
-du spiller (højst hvert 10. minut, og kun når guldet har ændret sig), og når du
-logger ud. Nye målinger sendes til vennerne med det samme. Vælg 7, 30 eller 90
-dage eller det hele, og klik på et navn for at skjule eller vise vennen. Hold
+En graf over hver vens samlede guld over tid. Guldet huskes pr. karakter, og
+grafen lægger alle vennens karakterer sammen, hvor dem, der ikke er logget på,
+tæller med deres senest kendte guld. Så hopper grafen ikke, når nogen spiller en
+alt. Der måles, mens du spiller (højst hvert 10. minut pr. karakter, og kun når
+guldet har ændret sig), og målingerne sendes til vennerne. Grafen starter, da
+målingerne pr. karakter begyndte, så en kort periode vises med klokkeslæt. Vælg
+7, 30 eller 90 dage eller det hele, og klik på et navn for at skjule eller vise vennen. Hold
 musen over et navn for at se, hvor meget vennen har tjent eller brugt i perioden.
 
 ### Professions
@@ -288,7 +329,7 @@ Fanen samler alt det, der er lavet for at genere hinanden:
   rent held. *Held 80%* betyder, at dine rolls er bedre end 80% af, hvad tilfældighed
   ville give; 50% er helt normalt. Kræver mindst 5 rolls. Den heldigste får titlen
   *Fætter Højben*.
-- **Skammens hat:** den, der døde sidst, bærer hatten (dødningehovedet på kortet),
+- **Skammens hat:** den, der døde sidst, bærer hatten (den grimme lilla troldmandshat på kortet og bande-baren),
   indtil en anden dør. Fanen viser, hvor længe hatten har siddet, og hvem der har
   båret den længst i alt.
 - **Emote-angreb:** klik på en ven (eller skriv `/wc4ever angrib nick`) for at sende en
@@ -303,6 +344,80 @@ Fanen samler alt det, der er lavet for at genere hinanden:
   *Level-snegl*. Hold musen over kortet for at se, hvor længe det er siden sidste
   level. Står der "mindst", har addonet ikke set selve level-up'et endnu.
 
+### Stomi-fælden
+Den gamle leg, bare i WoW. **Højreklik** på en ven under Sjov > Drilleri (eller skriv
+`/wc4ever stomi nick`) for at sætte en fælde:
+
+1. Vennen får en popup med noget, man har lyst til at sige ja til: en gave med et rigtigt
+   item fra din taske, lidt af dit guld, en summon til din zone, en gruppe-invite, en
+   dungeon-carry eller (hvis vennen er død, og du kan rezze) en rez. Navnet er din karakters.
+2. Popuppen dukker op med en **stor JA-knap lige under musen** og en **lille "nej"** i hjørnet.
+3. I samme øjeblik vennen trykker ned på JA, skifter spørgsmålet til **"HAR DU STOMI?"**.
+   Slipper vennen knappen, er det et ja. Den eneste udvej er den lille nej.
+4. Ja = **stomi i 24 timer**: en stomipose på vennens ikon i bande-baren, en toast og en
+   besked hos alle, en linje i nyhederne og i dagens sladder, og tællere for flest givne og
+   flest modtagne stomier nederst i Emote-angreb-boksen.
+
+Du kan sætte én fælde hver **6. time**, og en ven, der allerede har stomi, kan ikke få en til.
+Popuppen kommer aldrig midt i kamp (den venter, til kampen er slut), og knapperne gør intet
+i spillet: der bliver ikke invitet, summonet, rezzet eller handlet noget. Vil du være fri,
+så slå **Stomi-fælden** fra i indstillingerne (eller `/wc4ever stomi fra`). Se, hvordan
+den ser ud, med `/wc4ever stomi test` (giver ikke stomi og sendes ikke).
+
+### Hån-knappen: prut af de døde
+Når en ven dør, har dødsannoncen en lille **Prut**-knap i højre side (annoncen bliver
+stående, mens musen er over den). Et klik sender vennen en **pruttelyd** og en lille
+hilsen, fx *"Mathias prutter af dig."* eller *"Mathias holder et minuts prutten for dig."*,
+som popup og i chatten. Du hører selv pruttet med, og står vennen lige ved siden af dig,
+laver din karakter også spillets egen `/fart` på vennen.
+
+- Du kan også klikke på dødsfaldet i bande-barens nyheder eller i nyhedspanelet, eller
+  skrive `/wc4ever prut` (den ven, der døde senest) eller `/wc4ever prut nick`.
+- Kun i **15 minutter** efter dødsfaldet, **én prut pr. dødsfald** fra hver ven og højst
+  én prut hver **20. sekund**.
+- Prutterne tælles: bande-barens tooltip viser prutter givet og fået, nyhederne viser
+  *"Mathias pruttede af Nick"*, sladderen hænger den værste prutter ud, og
+  `/wc4ever prut tal` viser, hvem der har givet og fået flest.
+- Vil du være fri, så slå **Prutter mod dig** fra i indstillingerne (eller
+  `/wc4ever prut fra`). Så kommer der ingen lyd og ingen popup, kun en linje i chatten.
+- Lyden er en af tre pruttere, der følger med i `sounds` (`prut1-3.ogg`). Vil du have din
+  egen, så skriv `haan = { "minprut.ogg" }` i `Sounds.lua`. `/wc4ever prut test` afspiller
+  en prut og viser popuppen kun hos dig.
+- **Nye lydfiler kræver, at spillet genstartes helt** efter opdateringen. `/reload` er
+  ikke nok, før WoW kan finde pruttefilerne.
+
+### Ugens pokaler (Sjov > Ugens pokaler)
+Hver **søndag kl. 20** (dansk tid, også om sommeren) kåres ugens vindere:
+
+| Pokal | Hvem vinder |
+|---|---|
+| Kirkegårdens stamgæst | Flest dødsfald |
+| Ugens pinligste død | Døde til det mob, der lå længst under ens eget level (mindst 3 levels, ikke PvP) |
+| Loot-goblin | Flest rare (eller bedre) items |
+| Need-goblin | Flest sager hos Need-politiet |
+| Ugens nolifer | Længst spilletid (mindst en time) |
+| Ding-maskinen | Flest levels |
+| Duel-kongen | Flest vundne dueller |
+| Rare-jægeren | Flest dræbte rare mobs |
+| Stomi-mesteren | Gav flest stomier |
+| Stomi-patienten | Fik flest stomier |
+| Prut-kongen | Pruttede mest af venner, der lige var døde (hån-knappen) |
+| Udødelig | Ingen dødsfald og mest spilletid (mindst to timer) |
+
+Ved uddelingen får alle en toast og en besked i chatten, og der kommer en linje i nyhederne.
+Vinderne har en lille pokal på deres kort i en uge (tallet ved siden af er antal pokaler), og
+kortets tooltip og bande-barens tooltip viser hvilke. Siden viser sidste uges vindere, hvem der
+fører i denne uge, hvor lang tid der er til næste uddeling, og **pokalskabet** med alle pokaler
+fra de seneste 26 uger. Hold musen over en pokal for at se top 5. `/wc4ever pokaler` skriver det
+samme i chatten.
+
+Alle får de samme vindere: ugen regnes ud fra spillets UTC-ur, og pokalerne bygger på data,
+der allerede synker (dødsfald, loot, Need-politiet, dueller, rare mobs, stomi og prutter). Står to lige,
+vinder den, der nåede tallet først. Spilletid og levels i ugen måler hver ven selv og sender
+til de andre. Kommer en vens data for sent (fx fordi vennen først logger ind om mandagen),
+bliver ugen rettet i en uge endnu; derefter står den fast i pokalskabet. Vennerne skal have
+0.25, for at deres spilletid og levels kommer med.
+
 ### Dødsannoncer
 Når en ven dør, får alle en popup med en dødsannonce, fx *"Nick blev overlistet af
 en level 12 Murloc Forager"*. Annoncen afhænger af, hvordan man døde (fald, drukning,
@@ -313,9 +428,14 @@ kommer med, hvis det kunne ses (target eller nameplate), da man døde. Slå dem 
 ### Daglig sladder
 Første gang du logger ind på en ny dato (pr. konto, så et alt-skifte samme dag ikke tæller),
 kommer der efter et halvt minut et lille vindue med højdepunkterne siden sidst, fx hvem der tog flest levels, hvem der døde mest,
-den mest pinlige død (fald, lava eller et mob langt under ens eget level), epic loot,
-nye trofæer, dueller, Need-politiets anholdelser, hvem der tjente eller brugte mest guld,
-hvem der bærer Skammens hat, og hvem der ikke har været online i flere dage.
+den mest pinlige død (fald, lava eller et mob langt under ens eget level), epic og legendary loot,
+de flotteste rare items (med navn), hvem der vandt flest need-rolls, rare mobs, der blev nedlagt,
+maxede professions og store skill-hop, ny reputation (Honored, Revered, Exalted), hvem der steg mest
+i item level, hvem der har spillet mest, instanser klaret (og wipes), hvem der rullede og rullede uden at vinde,
+hvem der trykkede Need på alt (og næsten aldrig Greed), hvem der passede mest,
+legacy points (WoW Forever), nye trofæer, dueller, Need-politiets anholdelser, hvem der tjente eller brugte mest guld,
+hvem der bærer Skammens hat, og hvem der ikke har været online i flere dage. Højst 10 linjer, og højst 3 om
+samme ven, så længe der er andet at fortælle.
 Sladderen står også i chatten. Den bygges af de data, addonet allerede har, så den sender
 ingen ekstra beskeder. Første gang dækker den det seneste døgn, ellers tiden siden du sidst
 var online (højst en uge). Vis den igen med `/wc4ever sladder`, og slå den fra ved login
@@ -323,7 +443,7 @@ med `/wc4ever sladder fra`.
 
 ### Indstillinger
 Under **Options > AddOns > Wasted Coast Forever** kan du slå lyd, chatbeskeder og popups
-til og fra, slå synk uden guild til og fra, vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
+til og fra, slå synk uden guild til og fra, slå bande-baren og dens nyheder til og fra (og låse den), vælge minimumskvalitet for loot og vælge, hvem du er. Der er også
 knapper til at åbne vinduet, vise test-popups og synkronisere.
 
 ### Sprog / Language
@@ -404,6 +524,9 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
 | `/wc4ever sladder` | Vis sladderen siden sidst igen (`sladder fra`/`til` styrer den ved login) |
 | `/wc4ever angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
+| `/wc4ever pokaler` | Vis sidste uges pokaler og hvem der fører i denne uge |
+| `/wc4ever stomi <ven>` | Sæt en stomi-fælde for en ven (`stomi test` viser popuppen, `stomi fra`/`til` slår den fra/til hos dig) |
+| `/wc4ever prut [ven]` | Prut af en ven, der lige er død (uden navn: den senest døde). `prut test` prøver lyden, `prut fra`/`til` slår prutter mod dig fra/til, `prut tal` viser flest givet og fået |
 | `/wc4ever annonce` | Slå dødsannoncer til/fra |
 | `/wc4ever emotes` | Slå popups for emote-angreb mod dig til/fra |
 | `/wc4ever testannonce` | Vis eksempler på dødsannonce, Need-politi og emote-angreb |
@@ -564,4 +687,13 @@ python3 tests/test_robust.py WastedCoast            # fejlrettelser, synk og ød
 python3 tests/test_robust.py WastedCoast forever    # det samme som WoW Forever (ingen combat log, kun C_Item)
 python3 tests/test_language.py WastedCoast          # engelsk: ingen dansk tekst nogen steder; dansk er standard
 python3 tests/test_language.py WastedCoast forever  # det samme på WoW Forever
+python3 tests/test_bar.py WastedCoast               # bande-baren: ikoner, XP-ring, tooltip, nyheder, hat, flyt og lås
+python3 tests/test_bar.py WastedCoast forever       # det samme på WoW Forever
+python3 tests/test_rolls.py WastedCoast             # need/greed/disenchant/pass i rolls, synk, Rolls-siden og sladder
+python3 tests/test_news.py WastedCoast              # nyhedspanelet i hovedvinduet og "[Loot]"-rettelsen
+python3 tests/test_news.py WastedCoast forever      # det samme på WoW Forever
+python3 tests/test_haan.py WastedCoast              # hån-knappen: prut på dødsannoncen, cooldown, spam-værn, slå fra, nyheder og synk
+python3 tests/test_haan.py WastedCoast forever      # det samme på WoW Forever
+python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-tid, vindere, XW, uddeling, kort og side
+python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever
 ```

@@ -94,7 +94,9 @@ do
     check(c.level == 22 and c.xp == 40 and c.class == "HUNTER" and db.friends.Rasmus.session == 7, "livstegn gemmes")
     check(ns.core.IsOnline("Rasmus"), "ven er online lige efter et livstegn")
     NOW = NOW + 151
-    check(not ns.core.IsOnline("Rasmus"), "offline efter 150 sekunder uden livstegn")
+    check(ns.core.IsOnline("Rasmus"), "to mistede livstegn: stadig online (v0.18.5)")
+    NOW = NOW + 180
+    check(not ns.core.IsOnline("Rasmus"), "offline efter 5½ minut uden livstegn")
     msg("H;Rasmus;Rasmuschar;HUNTER;0;5000;Westfall;40;;7", "GUILD", "Rasmuschar")
     check(c.level == 22, "level 0 overskriver ikke et kendt level")
 
@@ -145,7 +147,7 @@ if not FOREVER then
     NOW = NOW + 100
     CombatLogGetCurrentEventInfo = function() return 0, "ENVIRONMENTAL_DAMAGE", nil, nil, nil, nil, nil, "guid", PLAYER, nil, nil, "FALLING", 500 end
     Fire("COMBAT_LOG_EVENT_UNFILTERED")
-    Fire("PLAYER_DEAD")
+    Fire("PLAYER_UNGHOST") Fire("PLAYER_DEAD")
     local ev = db.events[#db.events]
     check(ev.killer == "Omgivelserne" and ev.ability == "Faldskade" and not ev.pvp, "FALLING fra combat loggen er faldskade: " .. tostring(ev.ability))
     local d = findSent("D;")
@@ -155,17 +157,75 @@ if not FOREVER then
     NOW = NOW + 100
     CombatLogGetCurrentEventInfo = function() return 0, "SPELL_DAMAGE", nil, "Player-1-AAA", "Gankeren", 0x548, nil, "guid", PLAYER, nil, nil, 133, "Fireball" end
     Fire("COMBAT_LOG_EVENT_UNFILTERED")
-    Fire("PLAYER_DEAD")
+    Fire("PLAYER_UNGHOST") Fire("PLAYER_DEAD")
     ev = db.events[#db.events]
     check(ev.killer == "Gankeren" and ev.ability == "Fireball" and ev.pvp == true, "spiller med kontrol-flag er PvP")
     CLOCK = CLOCK + 100
     NOW = NOW + 100
     CombatLogGetCurrentEventInfo = function() return 0, "SPELL_PERIODIC_DAMAGE", nil, "guid", PLAYER, 0x511, nil, "guid", PLAYER, nil, nil, 1, "Hellfire" end
     Fire("COMBAT_LOG_EVENT_UNFILTERED")
-    Fire("PLAYER_DEAD")
+    Fire("PLAYER_UNGHOST") Fire("PLAYER_DEAD")
     ev = db.events[#db.events]
     check(ev.killer == PLAYER and not ev.pvp, "egen skade er ikke PvP")
     CombatLogGetCurrentEventInfo = nil
+end
+
+-- v0.20.1: én død = ét dødsfald, selv når spillet sender PLAYER_DEAD to gange
+do
+    CLOCK = CLOCK + 100
+    NOW = NOW + 100
+    Fire("PLAYER_UNGHOST")
+    local nEv, nT, nP = #db.events, #toasts, #PRINTS
+    Fire("PLAYER_DEAD")
+    local first = db.events[#db.events]
+    check(#db.events == nEv + 1, "første PLAYER_DEAD giver et dødsfald")
+    -- Seks sekunder senere (fx ved Release) kommer PLAYER_DEAD igen, nu uden kendt dræber
+    CLOCK = CLOCK + 6
+    NOW = NOW + 6
+    UnitIsGhost = function() return true end   -- Release: PLAYER_ALIVE, men man er stadig spøgelse
+    Fire("PLAYER_ALIVE")
+    Fire("PLAYER_DEAD")
+    check(#db.events == nEv + 1, "PLAYER_DEAD igen for samme død tæller ikke: " .. (#db.events - nEv))
+    local deaths = 0
+    for i = nP + 1, #PRINTS do if PRINTS[i]:find("døde til") then deaths = deaths + 1 end end
+    check(deaths == 1, "kun én dødsbesked i chatten: " .. deaths)
+    -- Genoplivet ved spirit healeren: næste død tæller igen
+    UnitIsGhost = function() return false end
+    Fire("PLAYER_UNGHOST")
+    UnitIsGhost = nil
+    CLOCK = CLOCK + 60
+    NOW = NOW + 60
+    Fire("PLAYER_DEAD")
+    check(#db.events == nEv + 2, "ny død efter genoplivning tæller")
+    check(db.events[#db.events] ~= first, "det er et nyt dødsfald")
+
+    -- En ven på en ældre version sender samme død to gange med forskellige ID'er: én gang,
+    -- og den kendte dræber vinder, selv når den kommer sidst
+    nEv, nT = #db.events, #toasts
+    NOW = NOW + 100
+    local function dline(t, killer, pvp)
+        return table.concat({ "D", "Søren-" .. t, "Sørenx", "MAGE", killer, "", 30, "Arathi Highlands", t, "Søren", 31, "", pvp or "" }, ";")
+    end
+    msg(dline(NOW, "Ukendt"), "GUILD", "Sørenx")
+    msg(dline(NOW + 6, "Nick", "1"), "GUILD", "Sørenx")
+    check(#db.events == nEv + 1, "vennens dobbelte død tælles én gang: " .. (#db.events - nEv))
+    local ev = db.events[#db.events]
+    check(ev.killer == "Nick" and ev.pvp == true, "den kendte dræber vinder: " .. tostring(ev.killer))
+    msg(dline(NOW + 12, "Ukendt"), "GUILD", "Sørenx")
+    check(#db.events == nEv + 1 and db.events[#db.events].killer == "Nick", "en senere 'Ukendt' overskriver ikke dræberen")
+    msg(dline(NOW + 120, "Hogger"), "GUILD", "Sørenx")
+    check(#db.events == nEv + 2, "en død to minutter senere er en ny død")
+
+    -- Gamle dubletter i SavedVariables ryddes op, og den med kendt dræber bliver
+    local n0 = #db.events
+    table.insert(db.events, { id = "Gammel-1", name = "Gammelchar", friend = "Frode", killer = "Ukendt", time = NOW - 5000 })
+    table.insert(db.events, { id = "Gammel-2", name = "Gammelchar", friend = "Frode", killer = "Defias Pillager", ability = "Nærkamp", time = NOW - 4994 })
+    table.insert(db.events, { id = "Gammel-3", name = "Gammelchar", friend = "Frode", killer = "Murloc", time = NOW - 3000 })
+    check(ns.DedupeDeaths() == 1 and #db.events == n0 + 2, "én gammel dublet fjernes")
+    local kept
+    for _, e in ipairs(db.events) do if e.id == "Gammel-1" then kept = e end end
+    check(kept and kept.killer == "Defias Pillager" and kept.ability == "Nærkamp", "den gemte død får den kendte dræber")
+    check(ns.DedupeDeaths() == 0, "ingen dubletter tilbage")
 end
 
 -- Samme dødsfald via to kanaler tælles én gang, og et gammelt dødsfald giver ingen toast
@@ -466,7 +526,26 @@ do
     Fire("GUILD_ROSTER_UPDATE")
     NOW = NOW + 200
     check(not C.IsOnline("Nick"), "en gammel guild-liste tæller ikke")
+    -- v0.18.5: et par mistede livstegn gør ikke vennen offline (uden guild-liste)
+    db.friends.Nick.chars.Nickchar.seen, db.friends.Nick.chars.Nickchar.hb = NOW - 200, NOW - 200
+    check(C.IsOnline("Nick"), "200 sek. uden livstegn: stadig online")
+    db.friends.Nick.chars.Nickchar.hb = nil
+    check(not C.IsOnline("Nick"), "fristen gælder kun livstegn, ikke synk-data")
+    db.friends.Nick.chars.Nickchar.seen, db.friends.Nick.chars.Nickchar.hb = NOW - 400, NOW - 400
+    check(not C.IsOnline("Nick"), "400 sek. uden livstegn: offline")
+    -- Guild-listen siger offline efter sidste livstegn: offline med det samme
+    db.friends.Nick.chars.Nickchar.seen = NOW - 30
+    roster[1][2] = false
+    NOW = NOW + 1
+    Fire("GUILD_ROSTER_UPDATE")
+    check(not C.IsOnline("Nick"), "logout i guild-listen vinder over et lidt ældre livstegn")
+    -- Efternavn i guild-listen (Forever) genkendes
+    roster[1] = { "Nickchar Stormhammer", true }
+    Fire("GUILD_ROSTER_UPDATE")
+    check(C.IsOnline("Nick"), "navn med efternavn i guild-listen genkendes")
+    roster[1] = { "Nickchar-Realm", true }
     GetNumGuildMembers, GetGuildRosterInfo = nil, nil
+    NOW = NOW + 400
 
     -- Kanalen er oppe, men vennen er ikke hørt i den: livstegnet skal også i guild
     local oldGCN = GetChannelName
@@ -483,10 +562,128 @@ do
 end
 
 -- -----------------------------------------------------------------------------
+-- v0.18.6: guldgrafen er summen af alle vennens karakterer (en alt må ikke få grafen til at hoppe)
+-- -----------------------------------------------------------------------------
+do
+    local G = 10000
+    local start = NOW
+    db.friends.Jeppe = nil
+    db.goldChar.Jeppe = nil
+    -- Jeppes main har 500g
+    msg("H;Jeppe;Jeppemain;WARRIOR;60;" .. (500 * G) .. ";Orgrimmar;0;;11", "GUILD", "Jeppemain")
+    NOW = NOW + 3600
+    -- Han logger en alt på med 2g. Gamle versioner sendte så "2g" som hans samlede guld.
+    msg("H;Jeppe;Jeppealt;MAGE;10;" .. (2 * G) .. ";Elwynn;0;;12", "GUILD", "Jeppealt")
+    msg("G;Jeppe;" .. NOW .. ":" .. (2 * G), "GUILD", "Jeppealt")
+    NOW = NOW + 3600
+    msg("H;Jeppe;Jeppealt;MAGE;11;" .. (7 * G) .. ";Elwynn;0;;12", "GUILD", "Jeppealt")
+    NOW = NOW + 3600
+    -- Tilbage på mainen, der har tjent 20g
+    msg("H;Jeppe;Jeppemain;WARRIOR;60;" .. (520 * G) .. ";Orgrimmar;0;;13", "GUILD", "Jeppemain")
+    msg("G;Jeppe;" .. NOW .. ":" .. (520 * G), "GUILD", "Jeppemain")
+
+    local pts = ns.GoldTotalSeries("Jeppe", start - 86400, NOW)
+    local lo, vals = math.huge, {}
+    for _, p in ipairs(pts) do
+        if p[2] < lo then lo = p[2] end
+        if not p[3] then vals[#vals + 1] = p[2] / G end
+    end
+    check(lo >= 500 * G, "guldgrafen falder ikke til altens guld: laveste " .. lo / G .. "g")
+    -- (altens første kendte beløb tæller også med før, den blev set første gang)
+    check(table.concat(vals, ",") == "502,507,527", "summen følger alle karakterer: " .. table.concat(vals, ","))
+    check(pts[#pts][2] == 527 * G and pts[#pts][1] == NOW, "linjen slutter i det samlede guld nu")
+    local total, known = ns.GoldTotalAt("Jeppe", start + 1800)
+    check(total == 500 * G + 2 * G and known == true, "samlet guld på et tidspunkt: altens første kendte beløb tæller med")
+    check(ns.GoldTotalAt("Jeppe", start + 2 * 3600 + 10) == 507 * G, "samlet guld efter altens ændring")
+
+    -- Trappetrin: beløbet holder sig til næste ændring (ingen skrå linje over flere timer)
+    local stepOK = false
+    for i = 2, #pts do
+        if pts[i][3] and pts[i][2] == pts[i - 1][2] and pts[i + 1] and pts[i + 1][2] ~= pts[i][2] then stepOK = true end
+    end
+    check(stepOK, "grafen tegnes som trapper")
+
+    -- GC: en vens historik pr. karakter fra synk (også fra før vi var online)
+    msg("GC;Jeppe;Jeppemain;" .. (start - 7200) .. ":" .. (450 * G) .. "," .. (start - 3600) .. ":" .. (480 * G), "GUILD", "Jeppemain")
+    local early = ns.GoldTotalSeries("Jeppe", start - 86400, NOW)
+    check(early[1][2] == 452 * G, "synket historik indgår (main 450g + alt 2g): " .. early[1][2] / G)
+    msg("GC;Mathias;Mychar;" .. start .. ":1", "GUILD", "Nickchar")
+    check(not (db.goldChar.Mathias and db.goldChar.Mathias.Mychar and db.goldChar.Mathias.Mychar[1] and db.goldChar.Mathias.Mychar[1][2] == 1),
+        "ingen kan skrive guld på dine egne karakterer")
+    msg("GC;Jeppe;Jeppemain;" .. (NOW + 99999) .. ":" .. (999 * G), "GUILD", "Jeppemain")
+    local h = db.goldChar.Jeppe.Jeppemain
+    check(h[#h][1] <= NOW, "guldmåling fra fremtiden flyttes til nu")
+    h[#h][2] = 520 * G   -- tilbage til det rigtige beløb
+
+    -- Højst én måling pr. 10 minutter pr. karakter, og et loft over antallet
+    db.goldChar.Frode = nil
+    for i = 1, 30 do ns.RecordCharGold("Frode", "Frodo", 6000000 + i * 30, i * G) end
+    check(#db.goldChar.Frode.Frodo <= 3, "målinger samles pr. 10 minutter: " .. #db.goldChar.Frode.Frodo)
+    check(db.goldChar.Frode.Frodo[#db.goldChar.Frode.Frodo][2] == 30 * G, "den nyeste måling vinder")
+    for i = 1, 400 do ns.RecordCharGold("Frode", "Frodo", 7000000 + i * 3600, (i % 2) * G) end
+    check(#db.goldChar.Frode.Frodo <= 300, "loft over målinger pr. karakter")
+    check(db.goldChar.Frode.Frodo[1][1] == 6000000 + 30, "den første måling beholdes")
+
+    -- Guldsiden: "Samlet for de viste" er det samme som summen af hver vens karakterer
+    ns.frame:Show()
+    if ns.goldInfo then
+        for i = 1, #ns.pages do
+            pcall(ns.ShowTab, i)
+            if ns.goldInfo:IsShown() and ns.goldInfo:GetText() and ns.goldInfo:GetText() ~= "" then break end
+        end
+        local want = 0
+        for _, name in ipairs(ns.core.ROSTER) do
+            local pts2 = ns.GoldTotalSeries(name, NOW - 30 * 86400, NOW)
+            if pts2[#pts2] then want = want + pts2[#pts2][2] end
+        end
+        local sum = 0
+        for _, info in pairs(db.friends) do
+            for _, c in pairs(info.chars or {}) do sum = sum + (c.gold or 0) end
+        end
+        check(want == sum, "seneste punkt i grafen = summen af alle karakterers guld (" .. want .. " / " .. sum .. ")")
+    end
+
+    -- v0.23.1: grafen starter, hvor målingerne pr. karakter begyndte, ikke ved en alts gamle "sidst set"
+    check(type(db.goldCharSince) == "number", "starttidspunkt for guld pr. karakter gemmes")
+    db.friends.Rasmus = nil
+    db.goldChar.Rasmus = nil
+    local oldSince = db.goldCharSince
+    db.goldCharSince = NOW - 7200
+    msg("C;Rasmus;Rasmusalt;HUNTER;20;" .. (8 * G) .. ";Westfall;" .. (NOW - 6 * 86400) .. ";5", "GUILD", "Rasmuschar")
+    msg("H;Rasmus;Rasmusmain;WARRIOR;30;" .. (3 * G) .. ";Barrens;0;;21", "GUILD", "Rasmusmain")
+    ns.goldRange = 1   -- 7 dage
+    ns.goldHidden = {}
+    ns.frame:Show()
+    ns.ShowTab(9)   -- guldsiden
+    local rb
+    for _, b in ipairs(ns.goldFriendBtns) do if b.friend == "Rasmus" then rb = b end end
+    check(rb and rb.data.pts[1][1] >= NOW - 7200, "linjen trækkes ikke tilbage til altens gamle 'sidst set': "
+        .. tostring(rb and rb.data.pts[1] and (rb.data.pts[1][1] - NOW)) .. " " .. tostring(ns.tab))
+    check(rb and rb.data.pts[1][2] == 11 * G, "altens sidst kendte guld tæller med fra start: " .. (rb and rb.data.pts[1][2] / G or -1))
+    check(ns.goldGraph.xlab[1]:GetText():find("^%d%d:%d%d$") ~= nil, "kort periode: klokkeslæt på x-aksen, ikke dato")
+    db.goldCharSince = oldSince
+
+    -- Ældre måling, der lander i de samme 10 minutter som en, vi har (andet ur): ingen hak
+    db.goldChar.Andreas = nil
+    ns.RecordCharGold("Andreas", "Andychar", 9000000, 100 * G)
+    ns.RecordCharGold("Andreas", "Andychar", 9003600, 120 * G)
+    check(not ns.RecordCharGold("Andreas", "Andychar", 9003590, 90 * G), "måling fra et lidt skævt ur giver ingen hak")
+    check(#db.goldChar.Andreas.Andychar == 2, "historikken er uændret")
+
+    -- Dine egne karakterer sendes som GC i synk
+    SENT = {}
+    ns.RecordCharGold("Mathias", "Mathchar", NOW - 100, 42 * G)
+    db.friends.Mathias = db.friends.Mathias or { chars = {} }
+    db.friends.Mathias.chars.Mathchar = db.friends.Mathias.chars.Mathchar or { gold = 42 * G, seen = NOW - 100 }
+    ns.SendGoldHistory(10)
+    check(findSent("GC;Mathias;Mathchar;") ~= nil, "dine guldmålinger pr. karakter sendes")
+end
+
+-- -----------------------------------------------------------------------------
 -- Fuzz: tilfældige og ødelagte beskeder af alle typer må aldrig give en Lua-fejl
 -- -----------------------------------------------------------------------------
 do
-    local kinds = { "D", "L", "H", "C", "RM", "LP", "HP", "PT", "BK", "S", "B", "W", "A", "R", "G", "P", "E", "F",
+    local kinds = { "D", "L", "H", "C", "RM", "LP", "HP", "PT", "BK", "S", "B", "W", "A", "R", "G", "GC", "P", "E", "F",
                     "XE", "XN", "XK", "XU", "XD", "XL", "GM", "GW", "GK", "Q", "", "ZZ" }
     local vals = { "", "Nick", "Mathias", "abc", "0", "-5", "99999999999", "item:123", "1", "x:y", "1:2,3:4",
                    "WASTEDCOAST", "need", "raid", "rareelite", "Nick-1", tostring(NOW), "a=1:2", "nan", "1e400", "-1e400",
