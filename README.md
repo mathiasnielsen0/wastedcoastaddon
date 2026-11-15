@@ -686,7 +686,14 @@ Slet mappen `VennerneForever` fra AddOns.
 
 ## Tests
 
-Testene kører addonet mod en lille attrap af WoW's API (kræver Python og `pip install lupa`):
+Testene kører addonet mod en lille attrap af WoW's API (kræver Python og `pip install lupa`).
+Kør dem alle, i begge spilversioner, med:
+
+```
+python tests/run_all.py
+```
+
+Eller én ad gangen:
 
 ```
 python3 tests/test_drilleri.py WastedCoast          # hele addonet, klassisk stil
