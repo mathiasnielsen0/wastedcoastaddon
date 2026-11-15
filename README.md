@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.28.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.29.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua`, (fra 0.27) `Gz.lua` og (fra 0.28) `Hjemmesko.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua`, (fra 0.27) `Gz.lua`, (fra 0.28) `Hjemmesko.lua` og (fra 0.29) `Milestones.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -67,7 +67,7 @@ nogle små undersider lige under fanerne:
 | **Rangliste** | Scoreboard, Spilletid, Race, Dueller, Bank & repair |
 | **Loot** | Loot, Rolls |
 | **Død** | Statistik, Instanser |
-| **Sjov** | Trofæer, Drilleri, Ugens pokaler |
+| **Sjov** | Trofæer, Drilleri, Ugens pokaler, Milepæle |
 
 Klik på en vens kort for at se vennens karakterer. Venner online har en grøn kant. De offline står
 tre på en række med, hvornår de sidst var online, i hjørnet. Er der plads til flere i gruppen, står
@@ -460,6 +460,35 @@ til de andre. Kommer en vens data for sent (fx fordi vennen først logger ind om
 bliver ugen rettet i en uge endnu; derefter står den fast i pokalskabet. Vennerne skal have
 0.25, for at deres spilletid og levels kommer med.
 
+### Gruppe-milepæle (Sjov > Milepæle)
+Fælles mål for hele banden. Når I sammen når et mål, kommer der en **fest-popup med konfetti**
+hos alle, en linje i chatten og en nyhed på bande-baren, fx *"Gruppe-milepæl! 1.000 levels
+tilsammen! Nick stod for nummer 1.000."* Hvert mål fejres kun én gang.
+
+| Kategori | Mål |
+|---|---|
+| Levels tilsammen (alle karakterer) | 100, 250, 500, 750, 1.000, 1.500, 2.000, 3.000 |
+| Max level-karakterer | 1, 3, 5, 8, 12, 16, 24 |
+| Dødsfald | 10, 25, 50, 100, 200, 300, 500, 750, 1.000 |
+| Rare loot (eller bedre) | 10, 25, 50, 100, 250, 500, 1.000 |
+| Guld tilsammen (lige nu) | 100, 500, 1.000, 2.500, 5.000, 10.000, 25.000 |
+| Boss-kills | 10, 50, 100, 250, 500, 1.000, 2.500 |
+| Timer spillet (/played) | 24, 100, 250, 500, 1.000, 2.500, 5.000 |
+| Rare mobs | 5, 10, 25, 50, 100 |
+| Prutter (hån-knappen) | 10, 25, 50, 100, 200 |
+
+Siden viser en bjælke mod næste mål for hver kategori og de seneste fester. Hold musen over en
+række for at se alle målene, hvornår de blev nået, og hvem der stod for det. For dødsfald, loot,
+rare mobs og prutter er det den, der stod for netop nummer 100 (eller hvad målet var), så alle
+ser den samme "skyldige".
+
+Det hele regnes ud fra data, der allerede synker, og demo-data tæller ikke. Den første, der ser
+et mål blive nået, fortæller de andre om det, så festen også kommer hos venner, hvis data ikke er
+nået frem endnu. Er du offline, får du festen, når du logger ind, hvis målet højst er to døgn
+gammelt. Første gang du kører 0.29, bliver det, I allerede har nået, gemt stille (ingen byge af
+popups). `/wc4ever milepæle` skriver fremskridtet i chatten, `milepæle test` viser popuppen, og
+`milepæle fra`/`til` slår popuppen fra/til hos dig (så kommer festen kun i chatten).
+
 ### Dødsannoncer
 Når en ven dør, får alle en popup med en dødsannonce, fx *"Nick blev overlistet af
 en level 12 Murloc Forager"*. Annoncen afhænger af, hvordan man døde (fald, drukning,
@@ -567,6 +596,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever sladder` | Vis sladderen siden sidst igen (`sladder fra`/`til` styrer den ved login) |
 | `/wc4ever angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
 | `/wc4ever pokaler` | Vis sidste uges pokaler og hvem der fører i denne uge |
+| `/wc4ever milepæle` | Vis bandens fælles mål og hvor langt I er. `milepæle test` viser fest-popuppen, `milepæle fra`/`til` slår den fra/til hos dig (`milestones` og `mål` virker også) |
 | `/wc4ever stomi <ven>` | Sæt en stomi-fælde for en ven (`stomi test` viser popuppen, `stomi fra`/`til` slår den fra/til hos dig) |
 | `/wc4ever gz [ven]` | Sig tillykke til en ven, der lige er steget i level (uden navn: den senest). `gz test` viser popuppen, `gz fra`/`til` slår gz-popups fra/til |
 | `/wc4ever væk [ven]` | Væk en ven, der sover AFK i en by (uden navn: den, der har sovet længst). `væk test` viser popuppen, `væk fra`/`til` slår vækkelyden fra/til hos dig (`vaek` og `wake` virker også) |
@@ -749,6 +779,8 @@ python3 tests/test_gz.py WastedCoast                # gz-knappen: Gz på level-p
 python3 tests/test_gz.py WastedCoast forever        # det samme på WoW Forever
 python3 tests/test_hjemmesko.py WastedCoast         # hjemmesko-alarmen: AFK i byen, zZz på baren, prik, cooldown, slå fra og synk
 python3 tests/test_hjemmesko.py WastedCoast forever # det samme på WoW Forever
+python3 tests/test_milestones.py WastedCoast        # gruppe-milepæle: tal, stille første gang, fest, XM, dubletter, synk, demo og side
+python3 tests/test_milestones.py WastedCoast forever # det samme på WoW Forever
 python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-tid, vindere, XW, uddeling, kort og side
 python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever
 ```

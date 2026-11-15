@@ -654,6 +654,9 @@ function ns.HandlePrankMessage(kind, t)
     elseif kind == "XZ" or kind == "XV" then
         -- v0.28: hjemmesko-alarmen (Hjemmesko.lua)
         if ns.HandleHjemmeskoMessage then ns.HandleHjemmeskoMessage(kind, t) end
+    elseif kind == "XM" then
+        -- v0.29: gruppe-milepæle (Milestones.lua)
+        if ns.HandleMilestoneMessage then ns.HandleMilestoneMessage(t) end
 
     elseif kind == "XD" then
         if ns.HandleDuelMessage then ns.HandleDuelMessage(t) end
@@ -705,6 +708,8 @@ function ns.SendPrankExtras(light)
     SendRecentRolls()
     SendMyLevel()
     if ns.Hjemmesko then ns.Hjemmesko.SendSync() end
+    -- v0.29: nåede gruppe-milepæle (den lette synk kun de friske)
+    if ns.Milestones then ns.Milestones.SendLog(light) end
     -- Den lette synk (hvert 10. minut) springer historikken over: den sendes, når den sker
     if light then return end
     if ns.SendDuels then ns.SendDuels() end
@@ -1040,6 +1045,7 @@ function ns.MakePrankDemo()
     if ns.Haan then ns.Haan.MakeDemo() end
     if ns.Gz then ns.Gz.MakeDemo() end
     if ns.Hjemmesko then ns.Hjemmesko.MakeDemo() end
+    if ns.Milestones then ns.Milestones.MakeDemo() end
 end
 
 function ns.ClearPrankDemo()
@@ -1050,6 +1056,7 @@ function ns.ClearPrankDemo()
     if ns.Haan then ns.Haan.ClearDemo() end
     if ns.Gz then ns.Gz.ClearDemo() end
     if ns.Hjemmesko then ns.Hjemmesko.ClearDemo() end
+    if ns.Milestones then ns.Milestones.ClearDemo() end
     for friend, e in pairs(db.levelAt) do
         if e.d then db.levelAt[friend] = nil end
     end
@@ -1071,6 +1078,7 @@ function ns.ResetPranks()
     if ns.Haan then ns.Haan.Reset() end
     if ns.Gz then ns.Gz.Reset() end
     if ns.Hjemmesko then ns.Hjemmesko.Reset() end
+    if ns.Milestones then ns.Milestones.Reset() end
 end
 
 -- Eksempler på de nye popups (gemmes og sendes ikke)
@@ -1108,6 +1116,7 @@ function ns.PrankSlash(cmd, arg)
     if ns.HaanSlash and ns.HaanSlash(cmd, arg) then return true end
     if ns.GzSlash and ns.GzSlash(cmd, arg) then return true end
     if ns.HjemmeskoSlash and ns.HjemmeskoSlash(cmd, arg) then return true end
+    if ns.MilestonesSlash and ns.MilestonesSlash(cmd, arg) then return true end
     if ns.WeeklySlash and ns.WeeklySlash(cmd, arg) then return true end
     if cmd == "angrib" or cmd == "emote" or cmd == "attack" then
         local name = FindFriend(arg)

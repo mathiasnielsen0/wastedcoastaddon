@@ -23,6 +23,7 @@ samme private tabel `ns` (`local _, ns = ...`).
 | `Gz.lua` | Gz-knappen (tillykke med levelet) |
 | `Hjemmesko.lua` | Hjemmesko-alarmen: zZz på sovende AFK-venner og vækkelyd |
 | `Weekly.lua` | Ugens pokaler |
+| `Milestones.lua` | Gruppe-milepæle (fælles mål og fest-popup) |
 | `Bar.lua` | Bande-baren og nyhedslisten (samler nyheder fra alle moduler) |
 
 `tests/wowmock.py` har sin egen kopi af fillisten (`FILES`). Den skal holdes i takt med `.toc`.
@@ -62,7 +63,7 @@ tickers (`C_Timer.NewTicker`).
 `GROUPS` (`WastedCoast.lua`, sektionen "UI: hovedvindue") definerer de fem faner og deres
 undersider. Sidenumrene er historiske: 1-7 er kernens første sider, resten er registreret i
 `EXTRA_PAGES[n] = { build = ..., refresh = ... }`, enten i kernen (8-12, 16) eller i et
-modul (13 Drilleri, 14 Dueller, 15 Bank, 17 Played, 18 Weekly). En ny side får næste ledige
+modul (13 Drilleri, 14 Dueller, 15 Bank, 17 Played, 18 Weekly, 19 Milestones). En ny side får næste ledige
 nummer og indsættes i `GROUPS`.
 
 Der er to udseender: spillets egne rammer (`ns.native`, standard på Forever) og addonets

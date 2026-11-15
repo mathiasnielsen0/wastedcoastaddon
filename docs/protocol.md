@@ -85,6 +85,7 @@ guild, party/raid eller whisper. `/wc4ever status` viser det live.
 | `XG` | fra, til, level, nonce, tekst-nr, tid | Gz (tillykke med levelet) | `Gz.lua` |
 | `XZ` | ven, 1/0, sekunder AFK, zone | AFK i en by (1, ved start og hvert 5. min.) eller vågen (0) | `Hjemmesko.lua` |
 | `XV` | fra, til, nonce, tekst-nr, tid | Prik til en sovende ven (vækkelyd) | `Hjemmesko.lua` |
+| `XM` | fra, kategori, mål, tid, udløser, stille | Gruppe-milepæl nået (v0.29). Tidligste tid vinder; stille = ingen fest | `Milestones.lua` |
 
 ## Ny beskedtype: tjekliste
 

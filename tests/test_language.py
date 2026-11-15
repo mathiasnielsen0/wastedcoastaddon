@@ -78,7 +78,7 @@ for _, c in ipairs({ "status", "sound", "toast", "loottoast", "raretoast", "kana
                      "announce", "annonce", "emotes", "sladder fra", "sladder til", "bar fold" }) do slash(c) slash(c) end
 for _, c in ipairs({ "testtoast", "testannonce", "test", "testloot", "loot", "loot epic", "loot rare", "efternavn",
                      "angrib", "angrib nick", "sound death", "sound xyz", "reset", "hjælp", "sync", "sladder", "gz test", "gz fra", "gz til", "gz nick", "gz",
-                     "væk test", "væk fra", "væk til", "væk nick", "væk", "wake" }) do
+                     "væk test", "væk fra", "væk til", "væk nick", "væk", "wake", "milepæle", "milepæle test", "milepæle fra", "milepæle til" }) do
     pcall(slash, c)
     RunTimers()
 end
@@ -93,6 +93,9 @@ Fire("CHAT_MSG_ADDON", "WCOAST", "XZ;Nick;1;1800;Stormwind City", "GUILD", "Nick
 Fire("CHAT_MSG_ADDON", "WCOAST", "XV;Nick;" .. tostring(db.me) .. ";777777;2;" .. NOW, "GUILD", "Nickchar")
 if ns.Bar then pcall(ns.Bar.Refresh) end
 if ns.HjemmeskoWake then pcall(ns.HjemmeskoWake, "Nick") end
+-- v0.29: en gruppe-milepæl fra en ven (fest-popup og nyhed)
+Fire("CHAT_MSG_ADDON", "WCOAST", "XM;Nick;dead;10;" .. NOW .. ";Nick;", "GUILD", "Nickchar")
+Fire("CHAT_MSG_ADDON", "WCOAST", "XM;Nick;haan;10;" .. NOW .. ";Mathias;", "GUILD", "Nickchar")
 RunTimers()
 hoverAll()
 for i = 1, #ns.pages do pcall(ns.ShowTab, i) end

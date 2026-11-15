@@ -85,6 +85,7 @@ local KIND_ICON = {
     gz    = IC("Spell_Holy_SurgeOfLight"),
     hjemmesko = IC("Spell_Nature_Sleep"),
     cup   = IC("INV_Misc_Coin_02"),
+    goal  = IC("INV_Misc_Coin_01"),
 }
 Bar.KIND_ICON = KIND_ICON
 
@@ -230,6 +231,11 @@ function Bar.Items(now, maxItems, maxAge)
     -- v0.25: ugens pokaler (én linje pr. uddeling)
     if ns.Weekly then
         for _, it in ipairs(ns.Weekly.NewsItems(now)) do add(it.t, it.key, it.text, nil, nil, "cup", it.icon) end
+    end
+
+    -- v0.29: gruppe-milepæle
+    if ns.Milestones then
+        for _, it in ipairs(ns.Milestones.NewsItems()) do add(it.t, it.key, it.text, nil, nil, "goal", it.icon, { demo = it.demo }) end
     end
 
     table.sort(out, function(a, b)
@@ -751,7 +757,7 @@ end
 -- betyder foldet ind; nil = foldet ud, som alle starter med). Foldet ind står kun den nyeste nyhed,
 -- men en vigtig nyhed folder baren ud i PEEK sek.
 -- =============================================================================
-local HOT = { death = true, gank = true, level = true, ach = true, cup = true, stomi = true, haan = true }
+local HOT = { death = true, gank = true, level = true, ach = true, cup = true, stomi = true, haan = true, goal = true }
 -- Tilstanden: set = nyheder, vi har set (key -> true), peekUntil = hvornår en udfoldning slutter,
 -- readyAt = hvornår login-pausen er forbi
 local fs = { seen = false, peekUntil = false, readyAt = 0 }

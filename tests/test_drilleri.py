@@ -46,7 +46,7 @@ local realToast = ns.Toast
 ns.Toast = function(o) ns.toastsSeen[#ns.toastsSeen+1] = o return realToast(o) end
 
 -- Sider: 16 (fordelt på 5 faner), og Drilleri-siden findes
-check(#ns.pages == 18 and #ns.tabs == 5, "18 sider på 5 faner")
+check(#ns.pages == 19 and #ns.tabs == 5, "19 sider på 5 faner")
 
 -- XP-procent i level
 check(ns.LevelText(42, 63) == "42 |cff9a9aa6(63%)|r", "level med XP-procent: " .. ns.LevelText(42, 63))
