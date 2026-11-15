@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.26.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.27.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` og (fra 0.25) `Weekly.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua` og (fra 0.27) `Gz.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -394,6 +394,22 @@ laver din karakter også spillets egen `/fart` på vennen.
 - **Nye lydfiler kræver, at spillet genstartes helt** efter opdateringen. `/reload` er
   ikke nok, før WoW kan finde pruttefilerne.
 
+### Gz-knappen: sig tillykke med levelet
+Prutternes venlige modstykke. Når en ven stiger i level, har level-popuppen en lille **Gz**-knap.
+Et klik sender vennen en hilsen, fx *"Mathias klapper ad dig. Level 31!"* eller *"Mathias
+rækker dig en kold en for level 31."*, som popup med ding-lyden og i chatten. Rammer vennen max
+level, er teksten lidt mere højtidelig.
+
+- På bande-baren bliver tiden til **Gz**, når musen er over en frisk level-nyhed, og et klik
+  siger tillykke. Det kan også gøres med `/wc4ever gz` (den ven, der dingede senest) eller
+  `/wc4ever gz nick`.
+- Kun i **15 minutter** efter levelet, **ét gz pr. level** fra hver ven og højst ét gz hvert
+  **10. sekund**.
+- Gz tælles: bande-barens tooltip viser gz givet og fået, og nyhederne viser
+  *"Mathias sagde tillykke til Nick med level 31"*.
+- Vil du ikke have popups, så skriv `/wc4ever gz fra`. Så kommer gz kun som en linje i chatten.
+  `/wc4ever gz test` viser popuppen kun hos dig.
+
 ### Ugens pokaler (Sjov > Ugens pokaler)
 Hver **søndag kl. 20** (dansk tid, også om sommeren) kåres ugens vindere:
 
@@ -534,6 +550,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
 | `/wc4ever pokaler` | Vis sidste uges pokaler og hvem der fører i denne uge |
 | `/wc4ever stomi <ven>` | Sæt en stomi-fælde for en ven (`stomi test` viser popuppen, `stomi fra`/`til` slår den fra/til hos dig) |
+| `/wc4ever gz [ven]` | Sig tillykke til en ven, der lige er steget i level (uden navn: den senest). `gz test` viser popuppen, `gz fra`/`til` slår gz-popups fra/til |
 | `/wc4ever prut [ven]` | Prut af en ven, der lige er død (uden navn: den senest døde). `prut test` prøver lyden, `prut fra`/`til` slår prutter mod dig fra/til, `prut tal` viser flest givet og fået |
 | `/wc4ever annonce` | Slå dødsannoncer til/fra |
 | `/wc4ever emotes` | Slå popups for emote-angreb mod dig til/fra |
@@ -702,6 +719,8 @@ python3 tests/test_news.py WastedCoast              # nyhedspanelet i hovedvindu
 python3 tests/test_news.py WastedCoast forever      # det samme på WoW Forever
 python3 tests/test_haan.py WastedCoast              # hån-knappen: prut på dødsannoncen, cooldown, spam-værn, slå fra, nyheder og synk
 python3 tests/test_haan.py WastedCoast forever      # det samme på WoW Forever
+python3 tests/test_gz.py WastedCoast                # gz-knappen: Gz på level-popuppen, cooldown, spam-værn, slå fra, baren og synk
+python3 tests/test_gz.py WastedCoast forever        # det samme på WoW Forever
 python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-tid, vindere, XW, uddeling, kort og side
 python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever
 ```

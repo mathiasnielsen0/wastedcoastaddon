@@ -83,6 +83,8 @@ local addonName, ns = ...
 --             mørk plade, "N online" i toppen og en streg mellem venner og nyheder. Pilen i toppen folder
 --             nyhederne ind (kun den nyeste); vigtige nyheder folder baren ud i 15 sek. (db.settings.barFolded)
 --             Forsiden og baren deler ét ikonsystem: Bar.Items giver hver nyhed kind og icon
+--   * v0.27.0: gz-knappen (Gz.lua): sig tillykke til en ven, der lige er steget i level, fra level-popuppen,
+--             bande-baren (klik på level-nyheden) eller /wc4ever gz [ven]. XG-beskeden. Kan slås fra hos modtageren
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -3059,7 +3061,7 @@ function ns.OnFriendHeartbeat(friend, char, class, level, zone, cameOnline, prev
     elseif prevLevel and level and level == prevLevel + 1
         and not (ns.LevelToasted and ns.LevelToasted(friend, char, level)) then
         ns.Toast({ kind = "levelup", title = Name(friend) .. ns.L(" nåede level ") .. level, text = char, class = class,
-                   sound = "levelup", friend = friend })
+                   sound = "levelup", friend = friend, action = ns.GzAction and ns.GzAction(friend) or nil })
     end
 end
 
