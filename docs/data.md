@@ -53,6 +53,7 @@ felter med `db.x = db.x or {}` første gang, det bruger dem.
 | `hjemmesko` (kun `log`; AFK-tilstanden ligger kun i sessionen) | `Hjemmesko.lua` |
 | `weekly` | `Weekly.lua` |
 | `milestones` (`hit["kategori:mål"] = { t, by, s, shown }`, `init`) | `Milestones.lua` |
+| `avis` (`day`, `n`, `base` = dagens øjebliksbillede, `hist[dato]` = levels de seneste 14 dage, `on`, `peak`, `duo` = hvem der var online hvornår og sammen) | `Avis.lua` |
 
 Spilletid ligger på karakteren (`friends[ven].chars[karakter].played`, `Played.lua`).
 
@@ -61,5 +62,5 @@ Spilletid ligger på karakteren (`friends[ven].chars[karakter].played`, `Played.
 Lokale valg, som aldrig synkes: `toasts`, `lootToasts`, `rareToasts`, `sound`, `announce`,
 `minQuality`, `fallbackSync`, `lang`, `skin`, `pos`, `minimapAngle`, `minimapHide`,
 `surnames`, `bar`, `barFolded` (`Bar.lua`), `emotes`, `obits` (`Drilleri.lua`), `gossip`, `stomi`,
-`haan`, `gz`, `hjemmesko`, `milestones`. Standardværdier sættes i `InitDB` eller i modulet. Tjek altid `~= false` for
+`haan`, `gz`, `hjemmesko`, `milestones`, `avis`. Standardværdier sættes i `InitDB` eller i modulet. Tjek altid `~= false` for
 indstillinger, der er slået til som standard, så gamle installationer uden feltet virker.

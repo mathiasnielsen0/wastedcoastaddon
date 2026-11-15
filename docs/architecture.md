@@ -24,6 +24,7 @@ samme private tabel `ns` (`local _, ns = ...`).
 | `Hjemmesko.lua` | Hjemmesko-alarmen: zZz på sovende AFK-venner og vækkelyd |
 | `Weekly.lua` | Ugens pokaler |
 | `Milestones.lua` | Gruppe-milepæle (fælles mål og fest-popup) |
+| `Avis.lua` | Wasted Coast Tidende: dagens avis ved login (historier med betingelser og vægt) |
 | `Bar.lua` | Bande-baren og nyhedslisten (samler nyheder fra alle moduler) |
 
 `tests/wowmock.py` har sin egen kopi af fillisten (`FILES`). Den skal holdes i takt med `.toc`.
@@ -50,7 +51,7 @@ Kernen kalder modulerne gennem valgfrie hooks på `ns`, altid beskyttet med `if 
 | `ns.OnFreshDeath(ev, friend)`, `ns.OnMyDeath(ev)` | Et nyt dødsfald (en vens eller dit eget) |
 | `ns.OnFriendHeartbeat(...)` | Livstegn fra en ven |
 | `ns.AfterEvent()` | Efter de fleste ændringer (trofæer m.m. tjekkes) |
-| `ns.PrankSlash(cmd, arg)` | Ukendt slash-kommando (videre til `ns.StomiSlash`, `ns.HaanSlash`, `ns.GzSlash`, `ns.HjemmeskoSlash`, `ns.WeeklySlash`) |
+| `ns.PrankSlash(cmd, arg)` | Ukendt slash-kommando (videre til `ns.StomiSlash`, `ns.HaanSlash`, `ns.GzSlash`, `ns.HjemmeskoSlash`, `ns.WeeklySlash`, `ns.AvisSlash`) |
 | `ns.GossipSlash`, `ns.BarSlash` | Deres kommandoer |
 | `ns.MakePrankDemo`, `ns.ClearPrankDemo` | `/wc4ever demo` og `demo slut` |
 | `ns.RefreshUI()` | Kald den efter ændringer, der skal vises |
@@ -63,14 +64,14 @@ tickers (`C_Timer.NewTicker`).
 `GROUPS` (`WastedCoast.lua`, sektionen "UI: hovedvindue") definerer de fem faner og deres
 undersider. Sidenumrene er historiske: 1-7 er kernens første sider, resten er registreret i
 `EXTRA_PAGES[n] = { build = ..., refresh = ... }`, enten i kernen (8-12, 16) eller i et
-modul (13 Drilleri, 14 Dueller, 15 Bank, 17 Played, 18 Weekly, 19 Milestones). En ny side får næste ledige
+modul (13 Drilleri, 14 Dueller, 15 Bank, 17 Played, 18 Weekly, 19 Milestones, 20 Avis). En ny side får næste ledige
 nummer og indsættes i `GROUPS`.
 
 Der er to udseender: spillets egne rammer (`ns.native`, standard på Forever) og addonets
 mørke stil (standard på TBC). `ns.UseNativeSkin()` afgør det, og `/wc4ever stil` skifter.
 Test begge (`tests/test_drilleri.py WastedCoast native`).
 
-Nyhedspanelet og bande-baren henter nyheder i `Bar.lua`, sladderen i `Gossip.lua`. Et modul,
+Nyhedspanelet og bande-baren henter nyheder i `Bar.lua`, sladderen i `Gossip.lua` og avisen i `Avis.lua` (hver historie er et `add(rubrik, vægt, ven, overskrift, tekst)` i `A.Collect`). Et modul,
 der skal give nyheder eller sladder, tilføjes eksplicit der.
 
 ## Spilversioner

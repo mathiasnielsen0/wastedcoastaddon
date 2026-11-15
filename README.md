@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.29.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.30.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua`, (fra 0.27) `Gz.lua`, (fra 0.28) `Hjemmesko.lua` og (fra 0.29) `Milestones.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua`, (fra 0.27) `Gz.lua`, (fra 0.28) `Hjemmesko.lua`, (fra 0.29) `Milestones.lua` og (fra 0.30) `Avis.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -67,7 +67,7 @@ nogle små undersider lige under fanerne:
 | **Rangliste** | Scoreboard, Spilletid, Race, Dueller, Bank & repair |
 | **Loot** | Loot, Rolls |
 | **Død** | Statistik, Instanser |
-| **Sjov** | Trofæer, Drilleri, Ugens pokaler, Milepæle |
+| **Sjov** | Avisen, Trofæer, Drilleri, Ugens pokaler, Milepæle |
 
 Klik på en vens kort for at se vennens karakterer. Venner online har en grøn kant. De offline står
 tre på en række med, hvornår de sidst var online, i hjørnet. Er der plads til flere i gruppen, står
@@ -489,6 +489,36 @@ gammelt. Første gang du kører 0.29, bliver det, I allerede har nået, gemt sti
 popups). `/wc4ever milepæle` skriver fremskridtet i chatten, `milepæle test` viser popuppen, og
 `milepæle fra`/`til` slår popuppen fra/til hos dig (så kommer festen kun i chatten).
 
+### Wasted Coast Tidende: dagens avis (Sjov > Avisen)
+Hver gang du logger ind (ikke ved `/reload` eller zone-skift), kommer der efter et halvt minut en
+**avis** med alt, der er sket i banden i dag (fra kl. 00.00 til nu). Forsiden er dagens største
+historie, fx *"Skandale i Westfall: Frode (level 30) blev slået ihjel af en level 12 Defias
+Trapper"*. Under den står rubrikkerne:
+
+| Rubrik | Hvad står der |
+|---|---|
+| **Dødsfald** | Pinlige dødsfald (mob langt under ens level), fald, drukning, lava, mange dødsfald, samme dræber igen, én mob mod flere venner, dobbelt-tragedier, død lige efter et ding eller ny loot, om natten, på max level, karakterens første død, gank og fejder |
+| **Børsen** | Legendary og epic loot (og den første epic nogensinde), rare items, Need-politiet, need-goblins og pass-helgener, RNG-ofre, item level, guld op og ned, guild bank og repair |
+| **Levels og karriere** | Max level, mange levels, runde levels, ding uden et eneste gz (eller med gz fra hele banden), nye alts, professions, reputation, spilletid, instanser og wipes, rare mobs, trofæer, honor kills og legacy points |
+| **Kapløbet** | Stillingen i level-løbet med dagens levels, ny fører, overhalinger, fotofinish, hvem der stikker af, hvornår førstemanden når max level i det nuværende tempo, og sneglen |
+| **Skandaler** | Stomi (også pose nummer to på en uge, hævn og stomi-terrorister), kollektive prutter, prut-baroner, gz-engle, savnede venner, venner tilbage fra de døde, natteugler, pjækkere, hele banden online og makkerpar i samme zone |
+
+Derudover **Skammens hat** (hvem, siden hvornår og fra hvem), et **horoskop** til hver ven
+(tegnet følger klassen, fx Dæmonen for warlocks, og teksten vennens vigtigste historie), **små
+annoncer** og **vejret** (zonen med flest dødsfald). Hver historie har en betingelse i dagens data
+og en vægt: den tungeste bliver forsiden, og der er højst 3 historier om samme ven, så længe der er
+andet at skrive om. Er der ingen historier i en rubrik, står der en reservetekst. Teksterne er de
+samme hele dagen, også hvis du åbner avisen igen.
+
+**Kopiér til Discord** giver avisen som ren tekst, klar til Ctrl+C. Sjov > Avisen viser dagens
+overskrifter i hovedvinduet. `/wc4ever avis` viser avisen igen, og `avis fra`/`til` slår den fra/til
+ved login. Når avisen er slået til, popper den daglige sladder ikke op (`/wc4ever sladder` virker stadig).
+
+Avisen sender ingen beskeder. Den bygger på det, addonet allerede har og synker. Levels, professions,
+spilletid og lignende sammenlignes med et øjebliksbillede, der tages første gang addonet kører på
+en ny dato. Natteugler, pjækkere, hvor mange der var online på én gang, og makkerpar kan avisen kun
+se, mens du selv er online. Demo-data kommer aldrig i avisen.
+
 ### Dødsannoncer
 Når en ven dør, får alle en popup med en dødsannonce, fx *"Nick blev overlistet af
 en level 12 Murloc Forager"*. Annoncen afhænger af, hvordan man døde (fald, drukning,
@@ -594,6 +624,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever efternavn X` | Sæt din karakters efternavn (WoW Forever). `auto` = find det selv. Uden navn: vis det |
 | `/wc4ever announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
 | `/wc4ever sladder` | Vis sladderen siden sidst igen (`sladder fra`/`til` styrer den ved login) |
+| `/wc4ever avis` | Vis dagens avis igen. `avis fra`/`til` styrer den ved login, `avis discord` giver den som tekst til Discord (`news` virker også) |
 | `/wc4ever angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
 | `/wc4ever pokaler` | Vis sidste uges pokaler og hvem der fører i denne uge |
 | `/wc4ever milepæle` | Vis bandens fælles mål og hvor langt I er. `milepæle test` viser fest-popuppen, `milepæle fra`/`til` slår den fra/til hos dig (`milestones` og `mål` virker også) |
@@ -781,6 +812,8 @@ python3 tests/test_hjemmesko.py WastedCoast         # hjemmesko-alarmen: AFK i b
 python3 tests/test_hjemmesko.py WastedCoast forever # det samme på WoW Forever
 python3 tests/test_milestones.py WastedCoast        # gruppe-milepæle: tal, stille første gang, fest, XM, dubletter, synk, demo og side
 python3 tests/test_milestones.py WastedCoast forever # det samme på WoW Forever
+python3 tests/test_avis.py WastedCoast              # avisen: øjebliksbillede, historier og betingelser, forside, kapløb, hat, horoskop, login, Discord og side
+python3 tests/test_avis.py WastedCoast forever      # det samme på WoW Forever
 python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-tid, vindere, XW, uddeling, kort og side
 python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever
 ```

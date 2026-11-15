@@ -282,7 +282,7 @@ local ns = ...
 ns.ShowTab(18)
 ''', ns)
 ui = ns.Weekly.ui
-check(ns.subTabs[5][3].active, "Ugens pokaler ligger under Sjov")
+check(ns.subTabs[5][4].active, "Ugens pokaler ligger under Sjov")
 check("Frode" in ui.last[1].who.text_ and "3 dødsfald" in ui.last[1].who.text_, "sidste uge: Frode: %s" % ui.last[1].who.text_)
 check(ui.lastSub.text_ == "uge 46", ui.lastSub.text_)
 check("uddeles om" in ui.nowSub.text_, ui.nowSub.text_)

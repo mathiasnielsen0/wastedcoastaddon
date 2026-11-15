@@ -1118,6 +1118,7 @@ function ns.PrankSlash(cmd, arg)
     if ns.HjemmeskoSlash and ns.HjemmeskoSlash(cmd, arg) then return true end
     if ns.MilestonesSlash and ns.MilestonesSlash(cmd, arg) then return true end
     if ns.WeeklySlash and ns.WeeklySlash(cmd, arg) then return true end
+    if ns.AvisSlash and ns.AvisSlash(cmd, arg) then return true end
     if cmd == "angrib" or cmd == "emote" or cmd == "attack" then
         local name = FindFriend(arg)
         if name then ns.EmoteAttack(name) else Print(L("Hvem? Skriv fx |cffffd100/wc4ever angrib nick|r.")) end

@@ -90,6 +90,9 @@ local addonName, ns = ...
 --             XZ (AFK-tilstand) og XV (prik). Vækkelyden kan slås fra hos modtageren
 --   * v0.29.0: gruppe-milepæle (Milestones.lua): fælles mål for banden (levels, dødsfald, loot, guld, bosser,
 --             spilletid, rare mobs, prutter). Fest-popup med konfetti hos alle, når et mål nås. XM-beskeden
+--   * v0.30.0: Wasted Coast Tidende (Avis.lua): dagens sladder som en avis, der åbner ved hvert login og
+--             opsummerer alt, der er sket i dag. Forside, rubrikker, Kapløbet, Skammens hat, horoskop og
+--             annoncer. Hver historie har en betingelse og en vægt. Sjov > Avisen og /wc4ever avis
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -6832,7 +6835,7 @@ local GROUPS = ns.LT({
     { label = "Død",        icon = "INV_Misc_Bone_HumanSkull_01",
       pages = { 16, 5 },               names = { "Statistik", "Instanser" } },
     { label = "Sjov",       icon = "Spell_Nature_Polymorph",
-      pages = { 6, 13, 18, 19 },       names = { "Trofæer", "Drilleri", "Ugens pokaler", "Milepæle" } },
+      pages = { 20, 6, 13, 18, 19 },   names = { "Avisen", "Trofæer", "Drilleri", "Ugens pokaler", "Milepæle" } },
 })
 ns.GROUPS = GROUPS
 
@@ -8000,6 +8003,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print(ns.L("  /wc4ever efternavn X  - sæt din karakters efternavn (auto = find selv)"))
         print(ns.L("  /wc4ever announce     - slå chat-beskeder til/fra"))
         print(ns.L("  /wc4ever sladder      - vis dagens sladder igen  (|cffffd100sladder fra|r/|cffffd100til|r ved login)"))
+        print(ns.L("  /wc4ever avis         - vis dagens avis igen  (|cffffd100avis fra|r/|cffffd100til|r ved login, |cffffd100avis discord|r)"))
         print(ns.L("  /wc4ever pokaler      - se ugens pokaler og hvem der fører i denne uge"))
         print(ns.L("  /wc4ever milepæle     - se bandens fælles mål  (|cffffd100milepæle test|r, |cffffd100milepæle fra|r)"))
         print(ns.L("  /wc4ever angrib <ven> - send et emote-angreb til en ven"))

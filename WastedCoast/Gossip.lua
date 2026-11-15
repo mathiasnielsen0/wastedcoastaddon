@@ -771,7 +771,9 @@ frame:SetScript("OnEvent", function(_, event)
         db.gossip.st = {}   -- nye målinger skrives i en ny tabel, så den gamle forbliver urørt
         C_Timer.After(SHOW_DELAY, function()
             -- første login på en ny dato (pr. konto, så et alt-skifte samme dag ikke viser den igen)
-            if db.me and db.settings.gossip ~= false and db.gossip.day ~= Today() then
+            -- v0.30: avisen (Avis.lua) tager over ved login, når den er slået til
+            local avis = ns.Avis and db.settings.avis ~= false
+            if db.me and db.settings.gossip ~= false and db.gossip.day ~= Today() and not avis then
                 db.gossip.day = Today()
                 ns.Gossip(true)
             end

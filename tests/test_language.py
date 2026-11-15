@@ -78,7 +78,8 @@ for _, c in ipairs({ "status", "sound", "toast", "loottoast", "raretoast", "kana
                      "announce", "annonce", "emotes", "sladder fra", "sladder til", "bar fold" }) do slash(c) slash(c) end
 for _, c in ipairs({ "testtoast", "testannonce", "test", "testloot", "loot", "loot epic", "loot rare", "efternavn",
                      "angrib", "angrib nick", "sound death", "sound xyz", "reset", "hjælp", "sync", "sladder", "gz test", "gz fra", "gz til", "gz nick", "gz",
-                     "væk test", "væk fra", "væk til", "væk nick", "væk", "wake", "milepæle", "milepæle test", "milepæle fra", "milepæle til" }) do
+                     "væk test", "væk fra", "væk til", "væk nick", "væk", "wake", "milepæle", "milepæle test", "milepæle fra", "milepæle til",
+                     "avis", "avis fra", "avis til", "avis discord" }) do
     pcall(slash, c)
     RunTimers()
 end
@@ -86,6 +87,7 @@ if ns.ShowGroupWindow then ns.ShowGroupWindow() end
 if ns.RefreshGroupWindow then ns.RefreshGroupWindow(true) end
 if ns.options and ns.options.scripts.OnShow then ns.options.scripts.OnShow(ns.options) end
 if ns.ShowGossip then pcall(ns.ShowGossip, false) end
+if ns.ShowAvis then pcall(ns.ShowAvis, false) end
 -- Netværk: en vens død, loot og level, så annoncer og popups bliver bygget
 Fire("CHAT_MSG_ADDON", "WCOAST", "D;net-1;Nickchar;WARRIOR;Hogger;Nærkamp;9;12;Westfall;" .. NOW .. ";Nick", "GUILD", "Nickchar")
 -- v0.28: Nick sover i hjemmeskoene og prikker til dig
@@ -188,9 +190,13 @@ check(len(list(g.POPUPS.values())) == 1, "ingen ny popup, når sproget ikke skif
 
 # Alle tekster i sladderen har en engelsk udgave (de fleste linjer vises kun, når der sker noget)
 import os
-src = open(os.path.join(ADDON, "Gossip.lua"), encoding="utf-8").read()
 en = lua.globals().WastedCoastDB and ns.EN
-missing = [k for k in re.findall(r'L\("((?:[^"\\]|\\.)*)"\)', src) if en[k] is None and DANISH.search(ALLOWED.sub(" ", k))]
-check(not missing, "sladder uden engelsk:\n  " + "\n  ".join(missing))
+for fname in ("Gossip.lua", "Avis.lua"):
+    src = open(os.path.join(ADDON, fname), encoding="utf-8").read()
+    missing = [k for k in re.findall(r'L\("((?:[^"\\]|\\.)*)"\)', src) if en[k] is None and DANISH.search(ALLOWED.sub(" ", k))]
+    # v0.30: også teksterne i avisens tabeller (horoskoper, tegn, rubrikker ...)
+    for blk in re.findall(r'ns\.LT\(\{(.*?)\}\)', src, re.S):
+        missing += [k for k in re.findall(r'"((?:[^"\\]|\\.)*)"', blk) if en[k] is None and DANISH.search(ALLOWED.sub(" ", k))]
+    check(not missing, fname + " uden engelsk:\n  " + "\n  ".join(missing))
 
 print("OK,", PASSES, "checks passed", "(forever)" if FOREVER else "")

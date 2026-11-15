@@ -46,7 +46,7 @@ local realToast = ns.Toast
 ns.Toast = function(o) ns.toastsSeen[#ns.toastsSeen+1] = o return realToast(o) end
 
 -- Sider: 16 (fordelt på 5 faner), og Drilleri-siden findes
-check(#ns.pages == 19 and #ns.tabs == 5, "19 sider på 5 faner")
+check(#ns.pages == 20 and #ns.tabs == 5, "20 sider på 5 faner")
 
 -- XP-procent i level
 check(ns.LevelText(42, 63) == "42 |cff9a9aa6(63%)|r", "level med XP-procent: " .. ns.LevelText(42, 63))
@@ -586,7 +586,7 @@ ns.ShowTab(3)
 check(ns.tabs[1].active and not ns.tabs[2].active, "karakterer hører under Venner")
 check(ns.subTabs[1][2].active and ns.subTabs[1][2]:IsShown() and not ns.subTabs[3][1]:IsShown(), "undersider følger fanen")
 ns.ShowTab(13)
-check(ns.tabs[5].active and ns.subTabs[5][2].active, "drilleri hører under Sjov")
+check(ns.tabs[5].active and ns.subTabs[5][3].active, "drilleri hører under Sjov")
 local seen = {}
 for _, g in ipairs(ns.GROUPS) do for _, pg in ipairs(g.pages) do seen[pg] = true end end
 for _, i in ipairs({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }) do check(seen[i], "side " .. i .. " kan nås fra en fane") end
@@ -862,7 +862,8 @@ SlashCmdList.WASTEDCOAST("sladder fra")
 check(db.settings.gossip == false, "sladder ved login fra")
 SlashCmdList.WASTEDCOAST("sladder til")
 check(db.settings.gossip == true, "sladder ved login til")
--- første login på en ny dato viser sladderen, næste login samme dag gør ikke
+-- første login på en ny dato viser sladderen, næste login samme dag gør ikke (v0.30: når avisen er slået fra)
+db.settings.avis = false
 _G.WastedCoastGossip:Hide()
 db.gossip.day = nil
 Fire("PLAYER_LOGIN") RunTimers()
@@ -874,6 +875,13 @@ check(not _G.WastedCoastGossip:IsShown(), "ikke igen samme dag")
 NOW = NOW + 86400
 Fire("PLAYER_LOGIN") RunTimers()
 check(_G.WastedCoastGossip:IsShown(), "igen næste dag")
+-- v0.30: med avisen slået til popper sladderen ikke op (avisen tager over)
+_G.WastedCoastGossip:Hide()
+db.settings.avis = nil
+NOW = NOW + 86400
+Fire("PLAYER_LOGIN") RunTimers()
+check(not _G.WastedCoastGossip:IsShown(), "avisen tager over fra sladderen ved login")
+db.settings.avis = false
 _G.WastedCoastGossip:Hide()
 
 -- v0.19: mere "siden sidst" (loot, rare mobs, professions, rep, gear, spilletid, instanser, rolls, legacy)
