@@ -126,7 +126,7 @@ local all = table.concat(texts, "\n")
 check(items[1].key == "lNick34" and texts[1]:find("dingede 34"), "nyeste først: Nick dingede 34")
 check(all:find("Defias Pillager") and all:find("fik ") and all:find("Big Sword"), "dødsfald og loot er med")
 check(all:find("Første blod") and all:find("Rak'shiri") and all:find("vandt en duel mod"), "trofæer, rare mobs og dueller er med")
-check(all:find("level 1 Chicken. Pinligt."), "dødsfald til en mob langt under ens level er pinligt")
+check(all:find("level 1 |cffffffffChicken|r. Pinligt.", 1, true), "dødsfald til en mob langt under ens level er pinligt")
 local nd = 0
 for _, t in ipairs(texts) do if t:find("duel") then nd = nd + 1 end end
 check(nd == 1, "samme duel vises kun én gang")
@@ -138,7 +138,7 @@ Bar.Refresh()
 local rows = {}
 for _, r in ipairs(bar.rows) do if r.shown then rows[#rows + 1] = r end end
 check(#rows == 5, "fem nyheder under ikonerne (" .. #rows .. ")")
-check(rows[1].fs.text_:find("dingede 34") and rows[1].fs.text_:find("%(nu%)"), "nyeste øverst med tid")
+check(rows[1].fs.text_:find("dingede 34") and rows[1].time.text_ == "nu" and rows[1].glyph.shown, "nyeste øverst med ikon og tid i hver sin kolonne")
 -- Loot: itemets navn står på linjen, og musen over viser itemets tooltip
 local lootRow
 for _, r in ipairs(rows) do if r.line.item and r.line.item.link then lootRow = r end end
@@ -156,6 +156,12 @@ db.levelAt.Rasmus = { l = 41, t = NOW }
 db.friends.Rasmus = { chars = { Raschar = { class = "WARRIOR", level = 41, seen = NOW - 9000 } } }
 Bar.UpdateTicker()
 check(bar.rows[1].fs.text_:find("dingede 41"), "ny nyhed øverst")
+-- v0.26: hver nyhed har en type og et ikon, og toppen viser "N online" og en skillelinje
+local kinds = {}
+for _, it in ipairs(Bar.Items()) do kinds[it.kind] = it.icon end
+check(kinds.level and kinds.death and kinds.loot and kinds.ach and kinds.rare and kinds.duel, "nyhederne har type og ikon")
+check(bar.onlineText.shown and bar.onlineText.text_:find("online") and bar.divider.shown and not bar.logoText.shown,
+      "med nyheder: online-tekst og skillelinje")
 
 -- Skammens hat: Nick døde sidst
 Bar.Refresh()
@@ -199,6 +205,7 @@ check(MOVES == 2, "træk i et ikon flytter baren")
 
 slash("bar nyheder")
 check(db.settings.barTicker == false and bar.news.shown == false, "nyhederne kan slås fra")
+check(bar.logoText.shown and not bar.onlineText.shown and not bar.divider.shown, "uden nyheder står tallet på logoet")
 slash("bar nyheder")
 check(db.settings.barTicker == true and bar.news.shown == true, "og til igen")
 slash("bar")

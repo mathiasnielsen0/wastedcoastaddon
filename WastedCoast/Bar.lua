@@ -22,7 +22,9 @@ local GAME, Name = C.GAME, C.Name
 
 local ICON, GAP, PAD = 24, 4, 4      -- ikonstørrelse, afstand og kant
 local RING = 2                       -- XP-ringens tykkelse
-local TICK_H = 14
+local TICK_H = 16                    -- v0.26: lidt mere luft mellem nyhederne
+local GLYPH = 12                     -- ikonet foran hver nyhed
+local TIME_W = 30                    -- tids-kolonnen til højre
 local ROWS = 5                       -- v0.21.1: de seneste 5 nyheder står fast under ikonerne
 local MIN_W = 300                    -- baren er mindst så bred, når nyhederne er med
 local MAX_ITEMS = 12
@@ -56,6 +58,29 @@ local function Who(friend, class)
     return C.ColorName(friend, class or ClassOf(friend))
 end
 
+-- v0.26: nyhederne læses hvem → hvad → hvornår. Linjens grundfarve er dæmpet grå (udsagnsordene),
+-- navne står i klassefarve, og "objektet" (dræber, modstander, mob) står i hvid.
+local TEXT_DIM = { 0.65, 0.67, 0.71 }
+local TIME_DIM = { 0.49, 0.51, 0.55 }
+Bar.TEXT_DIM = TEXT_DIM
+local function W(s) return "|cffffffff" .. tostring(s) .. "|r" end
+
+-- Et lille ikon foran hver nyhed, så typen kan ses uden at læse (dødsfald, gank, loot ...)
+local function IC(name) return "Interface\\Icons\\" .. name end
+local KIND_ICON = {
+    death = IC("INV_Misc_Bone_HumanSkull_01"),
+    gank  = IC("INV_Sword_27"),
+    level = IC("Spell_Holy_SurgeOfLight"),
+    loot  = IC("INV_Misc_Bag_10"),
+    ach   = IC("Spell_Shadow_AnimateDead"),
+    rare  = IC("Ability_Hunter_SniperShot"),
+    duel  = IC("Ability_Warrior_Challange"),
+    stomi = IC("INV_Misc_Bag_10"),
+    haan  = IC("Spell_Nature_Cyclone"),
+    cup   = IC("INV_Misc_Coin_02"),
+}
+Bar.KIND_ICON = KIND_ICON
+
 -- =============================================================================
 -- Ticker: det seneste nye fra de data, vi har. Hver linje = { t, key, text }
 -- =============================================================================
@@ -67,15 +92,19 @@ function Bar.Items(now, maxItems, maxAge)
     maxItems = maxItems or MAX_ITEMS
     local since = now - (maxAge or MAX_AGE)
     local out = {}
-    local function add(t, key, text, link, dead)
-        if t and t > since and t <= now + 60 and text then out[#out + 1] = { t = t, key = key, text = text, link = link, dead = dead } end
+    -- v0.26: kind = nyhedens type, icon = ikonet foran linjen
+    local function add(t, key, text, link, dead, kind, icon)
+        if t and t > since and t <= now + 60 and text then
+            out[#out + 1] = { t = t, key = key, text = text, link = link, dead = dead, kind = kind,
+                              icon = icon or KIND_ICON[kind] }
+        end
     end
 
     -- Dødsfald
     for _, ev in ipairs(db.events or {}) do
         local f = C.EventFriend(ev)
         if f and (ev.time or 0) > since then
-            local killer = (ev.killer and ev.killer ~= "") and L(ev.killer) or L("Ukendt")
+            local killer = W((ev.killer and ev.killer ~= "") and L(ev.killer) or L("Ukendt"))
             local kl, lv = tonumber(ev.klvl), tonumber(ev.level)
             local text
             if ev.pvp == true then
@@ -86,7 +115,7 @@ function Bar.Items(now, maxItems, maxAge)
                 text = F("%s døde til %s", Who(f, ev.class), killer)
             end
             -- v0.24: dead = vennen, så linjen kan bruges til at prutte (Haan.lua)
-            add(ev.time, "d" .. tostring(ev.id or ev.time), text, nil, f)
+            add(ev.time, "d" .. tostring(ev.id or ev.time), text, nil, f, ev.pvp == true and "gank" or "death")
         end
     end
 
@@ -99,7 +128,7 @@ function Bar.Items(now, maxItems, maxAge)
             end
             local text = (e.l >= C.MAX_LEVEL) and F("%s ramte MAX LEVEL %d!", Who(f, class), e.l)
                 or F("%s dingede %d", Who(f, class), e.l)
-            add(e.t, "l" .. f .. e.l, text)
+            add(e.t, "l" .. f .. e.l, text, nil, nil, "level")
         end
     end
 
@@ -110,11 +139,11 @@ function Bar.Items(now, maxItems, maxAge)
             -- v0.21: vundet på need/greed/disenchant står efter itemet
             local how = (ev.how == "need" or ev.how == "greed" or ev.how == "de") and C.HOW_LABEL and C.HOW_LABEL[ev.how]
             local tail = how and (" |cff9aa0a6(" .. how .. ")|r") or ""
-            -- v0.21.1: itemets ikon foran linket, og musen over viser itemets tooltip
+            -- v0.21.1: musen over viser itemets tooltip. v0.26: itemets ikon står i ikon-kolonnen
             local id = tonumber(ev.item:match("^item:(%d+)"))
             local icon = id and ((C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id)) or (GetItemIcon and GetItemIcon(id)))
-            local item = (icon and ("|T" .. tostring(icon) .. ":12:12:0:0|t ") or "") .. C.LootLink(ev)
-            add(ev.time, "o" .. tostring(ev.id or ev.time), F("%s fik %s", Who(f, ev.class), item) .. tail, ev.item)
+            add(ev.time, "o" .. tostring(ev.id or ev.time), F("%s fik %s", Who(f, ev.class), C.LootLink(ev)) .. tail, ev.item,
+                nil, "loot", icon)
         end
     end
 
@@ -124,7 +153,7 @@ function Bar.Items(now, maxItems, maxAge)
             for id, t in pairs(list) do
                 local a = C.ACH_BY_ID[id]
                 if a and type(t) == "number" then
-                    add(t, "a" .. f .. id, F("%s låste |cffffd100%s|r op", Who(f), a.name))
+                    add(t, "a" .. f .. id, F("%s låste |cffffd100%s|r op", Who(f), a.name), nil, nil, "ach", a.icon)
                 end
             end
         end
@@ -134,7 +163,7 @@ function Bar.Items(now, maxItems, maxAge)
     for _, r in ipairs(db.rareLog or {}) do
         if C.ROSTER_SET[r.friend] then
             add(r.t, "r" .. r.friend .. tostring(r.mob) .. tostring(r.t),
-                F("%s dræbte rare mob %s", Who(r.friend), tostring(r.mob)))
+                F("%s dræbte rare mob %s", Who(r.friend), W(r.mob)), nil, nil, "rare")
         end
     end
 
@@ -147,11 +176,11 @@ function Bar.Items(now, maxItems, maxAge)
                 if not duels[key] and d.t then
                     local text
                     if d.won then
-                        text = F("%s vandt en duel mod %s", Who(f), d.of and Name(d.of) or tostring(d.opp or "?"))
+                        text = F("%s vandt en duel mod %s", Who(f), d.of and Who(d.of) or W(d.opp or "?"))
                     elseif not d.of then
-                        text = F("%s tabte en duel til %s", Who(f), tostring(d.opp or "?"))
+                        text = F("%s tabte en duel til %s", Who(f), W(d.opp or "?"))
                     end
-                    if text then duels[key] = true add(d.t, key, text) end
+                    if text then duels[key] = true add(d.t, key, text, nil, nil, "duel") end
                 end
             end
         end
@@ -160,20 +189,21 @@ function Bar.Items(now, maxItems, maxAge)
     -- v0.22: stomi
     for _, e in ipairs((db.stomi and db.stomi.log) or {}) do
         if e.r == "y" and C.ROSTER_SET[e.to] and C.ROSTER_SET[e.from] then
-            add(e.t, "s" .. tostring(e.id), F("%s fik |cffd9b38cstomi|r af %s", Who(e.to), Who(e.from)))
+            add(e.t, "s" .. tostring(e.id), F("%s fik |cffd9b38cstomi|r af %s", Who(e.to), Who(e.from)), nil, nil, "stomi",
+                ns.Stomi and ns.Stomi.ICON)
         end
     end
 
     -- v0.24: prutter
     for _, e in ipairs((db.haan and db.haan.log) or {}) do
         if C.ROSTER_SET[e.to] and C.ROSTER_SET[e.from] then
-            add(e.t, "h" .. tostring(e.id), F("%s pruttede af %s", Who(e.from), Who(e.to)))
+            add(e.t, "h" .. tostring(e.id), F("%s pruttede af %s", Who(e.from), Who(e.to)), nil, nil, "haan")
         end
     end
 
     -- v0.25: ugens pokaler (én linje pr. uddeling)
     if ns.Weekly then
-        for _, it in ipairs(ns.Weekly.NewsItems(now)) do add(it.t, it.key, it.text) end
+        for _, it in ipairs(ns.Weekly.NewsItems(now)) do add(it.t, it.key, it.text, nil, nil, "cup", it.icon) end
     end
 
     table.sort(out, function(a, b)
@@ -184,7 +214,8 @@ function Bar.Items(now, maxItems, maxAge)
     return out
 end
 
--- Nyhedslinjerne: { text, item } pr. linje (højst ROWS). En stille dag giver én pladsholder.
+-- Nyhedslinjerne: { text, ago, icon, item } pr. linje (højst ROWS). En stille dag giver én pladsholder.
+-- v0.26: tiden står i sin egen højrestillede kolonne og ikonet i sin egen kolonne til venstre.
 function Bar.NewsLines(items)
     if #items == 0 then
         return { { text = "|cff888888" .. L("Stille på kysten. Nogen må gøre noget dumt snart.") .. "|r" } }
@@ -192,7 +223,7 @@ function Bar.NewsLines(items)
     local out = {}
     for i = 1, math.min(ROWS, #items) do
         local it = items[i]
-        out[i] = { text = it.text .. " |cff7a7a86(" .. Ago(it.t) .. ")|r", item = it }
+        out[i] = { text = it.text, ago = Ago(it.t), icon = it.icon, item = it }
     end
     return out
 end
@@ -390,8 +421,14 @@ local function MakeIcon()
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
     btn.icon:SetPoint("TOPLEFT", btn, "TOPLEFT", RING, -RING)
     btn.icon:SetSize(ICON, ICON)
+    -- v0.26: level står på en mørk plade, så tallet kan læses oven på ikonet
+    btn.levelBg = btn:CreateTexture(nil, "OVERLAY", nil, 1)
+    btn.levelBg:SetSize(15, 10)
+    btn.levelBg:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 0, 0)
+    btn.levelBg:SetColorTexture(0.04, 0.05, 0.06, 0.85)
     btn.level = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-    btn.level:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 2)
+    if btn.level.SetDrawLayer then btn.level:SetDrawLayer("OVERLAY", 2) end
+    btn.level:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
     btn.level:SetJustifyH("RIGHT")
     btn.dot = btn:CreateTexture(nil, "OVERLAY")
     btn.dot:SetSize(5, 5)
@@ -451,8 +488,13 @@ local function Layout()
     if tickerOn then w = math.max(w, MIN_W) end
     local nRows = 0
     for _, r in ipairs(bar.rows) do if r:IsShown() then nRows = nRows + 1 end end
-    local h = PAD * 2 + outer + (tickerOn and (nRows * TICK_H + 3) or 0)
+    local h = PAD * 2 + outer + (tickerOn and (nRows * TICK_H + 7) or 0)
     bar:SetSize(w, h)
+    -- v0.26: med nyhederne står "N online" som tekst til højre og en streg skiller venner fra nyheder.
+    -- Uden nyhederne er baren for smal, så tallet står på logoet som før.
+    bar.onlineText:SetShown(tickerOn)
+    bar.logoText:SetShown(not tickerOn)
+    bar.divider:SetShown(tickerOn)
     local i = 0
     for _, b in ipairs(bar.icons) do
         b:ClearAllPoints()
@@ -465,7 +507,7 @@ local function Layout()
     bar.news:SetSize(w - PAD * 2, math.max(1, nRows * TICK_H))
     for _, r in ipairs(bar.rows) do
         r:SetWidth(w - PAD * 2)
-        r.fs:SetWidth(w - PAD * 2)
+        r.fs:SetWidth(w - PAD * 2 - GLYPH - 4 - TIME_W)
     end
 end
 
@@ -499,6 +541,7 @@ function Bar.Refresh()
                 b.dot:Hide()
             end
             b.level:SetText((s.level and s.level > 0) and tostring(s.level) or "")
+            b.levelBg:SetShown(s.level ~= nil and s.level > 0)
             local p, max = Bar.RingValue(s.level, s.xp)
             if max then
                 SetRing(b, 1, C.COL_GOLD[1], C.COL_GOLD[2], C.COL_GOLD[3], s.online and 1 or 0.45)
@@ -512,6 +555,7 @@ function Bar.Refresh()
     end
     bar.online = online
     bar.logoText:SetText(online > 0 and tostring(online) or "")
+    bar.onlineText:SetText(string.format(L("|cff66d36a%d|r online"), online))
     Bar.UpdateTicker()
     Layout()
 end
@@ -542,6 +586,22 @@ function Bar.CanTaunt(it)
     return ns.Haan.Can(it.dead) and true or false
 end
 
+-- v0.26: tids-kolonnen. Over et dødsfald, man kan prutte af, bliver tiden til en "Prut"-knap,
+-- så man kan se, at linjen kan klikkes.
+local function SetRowTime(row, hover)
+    local line = row.line
+    local it = line and line.item
+    if hover and it and Bar.CanTaunt(it) then
+        row.time:SetText(L("Prut"))
+        row.time:SetTextColor(0.94, 0.77, 0.54)
+        row.chip:Show()
+    else
+        row.time:SetText(line and line.ago or "")
+        row.time:SetTextColor(TIME_DIM[1], TIME_DIM[2], TIME_DIM[3])
+        row.chip:Hide()
+    end
+end
+
 local function RowClick(self)
     local it = self.line and self.line.item
     if it and it.dead and not it.link and ns.HaanSend and not (IsShiftKeyDown and IsShiftKeyDown()) then
@@ -559,18 +619,36 @@ local function MakeRow(i)
     row.line = false
     row:SetHeight(TICK_H)
     row:SetPoint("TOPLEFT", bar.news, "TOPLEFT", 0, -(i - 1) * TICK_H)
+    -- v0.26: ikon | tekst | tid
+    row.glyph = row:CreateTexture(nil, "ARTWORK")
+    row.glyph:SetSize(GLYPH, GLYPH)
+    row.glyph:SetPoint("LEFT", row, "LEFT", 0, 0)
+    row.glyph:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     row.fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.fs:SetWordWrap(false)
     row.fs:SetJustifyH("LEFT")
-    row.fs:SetPoint("LEFT", row, "LEFT", 0, 0)
+    row.fs:SetPoint("LEFT", row, "LEFT", GLYPH + 4, 0)
+    row.fs:SetTextColor(TEXT_DIM[1], TEXT_DIM[2], TEXT_DIM[3])
+    row.chip = row:CreateTexture(nil, "BORDER")
+    row.chip:SetSize(TIME_W, TICK_H - 2)
+    row.chip:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    row.chip:SetColorTexture(0.85, 0.63, 0.36, 0.22)
+    row.chip:Hide()
+    row.time = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.time:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+    row.time:SetJustifyH("RIGHT")
+    row.time:SetTextColor(TIME_DIM[1], TIME_DIM[2], TIME_DIM[3])
     local hl = row:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints(row)
     hl:SetColorTexture(1, 0.85, 0.45, 0.07)
     row:RegisterForDrag("LeftButton")
     row:SetScript("OnDragStart", StartMove)
     row:SetScript("OnDragStop", StopMove)
-    row:SetScript("OnEnter", RowEnter)
-    row:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    row:SetScript("OnEnter", function(self) SetRowTime(self, true) RowEnter(self) end)
+    row:SetScript("OnLeave", function(self)
+        SetRowTime(self, false)
+        if GameTooltip then GameTooltip:Hide() end
+    end)
     row:SetScript("OnClick", RowClick)
     return row
 end
@@ -584,6 +662,9 @@ function Bar.UpdateTicker()
         row:SetShown(line ~= nil)
         row.line = line or false
         row.fs:SetText(line and line.text or "")
+        row.glyph:SetShown(line ~= nil and line.icon ~= nil)
+        if line and line.icon then row.glyph:SetTexture(line.icon) end
+        SetRowTime(row, false)
     end
 end
 
@@ -637,9 +718,20 @@ function ns.BuildBar()
     end)
     logo:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
 
+    -- v0.26: "N online" til højre i toppen og en tynd streg mellem venner og nyheder
+    bar.onlineText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    bar.onlineText:SetPoint("TOPRIGHT", bar, "TOPRIGHT", -PAD - 2, -PAD - RING - 6)
+    bar.onlineText:SetJustifyH("RIGHT")
+    bar.onlineText:SetTextColor(TEXT_DIM[1], TEXT_DIM[2], TEXT_DIM[3])
+    bar.divider = bar:CreateTexture(nil, "ARTWORK")
+    bar.divider:SetPoint("TOPLEFT", bar, "TOPLEFT", 1, -(PAD + ICON + RING * 2 + 3))
+    bar.divider:SetPoint("TOPRIGHT", bar, "TOPRIGHT", -1, -(PAD + ICON + RING * 2 + 3))
+    bar.divider:SetHeight(1)
+    bar.divider:SetColorTexture(1, 1, 1, 0.08)
+
     -- Nyhederne: de seneste 5 begivenheder under ikonerne
     bar.news = CreateFrame("Frame", nil, bar)
-    bar.news:SetPoint("TOPLEFT", bar, "TOPLEFT", PAD, -(PAD + ICON + RING * 2 + 3))
+    bar.news:SetPoint("TOPLEFT", bar, "TOPLEFT", PAD, -(PAD + ICON + RING * 2 + 7))
     bar.rows = {}
 
     Place()
@@ -680,8 +772,14 @@ local function MakePanelRow(i)
     row:SetHeight(PANEL_ROW_H)
     row:SetPoint("TOPLEFT", panel.list, "TOPLEFT", 0, -(i - 1) * PANEL_ROW_H)
     row:SetPoint("TOPRIGHT", panel.list, "TOPRIGHT", 0, -(i - 1) * PANEL_ROW_H)
+    -- v0.26: samme ikon-kolonne og dæmpede grundfarve som på baren
+    row.glyph = row:CreateTexture(nil, "ARTWORK")
+    row.glyph:SetSize(GLYPH, GLYPH)
+    row.glyph:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -3)
+    row.glyph:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     row.fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.fs:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -3)
+    row.fs:SetTextColor(TEXT_DIM[1], TEXT_DIM[2], TEXT_DIM[3])
+    row.fs:SetPoint("TOPLEFT", row, "TOPLEFT", GLYPH + 8, -3)
     row.fs:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -2, 2)
     row.fs:SetJustifyH("LEFT")
     row.fs:SetJustifyV("TOP")
@@ -711,6 +809,9 @@ function ns.RefreshNewsPanel()
         row:SetShown(line ~= nil)
         row.line = line or false
         row.fs:SetText(line and line.text or "")
+        local icon = line and line.item and line.item.icon
+        row.glyph:SetShown(icon ~= nil)
+        if icon then row.glyph:SetTexture(icon) end
     end
     panel.count:SetText(#items > 0 and tostring(#items) or "")
     -- Rullebjælken: kun når der er mere, end der kan ses

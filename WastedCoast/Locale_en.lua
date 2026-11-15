@@ -989,6 +989,7 @@ ns.EN = {
     ["PRUT"] = "FART",
     ["Prut"] = "Fart",
     ["Prut!"] = "Fart!",
+    ["|cff66d36a%d|r online"] = "|cff66d36a%d|r online",
     ["Pruttelyden kunne ikke afspilles. Har du genstartet spillet helt efter opdateringen? /reload er ikke nok til nye lydfiler."] = "The fart sound could not play. Did you fully restart the game after updating? /reload is not enough for new sound files.",
     ["Prutter mod dig: "] = "Farts at you: ",
     ["Rolig nu. Du kan prutte igen om %d sek."] = "Easy now. You can fart again in %d sec.",

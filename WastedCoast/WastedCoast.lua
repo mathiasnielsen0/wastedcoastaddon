@@ -75,6 +75,9 @@ local addonName, ns = ...
 --             pinligste død, loot- og need-goblin, nolifer, ding-maskine, dueller, rares, stomi, prutter, udødelig).
 --             Pokal på kortet i en uge, toast, nyhed, Sjov > Ugens pokaler og et pokalskab. XW = egen
 --             spilletid og levels i ugen
+--   * v0.26.0: nyt udseende på bande-baren: et ikon pr. nyhedstype, tiden i sin egen kolonne, dæmpede
+--             udsagnsord med navne og dræbere fremhævet, "Prut" ved musen over et dødsfald, level på en
+--             mørk plade, "N online" i toppen og en streg mellem venner og nyheder
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)

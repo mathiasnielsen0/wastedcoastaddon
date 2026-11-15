@@ -78,7 +78,7 @@ check(items[1].text:find("Mob1", 1, true) and items[100].text:find("Mob100", 1, 
 check(items[100].t < NOW - 86400, "også nyheder ældre end et døgn")
 
 ns.RefreshUI()
-check(panel.rows[1].fs.text_:find("Mob1 ", 1, true), "øverste linje er den nyeste")
+check(panel.rows[1].fs.text_:find("Mob1|r", 1, true), "øverste linje er den nyeste")
 check(panel.rows[1].fs.text_:find("(16m)", 1, true), "med tiden siden")
 check(panel.count.text_ == "100", "antallet står i hjørnet")
 check(panel.thumb.shown and panel.track.shown, "rullebjælken vises, når der er mere end der kan ses")
@@ -86,7 +86,7 @@ check(panel.thumb.shown and panel.track.shown, "rullebjælken vises, når der er
 -- Scroll
 local wheel = panel.scripts.OnMouseWheel
 wheel(panel, -1)
-check(panel.offset == 2 and panel.rows[1].fs.text_:find("Mob3 ", 1, true), "scroll ned to linjer ad gangen")
+check(panel.offset == 2 and panel.rows[1].fs.text_:find("Mob3|r", 1, true), "scroll ned to linjer ad gangen")
 wheel(panel, 1)
 check(panel.offset == 0, "og op igen")
 wheel(panel, 5)
@@ -94,7 +94,7 @@ check(panel.offset == 0, "kan ikke scrolle over toppen")
 for _ = 1, 100 do wheel(panel, -1) end
 check(panel.offset == 100 - panel.nRows, "kan ikke scrolle forbi bunden: " .. panel.offset)
 local last = panel.rows[panel.nRows]
-check(last.shown and last.fs.text_:find("Mob100 ", 1, true), "nederst står den 100. nyhed")
+check(last.shown and last.fs.text_:find("Mob100|r", 1, true), "nederst står den 100. nyhed")
 wheel(panel, 100)
 
 -- PanelLines direkte
