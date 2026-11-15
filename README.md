@@ -793,5 +793,8 @@ Når `## Version:` i `WastedCoast/WastedCoast.toc` ændres og lander på `main`,
 GitHub Actions addonet med BigWigs-packageren, laver et tag (fx `v0.26.2`) og uploader
 zip-filen til CurseForge-projektet. Den bliver markeret til både Anniversary (20506) og
 WoW Forever (16001) ud fra `## Interface`-linjen. Er versionen allerede udgivet, sker der
-ingenting. Workflowet kan også køres manuelt under fanen Actions. Det kræver
-repo-secret `CF_API_KEY`. Opsætningen ligger i `.pkgmeta` og `.github/workflows/release.yml`.
+ingenting. Selve upload'en sker i en ekstra kørsel, som push-kørslen starter, fordi
+packageren ikke pakker ved et push til en branch med et tag på HEAD. Under Actions er der
+derfor to kørsler pr. version. Workflowet kan også køres manuelt under fanen Actions. Det
+kræver repo-secret `CF_API_KEY`. Opsætningen ligger i `.pkgmeta` og `.github/workflows/release.yml`.
+Nye filer skal godkendes af CurseForge, før de kan ses på projektsiden.
