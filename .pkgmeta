@@ -1,0 +1,14 @@
+# Opsætning til BigWigs-packageren (bruges af .github/workflows/release.yml).
+# Addonet ligger i undermappen WastedCoast/, så den flyttes op og bliver selve zip-indholdet.
+package-as: WastedCoast
+
+move-folders:
+  WastedCoast/WastedCoast: WastedCoast
+
+ignore:
+  - tests
+  - docs
+  - README.md
+  - install.bat
+  - .gitignore
+  - "*.md"

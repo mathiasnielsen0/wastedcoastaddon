@@ -1,0 +1,76 @@
+# Pakker addonet og lægger det op på CurseForge (projekt 1760154).
+#
+# Sådan udløses den:
+#   - Når "## Version:" i WastedCoast/WastedCoast.toc ændres og lander på main.
+#     Workflowet laver så et tag (fx v0.26.2) og uploader den version.
+#     Er versionen allerede udgivet (tagget findes), sker der ingenting.
+#   - Manuelt fra fanen Actions ("Run workflow"), fx hvis en upload fejlede.
+#     Findes tagget allerede, pakkes og uploades den version igen.
+#
+# Kræver repo-secret CF_API_KEY (CurseForge API-token).
+name: Release til CurseForge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "WastedCoast/WastedCoast.toc"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Læs version fra .toc
+        id: version
+        run: |
+          version=$(grep -m1 -i '^## Version:' WastedCoast/WastedCoast.toc | sed 's/^## [Vv]ersion:[[:space:]]*//' | tr -d '\r[:space:]')
+          if [ -z "$version" ]; then echo "Fandt ingen ## Version i .toc"; exit 1; fi
+          tag="v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "$tag er allerede udgivet, springer over."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Ny version: $tag"
+          fi
+
+      - name: Lav og push tag
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Wasted Coast Forever ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Brug det eksisterende tag (manuel genkørsel)
+        if: steps.version.outputs.exists == 'true' && github.event_name == 'workflow_dispatch'
+        run: git checkout "${{ steps.version.outputs.tag }}"
+
+      - name: Pak og upload til CurseForge
+        if: steps.version.outputs.exists == 'false' || github.event_name == 'workflow_dispatch'
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -p 1760154
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Gem zip som artifact
+        if: steps.version.outputs.exists == 'false' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WastedCoast-${{ steps.version.outputs.tag }}
+          path: .release/*.zip

@@ -705,3 +705,14 @@ python3 tests/test_haan.py WastedCoast forever      # det samme på WoW Forever
 python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-tid, vindere, XW, uddeling, kort og side
 python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever
 ```
+
+---
+
+## Udgivelse til CurseForge (automatisk)
+
+Når `## Version:` i `WastedCoast/WastedCoast.toc` ændres og lander på `main`, pakker
+GitHub Actions addonet med BigWigs-packageren, laver et tag (fx `v0.26.2`) og uploader
+zip-filen til CurseForge-projektet. Den bliver markeret til både Anniversary (20506) og
+WoW Forever (16001) ud fra `## Interface`-linjen. Er versionen allerede udgivet, sker der
+ingenting. Workflowet kan også køres manuelt under fanen Actions. Det kræver
+repo-secret `CF_API_KEY`. Opsætningen ligger i `.pkgmeta` og `.github/workflows/release.yml`.
