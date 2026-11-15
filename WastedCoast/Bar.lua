@@ -80,6 +80,7 @@ local KIND_ICON = {
     duel  = IC("Ability_Warrior_Challange"),
     stomi = IC("INV_Misc_Bag_10"),
     haan  = IC("Spell_Nature_Cyclone"),
+    gz    = IC("Spell_Holy_SurgeOfLight"),
     cup   = IC("INV_Misc_Coin_02"),
 }
 Bar.KIND_ICON = KIND_ICON
@@ -99,7 +100,8 @@ function Bar.Items(now, maxItems, maxAge)
     local function add(t, key, text, link, dead, kind, icon, x)
         if t and t > since and t <= now + 60 and text then
             out[#out + 1] = { t = t, key = key, text = text, link = link, dead = dead, kind = kind,
-                              icon = icon or KIND_ICON[kind], demo = x and x.demo or nil, q = x and x.q or nil }
+                              icon = icon or KIND_ICON[kind], demo = x and x.demo or nil, q = x and x.q or nil,
+                              ding = x and x.ding or nil }
         end
     end
 
@@ -132,7 +134,8 @@ function Bar.Items(now, maxItems, maxAge)
             end
             local text = (e.l >= C.MAX_LEVEL) and F("%s ramte MAX LEVEL %d!", Who(f, class), e.l)
                 or F("%s dingede %d", Who(f, class), e.l)
-            add(e.t, "l" .. f .. e.l, text, nil, nil, "level", nil, { demo = e.demo })
+            -- v0.27: ding = vennen, så linjen kan bruges til at sige tillykke (Gz.lua)
+            add(e.t, "l" .. f .. e.l, text, nil, nil, "level", nil, { demo = e.d or e.demo, ding = f })
         end
     end
 
@@ -202,6 +205,14 @@ function Bar.Items(now, maxItems, maxAge)
     for _, e in ipairs((db.haan and db.haan.log) or {}) do
         if C.ROSTER_SET[e.to] and C.ROSTER_SET[e.from] then
             add(e.t, "h" .. tostring(e.id), F("%s pruttede af %s", Who(e.from), Who(e.to)), nil, nil, "haan", nil, { demo = e.demo })
+        end
+    end
+
+    -- v0.27: gz
+    for _, e in ipairs((db.gz and db.gz.log) or {}) do
+        if C.ROSTER_SET[e.to] and C.ROSTER_SET[e.from] then
+            add(e.t, "g" .. tostring(e.id), F("%s sagde tillykke til %s med level %d", Who(e.from), Who(e.to), tonumber(e.l) or 0),
+                nil, nil, "gz", nil, { demo = e.demo })
         end
     end
 
@@ -301,6 +312,12 @@ function Bar.TooltipLines(s, now)
         local sent, recv = ns.Haan.Counts()
         local ps, pr = sent[s.name] or 0, recv[s.name] or 0
         if ps + pr > 0 then add(L("Prutter"), string.format(L("%d givet, %d fået"), ps, pr), 0.6, 0.6, 0.66) end
+    end
+    -- v0.27: gz givet og fået
+    if ns.Gz then
+        local sent, recv = ns.Gz.Counts()
+        local gs, gr = sent[s.name] or 0, recv[s.name] or 0
+        if gs + gr > 0 then add("Gz", string.format(L("%d givet, %d fået"), gs, gr), 0.6, 0.6, 0.66) end
     end
     if s.chars and s.chars > 1 then add(L("Karakterer"), tostring(s.chars), 0.6, 0.6, 0.66) end
     -- v0.25: ugens pokaler
@@ -584,6 +601,8 @@ local function RowEnter(self)
         GameTooltip:AddLine(C.FormatAgo(it.t), 0.6, 0.6, 0.66)
         if Bar.CanTaunt(it) then
             GameTooltip:AddLine(string.format(L("Klik: prut af %s"), Name(it.dead)), 0.85, 0.63, 0.36)
+        elseif Bar.CanGz(it) then
+            GameTooltip:AddLine(string.format(L("Klik: sig tillykke til %s"), Name(it.ding)), 0.4, 0.83, 0.42)
         end
     end
     GameTooltip:Show()
@@ -595,6 +614,12 @@ function Bar.CanTaunt(it)
     return ns.Haan.Can(it.dead) and true or false
 end
 
+-- v0.27: en linje om et level kan bruges til at sige tillykke, så længe det er friskt
+function Bar.CanGz(it)
+    if not (it and it.ding and ns.Gz) then return false end
+    return ns.Gz.Can(it.ding) and true or false
+end
+
 -- v0.26: tids-kolonnen. Over et dødsfald, man kan prutte af, bliver tiden til en "Prut"-knap,
 -- så man kan se, at linjen kan klikkes.
 local function SetRowTime(row, hover)
@@ -603,6 +628,13 @@ local function SetRowTime(row, hover)
     if hover and it and Bar.CanTaunt(it) then
         row.time:SetText(L("Prut"))
         row.time:SetTextColor(0.94, 0.77, 0.54)
+        row.chip:SetColorTexture(0.85, 0.63, 0.36, 0.22)
+        row.chip:Show()
+    elseif hover and it and Bar.CanGz(it) then
+        -- v0.27: over et frisk level bliver tiden til "Gz"
+        row.time:SetText("Gz")
+        row.time:SetTextColor(0.55, 0.9, 0.55)
+        row.chip:SetColorTexture(0.4, 0.83, 0.42, 0.22)
         row.chip:Show()
     else
         row.time:SetText(line and line.ago or "")
@@ -615,6 +647,11 @@ local function RowClick(self)
     local it = self.line and self.line.item
     if it and it.dead and not it.link and ns.HaanSend and not (IsShiftKeyDown and IsShiftKeyDown()) then
         if ns.Haan.FreshDeath(it.dead) then ns.HaanSend(it.dead) end
+        return
+    end
+    -- v0.27: klik på et frisk level siger tillykke
+    if it and it.ding and ns.GzSend and ns.Gz.FreshDing(it.ding) then
+        ns.GzSend(it.ding)
         return
     end
     if not (it and it.link and IsShiftKeyDown and IsShiftKeyDown() and ChatEdit_InsertLink) then return end
