@@ -16,11 +16,16 @@ local L = ns.L
 --   * Vil du ikke have prutter, slå "Prutter mod dig" fra i indstillingerne (eller
 --     /wc4ever prut fra): så kommer der ingen lyd og ingen popup, kun en linje i chatten.
 --   * Alle prutter tælles (flest givet og flest fået), står i nyhederne og i sladderen.
+--   * v0.30.1: prut-nægteren. Slår man prutter fra, er man en frygtsom prut-nægter og får i
+--     stedet en straffeprut hvert 5. minut, mens man er logget ind (lyd og popup). Vennerne
+--     kan se det: en linje i nyhederne, når man bliver prut-nægter, og i bande-barens tooltip.
 --
 -- Besked:
 --   XH;fra;til;dødsfald-id;nonce;tekst;lyd;tid
 -- db.haan = { log = { { id, from, to, death, line, snd, t } }, lastSent = GetTime-tid (kun i sessionen) }
--- db.settings.haan = false: ingen lyd eller popup, når nogen prutter af dig
+-- db.settings.haan = false: ingen lyd eller popup, når nogen prutter af dig (men en straffeprut hvert 5. min)
+--   XR;ven;1|0;siden;straffeprutter   (prut-nægter-status, sendes ved skift og ved synk)
+-- db.haan.refusers = { ven -> { on = true|nil, since, n } }, db.haan.penalty = { n, last }
 -- =============================================================================
 
 local C = ns.core
@@ -37,6 +42,7 @@ Haan.RECV_GAP = 10         -- modtageren: højst én prut pr. ven så ofte
 Haan.SOUNDS = 3            -- prut1.ogg ... prut3.ogg
 Haan.ICON = "Interface\\Icons\\Spell_Nature_Cyclone"
 local SOUND_DIR = "Interface\\AddOns\\WastedCoast\\sounds\\"
+Haan.PENALTY = 5 * 60      -- prut-nægtere: en straffeprut så ofte
 local LOG_MAX = 300
 local FRESH = 120          -- kun nye prutter giver lyd, popup og chat
 
@@ -57,6 +63,7 @@ local function DB()
     local db = WastedCoastDB
     db.haan = db.haan or {}
     db.haan.log = db.haan.log or {}
+    db.haan.refusers = db.haan.refusers or {}
     return db, db.haan
 end
 
@@ -285,6 +292,92 @@ function ns.HandleHaanMessage(t)
     Haan.Record(e)
 end
 
+-- =============================================================================
+-- Prut-nægteren (v0.30.1): slår man prutter fra, får man en straffeprut hvert 5. minut
+-- =============================================================================
+local PENALTY_LINES = ns.LT({
+    "Frygtsomme prut-nægtere får deres prut alligevel. Bare oftere.",
+    "Du nægtede at modtage prutter. Universet prutter nu af dig i stedet.",
+    "Straffeprut nr. {N}. Slå prutter til igen, så stopper det.",
+    "Prut-nægtere prutter selv. Det er loven.",
+    "En lille påmindelse om, at du gemmer dig for prutter.",
+    "Du kan løbe fra vennernes prutter, men ikke fra dine egne.",
+})
+Haan.PENALTY_LINES = PENALTY_LINES
+
+function Haan.IsRefuser(friend)
+    local db, h = DB()
+    if friend == db.me then return db.settings.haan == false end
+    local r = h.refusers[friend]
+    return (r and r.on) and r or nil
+end
+
+local function SendStatus()
+    local db, h = DB()
+    if not db.me then return end
+    local p = h.penalty or {}
+    C.Send(table.concat({ "XR", db.me, (db.settings.haan == false) and "1" or "0", tostring(p.since or 0), tostring(p.n or 0) }, ";"))
+end
+Haan.SendStatus = SendStatus
+
+-- Slår prutter mod dig til (true) eller fra (false)
+function ns.HaanSetReceive(on)
+    local db, h = DB()
+    local was = db.settings.haan ~= false
+    if on then db.settings.haan = nil else db.settings.haan = false end
+    if was and not on then
+        h.penalty = { since = time(), n = 0, last = GetTime() }
+        Print("|cffd9a05b" .. L("Prutter mod dig er slået fra. Frygtsomme prut-nægtere får en straffeprut hvert 5. minut i stedet. Velbekomme.") .. "|r")
+    elseif on and not was then
+        local n = h.penalty and h.penalty.n or 0
+        h.penalty = nil
+        Print("|cffd9a05b" .. string.format(L("Prutter mod dig er slået til igen. Du slap med %d straffeprutter."), n) .. "|r")
+    end
+    if was ~= (on and true or false) then SendStatus() end
+    if ns.Bar and ns.Bar.MarkDirty then ns.Bar.MarkDirty() end
+end
+
+-- Kaldes hvert minut: er det tid til en straffeprut?
+function Haan.PenaltyTick()
+    local db, h = DB()
+    if db.settings.haan ~= false or not db.me then return false end
+    h.penalty = h.penalty or { since = time(), n = 0 }
+    local p = h.penalty
+    -- Ved login starter uret forfra (GetTime nulstilles ikke mellem sessioner, men det er ligegyldigt her)
+    if not p.last or p.last > GetTime() then p.last = GetTime() return false end
+    if GetTime() - p.last < Haan.PENALTY then return false end
+    p.last = GetTime()
+    p.n = (p.n or 0) + 1
+    Haan.Play(math.random(Haan.SOUNDS), db.me)
+    local text = PENALTY_LINES[math.random(#PENALTY_LINES)]:gsub("{N}", tostring(p.n))
+    ns.Toast({ kind = "haan", head = L("STRAFFEPRUT"), title = L("Frygtsom prut-nægter"), text = text,
+               icon = Haan.ICON, dur = 5, force = true })
+    Print("|cffd9a05b" .. L("Straffeprut!") .. "|r " .. text)
+    -- Tælleren sendes med jævne mellemrum, ikke for hver prut
+    if p.n % 3 == 1 then SendStatus() end
+    return true
+end
+
+local function OnStatus(t)
+    local db, h = DB()
+    local friend, on, since, n = t[2], t[3], tonumber(t[4]), tonumber(t[5])
+    if not ROSTER_SET[friend] or friend == db.me or (on ~= "1" and on ~= "0") then return end
+    since = since and math.min(since, time()) or time()
+    local r = h.refusers[friend]
+    if on == "1" then
+        local fresh = not (r and r.on)
+        h.refusers[friend] = { on = true, since = (r and r.on and r.since) or since, n = math.max(n or 0, (r and r.on and r.n) or 0) }
+        if fresh and db.settings.announce and math.abs(time() - since) < FRESH then
+            Print("|cffd9a05b" .. string.format(L("%s har slået prutter fra og er nu en frygtsom prut-nægter. Straffeprut hvert 5. minut."), Name(friend)) .. "|r")
+        end
+    elseif r then
+        h.refusers[friend] = { since = r.since, n = r.n, off = time() }
+    end
+    if ns.Bar and ns.Bar.MarkDirty then ns.Bar.MarkDirty() end
+    if ns.RefreshUI then ns.RefreshUI() end
+end
+ns.HandleHaanStatus = OnStatus
+
 -- Ved synk: de seneste prutter, du har givet (dubletter filtreres fra hos modtageren)
 function Haan.SendLog()
     local db, h = DB()
@@ -317,12 +410,15 @@ function Haan.ClearDemo()
     for i = #h.log, 1, -1 do
         if h.log[i].demo then table.remove(h.log, i) end
     end
+    for f, r in pairs(h.refusers) do if r.demo then h.refusers[f] = nil end end
 end
 
 function Haan.Reset()
     local _, h = DB()
     wipe(h.log)
+    wipe(h.refusers)
     h.lastSent = nil
+    h.penalty = nil
 end
 
 local function FindFriend(arg)
@@ -348,7 +444,7 @@ function ns.HaanSlash(cmd, arg)
         ns.Toast({ kind = "haan", head = L("PRUT"), title = string.format(L("%s prutter af dig!"), Name(db.me) or "?"),
                    text = Haan.Text(math.random(#LINES), Name(db.me) or "?", L("dig")), icon = Haan.ICON, dur = 5, force = true })
     elseif arg == "fra" or arg == "off" or arg == "til" or arg == "on" then
-        if arg == "til" or arg == "on" then db.settings.haan = nil else db.settings.haan = false end
+        ns.HaanSetReceive(arg == "til" or arg == "on")
         Print(L("Prutter mod dig: ") .. ((db.settings.haan ~= false) and L("til") or L("fra")))
     elseif arg == "stats" or arg == "tal" then
         Print(Haan.Summary())
@@ -366,3 +462,15 @@ function ns.HaanSlash(cmd, arg)
     end
     return true
 end
+
+-- =============================================================================
+-- Events
+-- =============================================================================
+local frame = CreateFrame("Frame")
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:SetScript("OnEvent", function()
+    if not WastedCoastDB then return end
+    local _, h = DB()
+    if h.penalty then h.penalty.last = GetTime() end
+    C_Timer.NewTicker(60, Haan.PenaltyTick)
+end)

@@ -647,6 +647,10 @@ function ns.HandlePrankMessage(kind, t)
         -- v0.24: prutter (Haan.lua)
         if ns.HandleHaanMessage then ns.HandleHaanMessage(t) end
 
+    elseif kind == "XR" then
+        -- v0.30.1: prut-nægtere (Haan.lua)
+        if ns.HandleHaanStatus then ns.HandleHaanStatus(t) end
+
     elseif kind == "XG" then
         -- v0.27: gz (Gz.lua)
         if ns.HandleGzMessage then ns.HandleGzMessage(t) end
@@ -710,6 +714,8 @@ function ns.SendPrankExtras(light)
     if ns.Hjemmesko then ns.Hjemmesko.SendSync() end
     -- v0.29: nåede gruppe-milepæle (den lette synk kun de friske)
     if ns.Milestones then ns.Milestones.SendLog(light) end
+    -- v0.30.1: er du prut-nægter?
+    if ns.Haan and ns.Haan.SendStatus then ns.Haan.SendStatus() end
     -- Den lette synk (hvert 10. minut) springer historikken over: den sendes, når den sker
     if light then return end
     if ns.SendDuels then ns.SendDuels() end

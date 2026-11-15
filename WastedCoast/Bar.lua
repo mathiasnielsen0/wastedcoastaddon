@@ -211,6 +211,16 @@ function Bar.Items(now, maxItems, maxAge)
             add(e.t, "h" .. tostring(e.id), F("%s pruttede af %s", Who(e.from), Who(e.to)), nil, nil, "haan", nil, { demo = e.demo })
         end
     end
+    -- v0.30.1: prut-nægtere
+    for f, r in pairs((db.haan and db.haan.refusers) or {}) do
+        if C.ROSTER_SET[f] and r.on and r.since then
+            add(r.since, "hr" .. f .. r.since, F("%s blev frygtsom prut-nægter", Who(f)), nil, nil, "haan", nil, { demo = r.demo })
+        end
+    end
+    local myP = db.haan and db.settings and db.settings.haan == false and db.haan.penalty
+    if myP and myP.since and db.me then
+        add(myP.since, "hr" .. db.me .. myP.since, F("%s blev frygtsom prut-nægter", Who(db.me)), nil, nil, "haan")
+    end
 
     -- v0.27: gz
     for _, e in ipairs((db.gz and db.gz.log) or {}) do
@@ -335,6 +345,12 @@ function Bar.TooltipLines(s, now)
         local sent, recv = ns.Haan.Counts()
         local ps, pr = sent[s.name] or 0, recv[s.name] or 0
         if ps + pr > 0 then add(L("Prutter"), string.format(L("%d givet, %d fået"), ps, pr), 0.6, 0.6, 0.66) end
+        -- v0.30.1: prut-nægter
+        local r = ns.Haan.IsRefuser(s.name)
+        if r then
+            local n = (s.name == DB().me) and ((DB().haan.penalty or {}).n or 0) or (type(r) == "table" and r.n or 0)
+            add(string.format(L("Frygtsom prut-nægter (%d straffeprutter)"), n), nil, 0.85, 0.63, 0.36)
+        end
     end
     -- v0.27: gz givet og fået
     if ns.Gz then

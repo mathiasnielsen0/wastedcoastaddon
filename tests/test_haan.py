@@ -297,7 +297,61 @@ for _, e in ipairs(db.haan.log) do if e.demo then demo = demo + 1 end end
 check(demo == 2, "demo-data")
 SlashCmdList["WASTEDCOAST"]("demo slut")
 check(#db.haan.log == n0, "demo fjernes igen")
+-- -----------------------------------------------------------------------------
+-- v0.30.1: prut-nægteren får en straffeprut hvert 5. minut
+-- -----------------------------------------------------------------------------
+local tick
+for _, tk in ipairs(TICKERS) do if tk.d == 60 and tk.f == Haan.PenaltyTick then tick = tk.f end end
+check(tick ~= nil, "straffeprut-uret kører hvert minut")
+check(Haan.PenaltyTick() == false, "ingen straffeprut, når prutter er slået til")
+SENT = {}
+PRINTS = {}
+SlashCmdList["WASTEDCOAST"]("prut fra")
+check(printed("prut-nægter"), "advarsel, når man slår prutter fra")
+local st = sentWith("XR;Mathias;1;")
+check(#st == 1, "vennerne får at vide, at du er prut-nægter")
+PLAYED = {}
+before = #toasts
+CLOCK = CLOCK + 60
+check(Haan.PenaltyTick() == false and #PLAYED == 0, "ingen straffeprut efter 1 minut")
+CLOCK = CLOCK + Haan.PENALTY
+check(Haan.PenaltyTick() == true, "straffeprut efter 5 minutter")
+check(#PLAYED == 1 and lastToast("haan").title == "Frygtsom prut-nægter", "lyd og popup til prut-nægteren")
+check(Haan.PenaltyTick() == false, "ikke to i træk")
+CLOCK = CLOCK + Haan.PENALTY
+check(Haan.PenaltyTick() == true and db.haan.penalty.n == 2, "og igen 5 minutter senere")
+local mine
+for _, it in ipairs(ns.Bar.Items(nil, 100)) do if it.text:find("prut-nægter", 1, true) and it.text:find("Mathias", 1, true) then mine = it end end
+check(mine ~= nil, "nyhed: du blev prut-nægter")
+for _, st2 in ipairs(ns.core.BuildStats()) do if st2.name == "Mathias" then s = st2 end end
+local found2
+for _, l in ipairs(ns.Bar.TooltipLines(s)) do if tostring(l[1]):find("2 straffeprutter", 1, true) then found2 = true end end
+check(found2, "tooltip viser dine straffeprutter")
+SENT = {}
+PRINTS = {}
+SlashCmdList["WASTEDCOAST"]("prut til")
+check(printed("2 straffeprutter") and #sentWith("XR;Mathias;0;") == 1, "slå til igen: stop og besked til vennerne")
+CLOCK = CLOCK + Haan.PENALTY
+check(Haan.PenaltyTick() == false, "ingen straffeprut efter, man har slået prutter til igen")
+
+-- En vens status
+PRINTS = {}
+Fire("CHAT_MSG_ADDON", "WCOAST", "XR;Nick;1;" .. NOW .. ";4", "GUILD", "Nickchar")
+check(Haan.IsRefuser("Nick") and printed("Nick har slået prutter fra"), "Nick er prut-nægter")
+Fire("CHAT_MSG_ADDON", "WCOAST", "XR;Nick;1;" .. NOW .. ";5", "GUILD", "Nickchar")
+check(db.haan.refusers.Nick.n == 5, "tælleren opdateres")
+for _, st2 in ipairs(ns.core.BuildStats()) do if st2.name == "Nick" then s = st2 end end
+found2 = nil
+for _, l in ipairs(ns.Bar.TooltipLines(s)) do if tostring(l[1]):find("5 straffeprutter", 1, true) then found2 = true end end
+check(found2, "Nicks tooltip viser straffeprutterne")
+Fire("CHAT_MSG_ADDON", "WCOAST", "XR;Nick;0;" .. NOW .. ";5", "GUILD", "Nickchar")
+check(not Haan.IsRefuser("Nick"), "Nick slog prutter til igen")
+Fire("CHAT_MSG_ADDON", "WCOAST", "XR;Sigurd;1;1;1", "GUILD", "Sigurd")
+Fire("CHAT_MSG_ADDON", "WCOAST", "XR;Jeppe;x", "GUILD", "Jepchar")
+Fire("CHAT_MSG_ADDON", "WCOAST", "XR;Mathias;1;1;1", "GUILD", "Mathiasx")
+check(not Haan.IsRefuser("Sigurd") and not Haan.IsRefuser("Jeppe") and not Haan.IsRefuser("Mathias"), "fremmede og ødelagte statusbeskeder ignoreres")
 return PASSES
+
 '''
 
 passes = lua.execute(TESTS, ns)

@@ -93,6 +93,8 @@ local addonName, ns = ...
 --   * v0.30.0: Wasted Coast Tidende (Avis.lua): dagens sladder som en avis, der åbner ved hvert login og
 --             opsummerer alt, der er sket i dag. Forside, rubrikker, Kapløbet, Skammens hat, horoskop og
 --             annoncer. Hver historie har en betingelse og en vægt. Sjov > Avisen og /wc4ever avis
+--   * v0.30.1: prut-nægteren (Haan.lua): slår man prutter mod sig fra, får man en straffeprut hvert 5. minut.
+--             XR-beskeden fortæller vennerne, hvem der er prut-nægter (nyheder og bande-barens tooltip)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -6700,8 +6702,8 @@ do
 
         -- v0.24: prutter (Haan.lua)
         do
-            local cb = MakeCheck(p, ns.L("Prutter mod dig"), ns.L("Lyd og popup, når en ven prutter af dig efter et dødsfald. Slået fra: kun en linje i chatten."),
-                function() return db.settings.haan ~= false end, function(v) if v then db.settings.haan = nil else db.settings.haan = false end end)
+            local cb = MakeCheck(p, ns.L("Prutter mod dig"), ns.L("Lyd og popup, når en ven prutter af dig efter et dødsfald. Slået fra: du er en frygtsom prut-nægter og får en straffeprut hvert 5. minut."),
+                function() return db.settings.haan ~= false end, function(v) if ns.HaanSetReceive then ns.HaanSetReceive(v) end end)
             cb:SetPoint("TOPLEFT", p, "TOPLEFT", 300, -60 - (#checks + 1) * 44)
             cb.tip:SetWidth(250)
             p.checks[#p.checks + 1] = cb

@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.30.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.30.1. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -387,7 +387,10 @@ laver din karakter også spillets egen `/fart` på vennen.
   *"Mathias pruttede af Nick"*, sladderen hænger den værste prutter ud, og
   `/wc4ever prut tal` viser, hvem der har givet og fået flest.
 - Vil du være fri, så slå **Prutter mod dig** fra i indstillingerne (eller
-  `/wc4ever prut fra`). Så kommer der ingen lyd og ingen popup, kun en linje i chatten.
+  `/wc4ever prut fra`). Så kommer der ingen lyd og ingen popup fra vennerne, kun en linje
+  i chatten. Men så er du en **frygtsom prut-nægter**: du får en **straffeprut hvert 5.
+  minut**, så længe du er logget ind, og vennerne kan se det i nyhederne og i
+  bande-barens tooltip. Slå prutter til igen, så stopper det.
 - Lyden er en af tre pruttere, der følger med i `sounds` (`prut1-3.ogg`). Vil du have din
   egen, så skriv `haan = { "minprut.ogg" }` i `Sounds.lua`. `/wc4ever prut test` afspiller
   en prut og viser popuppen kun hos dig.
