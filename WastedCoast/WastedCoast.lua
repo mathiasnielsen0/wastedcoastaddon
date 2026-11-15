@@ -77,7 +77,8 @@ local addonName, ns = ...
 --             spilletid og levels i ugen
 --   * v0.26.0: nyt udseende på bande-baren: et ikon pr. nyhedstype, tiden i sin egen kolonne, dæmpede
 --             udsagnsord med navne og dræbere fremhævet, "Prut" ved musen over et dødsfald, level på en
---             mørk plade, "N online" i toppen og en streg mellem venner og nyheder
+--             mørk plade, "N online" i toppen og en streg mellem venner og nyheder. Pilen i toppen folder
+--             nyhederne ind (kun den nyeste); vigtige nyheder folder baren ud i 15 sek. (db.settings.barFolded)
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)

@@ -25,6 +25,9 @@ local RING = 2                       -- XP-ringens tykkelse
 local TICK_H = 16                    -- v0.26: lidt mere luft mellem nyhederne
 local GLYPH = 12                     -- ikonet foran hver nyhed
 local TIME_W = 30                    -- tids-kolonnen til højre
+local PEEK = 15                      -- v0.26: sek. en foldet bar står foldet ud ved en vigtig nyhed
+local GRACE = 30                     -- intet folder ud de første sek. efter login (synken henter gamle nyheder)
+local FRESH = 120                    -- kun nyheder, der højst er så gamle, folder baren ud
 local ROWS = 5                       -- v0.21.1: de seneste 5 nyheder står fast under ikonerne
 local MIN_W = 300                    -- baren er mindst så bred, når nyhederne er med
 local MAX_ITEMS = 12
@@ -92,11 +95,11 @@ function Bar.Items(now, maxItems, maxAge)
     maxItems = maxItems or MAX_ITEMS
     local since = now - (maxAge or MAX_AGE)
     local out = {}
-    -- v0.26: kind = nyhedens type, icon = ikonet foran linjen
-    local function add(t, key, text, link, dead, kind, icon)
+    -- v0.26: kind = nyhedens type, icon = ikonet foran linjen, x = { demo, q } (demo-data, lootets kvalitet)
+    local function add(t, key, text, link, dead, kind, icon, x)
         if t and t > since and t <= now + 60 and text then
             out[#out + 1] = { t = t, key = key, text = text, link = link, dead = dead, kind = kind,
-                              icon = icon or KIND_ICON[kind] }
+                              icon = icon or KIND_ICON[kind], demo = x and x.demo or nil, q = x and x.q or nil }
         end
     end
 
@@ -115,7 +118,8 @@ function Bar.Items(now, maxItems, maxAge)
                 text = F("%s døde til %s", Who(f, ev.class), killer)
             end
             -- v0.24: dead = vennen, så linjen kan bruges til at prutte (Haan.lua)
-            add(ev.time, "d" .. tostring(ev.id or ev.time), text, nil, f, ev.pvp == true and "gank" or "death")
+            add(ev.time, "d" .. tostring(ev.id or ev.time), text, nil, f, ev.pvp == true and "gank" or "death", nil,
+                { demo = ev.demo })
         end
     end
 
@@ -128,7 +132,7 @@ function Bar.Items(now, maxItems, maxAge)
             end
             local text = (e.l >= C.MAX_LEVEL) and F("%s ramte MAX LEVEL %d!", Who(f, class), e.l)
                 or F("%s dingede %d", Who(f, class), e.l)
-            add(e.t, "l" .. f .. e.l, text, nil, nil, "level")
+            add(e.t, "l" .. f .. e.l, text, nil, nil, "level", nil, { demo = e.demo })
         end
     end
 
@@ -143,7 +147,7 @@ function Bar.Items(now, maxItems, maxAge)
             local id = tonumber(ev.item:match("^item:(%d+)"))
             local icon = id and ((C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id)) or (GetItemIcon and GetItemIcon(id)))
             add(ev.time, "o" .. tostring(ev.id or ev.time), F("%s fik %s", Who(f, ev.class), C.LootLink(ev)) .. tail, ev.item,
-                nil, "loot", icon)
+                nil, "loot", icon, { demo = ev.demo, q = tonumber(ev.quality) })
         end
     end
 
@@ -190,14 +194,14 @@ function Bar.Items(now, maxItems, maxAge)
     for _, e in ipairs((db.stomi and db.stomi.log) or {}) do
         if e.r == "y" and C.ROSTER_SET[e.to] and C.ROSTER_SET[e.from] then
             add(e.t, "s" .. tostring(e.id), F("%s fik |cffd9b38cstomi|r af %s", Who(e.to), Who(e.from)), nil, nil, "stomi",
-                ns.Stomi and ns.Stomi.ICON)
+                ns.Stomi and ns.Stomi.ICON, { demo = e.demo })
         end
     end
 
     -- v0.24: prutter
     for _, e in ipairs((db.haan and db.haan.log) or {}) do
         if C.ROSTER_SET[e.to] and C.ROSTER_SET[e.from] then
-            add(e.t, "h" .. tostring(e.id), F("%s pruttede af %s", Who(e.from), Who(e.to)), nil, nil, "haan")
+            add(e.t, "h" .. tostring(e.id), F("%s pruttede af %s", Who(e.from), Who(e.to)), nil, nil, "haan", nil, { demo = e.demo })
         end
     end
 
@@ -216,12 +220,13 @@ end
 
 -- Nyhedslinjerne: { text, ago, icon, item } pr. linje (højst ROWS). En stille dag giver én pladsholder.
 -- v0.26: tiden står i sin egen højrestillede kolonne og ikonet i sin egen kolonne til venstre.
-function Bar.NewsLines(items)
+function Bar.NewsLines(items, rows)
+    rows = rows or ROWS
     if #items == 0 then
         return { { text = "|cff888888" .. L("Stille på kysten. Nogen må gøre noget dumt snart.") .. "|r" } }
     end
     local out = {}
-    for i = 1, math.min(ROWS, #items) do
+    for i = 1, math.min(rows, #items) do
         local it = items[i]
         out[i] = { text = it.text, ago = Ago(it.t), icon = it.icon, item = it }
     end
@@ -493,6 +498,10 @@ local function Layout()
     -- v0.26: med nyhederne står "N online" som tekst til højre og en streg skiller venner fra nyheder.
     -- Uden nyhederne er baren for smal, så tallet står på logoet som før.
     bar.onlineText:SetShown(tickerOn)
+    bar.fold:SetShown(tickerOn)
+    -- Pilen peger derhen, baren folder: op = fold ind, ned = fold ud
+    bar.fold.tex:SetTexture(S().barFolded and "Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up"
+        or "Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Up")
     bar.logoText:SetShown(not tickerOn)
     bar.divider:SetShown(tickerOn)
     local i = 0
@@ -653,9 +662,58 @@ local function MakeRow(i)
     return row
 end
 
+-- =============================================================================
+-- v0.26: foldet ind/ud. Pilen øverst til højre skifter, og valget huskes (db.settings.barFolded = true
+-- betyder foldet ind; nil = foldet ud, som alle starter med). Foldet ind står kun den nyeste nyhed,
+-- men en vigtig nyhed folder baren ud i PEEK sek.
+-- =============================================================================
+local HOT = { death = true, gank = true, level = true, ach = true, cup = true, stomi = true, haan = true }
+-- Tilstanden: set = nyheder, vi har set (key -> true), peekUntil = hvornår en udfoldning slutter,
+-- readyAt = hvornår login-pausen er forbi
+local fs = { seen = false, peekUntil = false, readyAt = 0 }
+Bar.foldState = fs
+
+-- Er nyheden vigtig nok til at folde baren ud? Loot kun fra epic og op. Demo-data aldrig.
+function Bar.IsHot(it)
+    if not it or it.demo then return false end
+    if it.kind == "loot" then return (it.q or 0) >= 4 end
+    return HOT[it.kind] == true
+end
+
+local function Clock() return GetTime and GetTime() or time() end
+
+function Bar.Peeking()
+    return bar ~= nil and fs.peekUntil and Clock() < fs.peekUntil or false
+end
+
+-- Hvor mange nyheder står der lige nu
+function Bar.RowCount()
+    if not S().barFolded or Bar.Peeking() then return ROWS end
+    return 1
+end
+
+-- Nye vigtige nyheder (ikke set før, friske, ikke lige efter login) folder baren ud
+function Bar.CheckNew(items, now)
+    if not bar then return end
+    now = now or time()
+    local first = not fs.seen
+    fs.seen = fs.seen or {}
+    local hot = false
+    local ready = Clock() >= (fs.readyAt or 0)
+    for _, it in ipairs(items) do
+        if not fs.seen[it.key] then
+            fs.seen[it.key] = true
+            if not first and ready and it.t >= now - FRESH and Bar.IsHot(it) then hot = true end
+        end
+    end
+    if hot then fs.peekUntil = Clock() + PEEK end
+end
+
 function Bar.UpdateTicker()
     if not bar then return end
-    local lines = Bar.NewsLines(Bar.Items())
+    local items = Bar.Items()
+    Bar.CheckNew(items)
+    local lines = Bar.NewsLines(items, Bar.RowCount())
     for i = #bar.rows + 1, #lines do bar.rows[i] = MakeRow(i) end
     for i, row in ipairs(bar.rows) do
         local line = lines[i]
@@ -718,9 +776,34 @@ function ns.BuildBar()
     end)
     logo:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
 
+    -- v0.26: pilen øverst til højre folder nyhederne ind og ud
+    local fold = CreateFrame("Button", nil, bar)
+    fold:SetSize(16, 16)
+    fold:SetPoint("TOPRIGHT", bar, "TOPRIGHT", -PAD, -PAD - RING - 4)
+    fold:RegisterForDrag("LeftButton")
+    fold.tex = fold:CreateTexture(nil, "ARTWORK")
+    fold.tex:SetAllPoints(fold)
+    local fhl = fold:CreateTexture(nil, "HIGHLIGHT")
+    fhl:SetAllPoints(fold)
+    fhl:SetColorTexture(1, 0.85, 0.45, 0.15)
+    fold:SetScript("OnDragStart", StartMove)
+    fold:SetScript("OnDragStop", StopMove)
+    fold:SetScript("OnClick", function() ns.SetBarFolded(not S().barFolded) end)
+    fold:SetScript("OnEnter", function(self)
+        if bar.moving or not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:AddLine(S().barFolded and L("Klik: fold nyhederne ud") or L("Klik: fold nyhederne ind"), 1, 1, 1)
+        if not S().barFolded then
+            GameTooltip:AddLine(L("Foldet ind står kun den nyeste. Vigtige nyheder folder den ud et øjeblik."), 0.7, 0.7, 0.76, true)
+        end
+        GameTooltip:Show()
+    end)
+    fold:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    bar.fold = fold
+
     -- v0.26: "N online" til højre i toppen og en tynd streg mellem venner og nyheder
     bar.onlineText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    bar.onlineText:SetPoint("TOPRIGHT", bar, "TOPRIGHT", -PAD - 2, -PAD - RING - 6)
+    bar.onlineText:SetPoint("RIGHT", fold, "LEFT", -4, 0)
     bar.onlineText:SetJustifyH("RIGHT")
     bar.onlineText:SetTextColor(TEXT_DIM[1], TEXT_DIM[2], TEXT_DIM[3])
     bar.divider = bar:CreateTexture(nil, "ARTWORK")
@@ -734,6 +817,7 @@ function ns.BuildBar()
     bar.news:SetPoint("TOPLEFT", bar, "TOPLEFT", PAD, -(PAD + ICON + RING * 2 + 7))
     bar.rows = {}
 
+    fs.readyAt = Clock() + GRACE
     Place()
     ns.barFrame = bar
     bar:SetShown(S().bar ~= false)
@@ -897,6 +981,16 @@ function ns.SetBarTicker(v)
     if bar then Layout() end
 end
 
+-- v0.26: fold nyhederne ind (kun den nyeste) eller ud (alle 5). Et klik, mens baren står foldet
+-- ud af sig selv, låser den åben.
+function ns.SetBarFolded(v)
+    S().barFolded = v and true or nil
+    if bar then
+        fs.peekUntil = false
+        Bar.Refresh()
+    end
+end
+
 function ns.BarSlash(arg)
     arg = arg or ""
     local P = C.Print
@@ -906,6 +1000,9 @@ function ns.BarSlash(arg)
     elseif arg == "ticker" or arg == "nyheder" or arg == "news" then
         ns.SetBarTicker(S().barTicker == false)
         P(L("Nyhederne på baren er ") .. ((S().barTicker ~= false) and L("slået til") or L("slået fra")) .. ".")
+    elseif arg == "fold" then
+        ns.SetBarFolded(not S().barFolded)
+        P(S().barFolded and L("Nyhederne på baren er foldet ind.") or L("Nyhederne på baren er foldet ud."))
     elseif arg == "nulstil" or arg == "reset" then
         S().barPos = nil
         if bar then Place() end
@@ -933,6 +1030,11 @@ do
     local function Tick()
         n = n + 1
         if not bar or not bar:IsShown() then return end
+        -- v0.26: en foldet bar, der stod foldet ud, folder ind igen
+        if fs.peekUntil and Clock() >= fs.peekUntil then
+            fs.peekUntil = false
+            dirty = true
+        end
         -- Online-status ændrer sig også, uden at der kommer nye data (en ven holder op med at svare)
         if dirty or n % 15 == 0 then
             dirty = false

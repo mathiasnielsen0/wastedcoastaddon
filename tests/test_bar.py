@@ -163,6 +163,48 @@ check(kinds.level and kinds.death and kinds.loot and kinds.ach and kinds.rare an
 check(bar.onlineText.shown and bar.onlineText.text_:find("online") and bar.divider.shown and not bar.logoText.shown,
       "med nyheder: online-tekst og skillelinje")
 
+-- v0.26: pilen folder nyhederne ind og ud, og en vigtig nyhed folder en foldet bar ud i 15 sek.
+local function shownRows() local n = 0 for _, r in ipairs(bar.rows) do if r.shown then n = n + 1 end end return n end
+check(bar.fold.shown and db.settings.barFolded == nil and shownRows() == 5, "alle starter foldet ud med 5 nyheder og en pil")
+bar.fold.scripts.OnClick(bar.fold)
+check(db.settings.barFolded == true and shownRows() == 1, "pilen folder ind: kun den nyeste nyhed")
+table.insert(db.loot, { id = "fold-l1", char = "Nickchar", class = "MAGE", item = "item:2:0", name = "Groen Ting", quality = 2, time = NOW - 10 })
+Bar.Refresh()
+check(shownRows() == 1 and not Bar.Peeking(), "almindelig loot folder ikke baren ud")
+table.insert(db.events, { id = "fold-d0", name = "Nickchar", friend = "Nick", class = "MAGE", killer = "Demo", time = NOW - 10, demo = true })
+Bar.Refresh()
+check(shownRows() == 1, "demo-data folder ikke baren ud")
+table.insert(db.events, { id = "fold-d1", name = "Nickchar", friend = "Nick", class = "MAGE", killer = "Kobold", time = NOW - 10 })
+Bar.Refresh()
+check(Bar.Peeking() and shownRows() == 5, "et frisk dødsfald folder en foldet bar ud")
+CLOCK = CLOCK + 10
+Bar.Tick()
+check(shownRows() == 5, "stadig foldet ud efter 10 sek.")
+CLOCK = CLOCK + 6
+Bar.Tick()
+check(not Bar.Peeking() and shownRows() == 1, "efter 15 sek. folder den ind igen")
+Bar.foldState.readyAt = CLOCK + 30
+table.insert(db.events, { id = "fold-d2", name = "Nickchar", friend = "Nick", class = "MAGE", killer = "Kobold", time = NOW - 10 })
+Bar.Refresh()
+check(not Bar.Peeking(), "lige efter login folder intet ud")
+Bar.foldState.readyAt = 0
+table.insert(db.events, { id = "fold-d3", name = "Nickchar", friend = "Nick", class = "MAGE", killer = "Kobold", time = NOW - 3600 })
+Bar.Refresh()
+check(not Bar.Peeking(), "en gammel nyhed (fx fra synk) folder ikke ud")
+table.insert(db.loot, { id = "fold-l2", char = "Nickchar", class = "MAGE", item = "item:3:0", name = "Epic Ting", quality = 4, time = NOW - 10 })
+Bar.Refresh()
+check(Bar.Peeking(), "epic loot folder baren ud")
+bar.fold.scripts.OnClick(bar.fold)
+check(db.settings.barFolded == nil and not Bar.Peeking(), "klik på pilen under udfoldningen låser den åben")
+CLOCK = CLOCK + 20
+Bar.Tick()
+check(shownRows() == 5, "og den bliver åben")
+local slashFold = SlashCmdList["WASTEDCOAST"]
+slashFold("bar fold")
+check(db.settings.barFolded == true and shownRows() == 1 and lastPrint():find("foldet ind"), "/wc4ever bar fold folder ind")
+slashFold("bar fold")
+check(db.settings.barFolded == nil and shownRows() == 5 and lastPrint():find("foldet ud"), "og ud igen")
+
 -- Skammens hat: Nick døde sidst
 Bar.Refresh()
 check(icon("Nick").hat.shown and not icon("Mathias").hat.shown, "Skammens hat sidder på den, der døde sidst")

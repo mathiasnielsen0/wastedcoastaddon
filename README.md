@@ -153,10 +153,14 @@ hovedvinduet er lukket:
   over et frisk dødsfald viser **Prut**, og et klik prutter af vennen.
 - WC4ever-logoet til venstre åbner hovedvinduet. Til højre står, hvor mange venner der er online
   (uden nyhederne står tallet ved logoet).
+- **Pilen øverst til højre** folder nyhederne ind og ud, og valget huskes. Foldet ind står kun den
+  nyeste nyhed, men når der sker noget vigtigt (dødsfald, gank, levels, trofæer, epic loot, ugens
+  pokaler, stomi og prutter), folder baren sig ud i 15 sekunder. Klik på pilen imens for at holde
+  den åben. Alle starter foldet ud.
 
 Træk i baren for at flytte den, og højreklik for indstillingerne. Under **Indstillinger** kan
 du slå baren og nyhederne til og fra og låse baren. Det kan også gøres med `/wc4ever bar`
-(vis/skjul), `/wc4ever bar lås`, `/wc4ever bar nyheder` og `/wc4ever bar nulstil` (tilbage
+(vis/skjul), `/wc4ever bar lås`, `/wc4ever bar nyheder`, `/wc4ever bar fold` (fold nyhederne ind/ud) og `/wc4ever bar nulstil` (tilbage
 øverst på skærmen). Baren bygger kun på data, addonet allerede har, så den sender intet ekstra.
 
 ### Scoreboard
