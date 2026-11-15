@@ -78,6 +78,11 @@ local addonName, ns = ...
 --   * v0.26.0: nyt udseende på forsiden: online-kort med grøn kant, offline-kort tre på en række med tiden
 --             i hjørnet (ingen "OFFLINE"), et "Inviter en ven"-kort, undersider som lette faner uden kasse,
 --             og nyhedspanelet (280 bredt) med ikon pr. nyhed, tidskolonne og filterknapper
+--   * v0.26.1: nyt udseende på bande-baren: et ikon pr. nyhedstype, tiden i sin egen kolonne, dæmpede
+--             udsagnsord med navne og dræbere fremhævet, "Prut" ved musen over et dødsfald, level på en
+--             mørk plade, "N online" i toppen og en streg mellem venner og nyheder. Pilen i toppen folder
+--             nyhederne ind (kun den nyeste); vigtige nyheder folder baren ud i 15 sek. (db.settings.barFolded)
+--             Forsiden og baren deler ét ikonsystem: Bar.Items giver hver nyhed kind og icon
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)

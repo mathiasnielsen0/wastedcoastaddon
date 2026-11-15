@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.26.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.26.1. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -151,13 +151,21 @@ hovedvinduet er lukket:
   døde lige til en kylling, fik ny loot, dingede ...) og hvor mange gange vennen er død i dag.
   Klik for at åbne vennens karakterer.
 - **De 5 seneste nyheder** står under ikonerne, det nyeste øverst: levels, dødsfald (de pinlige
-  bliver kaldt pinlige), loot, trofæer, rare mobs og dueller. Musen over en loot-linje viser
-  itemets tooltip, og shift-klik linker itemet i chatten.
-- WC4ever-logoet til venstre åbner hovedvinduet, og tallet ved det er antal venner online.
+  bliver kaldt pinlige), loot, trofæer, rare mobs og dueller. Hver linje har et lille ikon for
+  typen (kranie, sværd, item ...), så man kan se dødsfaldene uden at læse, og tiden står for sig
+  selv yderst til højre. Navne står i klassefarve og det vigtige (dræberen, itemet, trofæet) lyser
+  op. Musen over en loot-linje viser itemets tooltip, og shift-klik linker itemet i chatten. Musen
+  over et frisk dødsfald viser **Prut**, og et klik prutter af vennen.
+- WC4ever-logoet til venstre åbner hovedvinduet. Til højre står, hvor mange venner der er online
+  (uden nyhederne står tallet ved logoet).
+- **Pilen øverst til højre** folder nyhederne ind og ud, og valget huskes. Foldet ind står kun den
+  nyeste nyhed, men når der sker noget vigtigt (dødsfald, gank, levels, trofæer, epic loot, ugens
+  pokaler, stomi og prutter), folder baren sig ud i 15 sekunder. Klik på pilen imens for at holde
+  den åben. Alle starter foldet ud.
 
 Træk i baren for at flytte den, og højreklik for indstillingerne. Under **Indstillinger** kan
 du slå baren og nyhederne til og fra og låse baren. Det kan også gøres med `/wc4ever bar`
-(vis/skjul), `/wc4ever bar lås`, `/wc4ever bar nyheder` og `/wc4ever bar nulstil` (tilbage
+(vis/skjul), `/wc4ever bar lås`, `/wc4ever bar nyheder`, `/wc4ever bar fold` (fold nyhederne ind/ud) og `/wc4ever bar nulstil` (tilbage
 øverst på skærmen). Baren bygger kun på data, addonet allerede har, så den sender intet ekstra.
 
 ### Scoreboard

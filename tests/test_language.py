@@ -75,7 +75,7 @@ end
 for i = 1, #ns.pages do pcall(ns.ShowTab, i) hoverAll() end
 -- Kommandoer (hver to gange, så indstillinger kommer tilbage, hvor de var)
 for _, c in ipairs({ "status", "sound", "toast", "loottoast", "raretoast", "kanal", "minimap", "stil",
-                     "announce", "annonce", "emotes", "sladder fra", "sladder til" }) do slash(c) slash(c) end
+                     "announce", "annonce", "emotes", "sladder fra", "sladder til", "bar fold" }) do slash(c) slash(c) end
 for _, c in ipairs({ "testtoast", "testannonce", "test", "testloot", "loot", "loot epic", "loot rare", "efternavn",
                      "angrib", "angrib nick", "sound death", "sound xyz", "reset", "hjælp", "sync", "sladder" }) do
     pcall(slash, c)

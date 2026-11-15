@@ -78,7 +78,7 @@ check(items[1].text:find("Mob1", 1, true) and items[100].text:find("Mob100", 1, 
 check(items[100].t < NOW - 86400, "også nyheder ældre end et døgn")
 
 ns.RefreshUI()
-check(panel.rows[1].fs.text_:find("Mob1$"), "øverste linje er den nyeste")
+check(panel.rows[1].fs.text_:find("Mob1|r", 1, true), "øverste linje er den nyeste")
 check(panel.rows[1].time.text_ == "16m" and not panel.rows[1].fs.text_:find("(16m)", 1, true), "tiden står i sin egen kolonne")
 check(panel.rows[1].icon.shown ~= false, "med et ikon for slags nyhed")
 check(panel.count.text_ == "100", "antallet står i hjørnet")
@@ -87,7 +87,7 @@ check(panel.thumb.shown and panel.track.shown, "rullebjælken vises, når der er
 -- Scroll
 local wheel = panel.scripts.OnMouseWheel
 wheel(panel, -1)
-check(panel.offset == 2 and panel.rows[1].fs.text_:find("Mob3$"), "scroll ned to linjer ad gangen")
+check(panel.offset == 2 and panel.rows[1].fs.text_:find("Mob3|r", 1, true), "scroll ned to linjer ad gangen")
 wheel(panel, 1)
 check(panel.offset == 0, "og op igen")
 wheel(panel, 5)
@@ -95,7 +95,7 @@ check(panel.offset == 0, "kan ikke scrolle over toppen")
 for _ = 1, 100 do wheel(panel, -1) end
 check(panel.offset == 100 - panel.nRows, "kan ikke scrolle forbi bunden: " .. panel.offset)
 local last = panel.rows[panel.nRows]
-check(last.shown and last.fs.text_:find("Mob100$"), "nederst står den 100. nyhed")
+check(last.shown and last.fs.text_:find("Mob100|r", 1, true), "nederst står den 100. nyhed")
 wheel(panel, 100)
 
 -- PanelLines direkte
@@ -180,6 +180,8 @@ check(onlyLoot and panel.rows[1].shown and panel.chips[3].active and not panel.c
 check(not panel.rows[1].fs.text_:find("|T", 1, true), "itemets ikon står i ikonkolonnen, ikke i teksten")
 Bar.SetPanelFilter("death")
 check(panel.rows[1].line.item.key:sub(1, 1) == "d" and panel.offset == 0, "Død viser dødsfald fra toppen")
+check(panel.rows[1].line.icon == Bar.KIND_ICON.death, "panelet bruger samme ikoner som baren")
+check(Bar.KindOf({ kind = "gank" }) == "death" and Bar.KindOf({ kind = "stomi" }) == "fun", "gank hører under Død, stomi under Sjov")
 Bar.SetPanelFilter("level")
 check(panel.rows[1].fs.text_:find("dingede 22"), "Level viser levels")
 Bar.SetPanelFilter("all")
