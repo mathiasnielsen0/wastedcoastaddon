@@ -71,6 +71,10 @@ local addonName, ns = ...
 --   * v0.24.0: hån-knappen (Haan.lua): når en ven dør, har dødsannoncen en "Prut"-knap, der sender vennen en
 --             pruttelyd (sounds/prut1-3.ogg) og en lille hilsen. Også fra nyhederne og /wc4ever prut [ven].
 --             Kun i 15 min efter dødsfaldet, én prut pr. dødsfald, 20 sek cooldown, kan slås fra hos modtageren
+--   * v0.25.0: ugens pokaler (Weekly.lua): hver søndag kl. 20 dansk tid kåres ugens vindere (flest døde,
+--             pinligste død, loot- og need-goblin, nolifer, ding-maskine, dueller, rares, stomi, prutter, udødelig).
+--             Pokal på kortet i en uge, toast, nyhed, Sjov > Ugens pokaler og et pokalskab. XW = egen
+--             spilletid og levels i ugen
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -3377,6 +3381,7 @@ function ns.SendMyExtras(light)
     if ns.SendPrankExtras then ns.SendPrankExtras(light) end
     if ns.SendBank then ns.SendBank() end   -- én lille besked, også ved den lette synk
     if ns.SendPlayed then ns.SendPlayed(light) end
+    if ns.SendWeekly then ns.SendWeekly() end   -- v0.25: spilletid og levels i ugen (Weekly.lua)
 end
 
 ns.CheckBossDeath = CheckBossDeath
@@ -3940,6 +3945,10 @@ local function BuildCard(parent, index, friend)
         end
         local snail = ns.SnailText and ns.SnailText(self.friend)
         if snail then GameTooltip:AddLine(snail, 0.9, 0.8, 0.4) end
+        -- v0.25: ugens pokaler (Weekly.lua)
+        local cups = ns.Weekly and ns.Weekly.TooltipLines(self.friend) or {}
+        if #cups > 0 then GameTooltip:AddLine(" ") end
+        for _, line in ipairs(cups) do GameTooltip:AddLine(line, 1, 0.82, 0.2) end
         local honor, hk = ns.HonorTotals(self.friend)
         if honor then
             GameTooltip:AddLine(string.format("Honor: %d (%d honorable kills)", honor, hk), 0.85, 0.75, 0.45)
@@ -4137,6 +4146,7 @@ local function RefreshOverview()
             card.sub:SetText(ns.L("Ikke set endnu"))
         end
         card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == ns.L("Skammens hat"))
+        if ns.WeeklyCard then ns.WeeklyCard(card, s.name, true) end
     end
 
     ns.ShowFirst(ns.cards, #on)
@@ -4183,6 +4193,7 @@ local function RefreshOverview()
         card.legacy:SetText(ns.CardExtraText(s.name, true) or "")
         card.titles:SetText(TitleText(titles[s.name]))
         card.hat:SetShown(titles[s.name] ~= nil and titles[s.name][1] == ns.L("Skammens hat"))
+        if ns.WeeklyCard then ns.WeeklyCard(card, s.name) end
     end
 
     -- Seneste dødsfald
@@ -6743,7 +6754,7 @@ local GROUPS = ns.LT({
     { label = "Død",        icon = "INV_Misc_Bone_HumanSkull_01",
       pages = { 16, 5 },               names = { "Statistik", "Instanser" } },
     { label = "Sjov",       icon = "Spell_Nature_Polymorph",
-      pages = { 6, 13 },               names = { "Trofæer", "Drilleri" } },
+      pages = { 6, 13, 18 },           names = { "Trofæer", "Drilleri", "Ugens pokaler" } },
 })
 ns.GROUPS = GROUPS
 
@@ -7899,6 +7910,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print(ns.L("  /wc4ever efternavn X  - sæt din karakters efternavn (auto = find selv)"))
         print(ns.L("  /wc4ever announce     - slå chat-beskeder til/fra"))
         print(ns.L("  /wc4ever sladder      - vis dagens sladder igen  (|cffffd100sladder fra|r/|cffffd100til|r ved login)"))
+        print(ns.L("  /wc4ever pokaler      - se ugens pokaler og hvem der fører i denne uge"))
         print(ns.L("  /wc4ever angrib <ven> - send et emote-angreb til en ven"))
         print(ns.L("  /wc4ever stomi <ven>  - sæt en stomi-fælde for en ven  (|cffffd100stomi test|r, |cffffd100stomi fra|r)"))
         print(ns.L("  /wc4ever prut [ven]   - prut af en ven, der lige er død  (|cffffd100prut test|r, |cffffd100prut fra|r, |cffffd100prut tal|r)"))

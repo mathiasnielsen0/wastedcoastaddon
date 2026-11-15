@@ -647,6 +647,10 @@ function ns.HandlePrankMessage(kind, t)
     elseif kind == "XD" then
         if ns.HandleDuelMessage then ns.HandleDuelMessage(t) end
 
+    elseif kind == "XW" then
+        -- v0.25: spilletid og levels i ugen (Weekly.lua)
+        if ns.HandleWeeklyMessage then ns.HandleWeeklyMessage(t) end
+
     elseif kind == "XU" then
         local friend, char, level = t[2], t[3], tonumber(t[5])
         if ROSTER_SET[friend] and friend ~= db.me and char and char ~= "" and level
@@ -1043,6 +1047,7 @@ function ns.ResetPranks()
     db.emoteStats = { sent = {}, recv = {} }
     wipe(db.levelAt)
     if ns.ResetDuels then ns.ResetDuels() end
+    if ns.ResetWeekly then ns.ResetWeekly() end
     if ns.ResetBank then ns.ResetBank() end
     if ns.Stomi then ns.Stomi.Reset() end
     if ns.Haan then ns.Haan.Reset() end
@@ -1081,6 +1086,7 @@ function ns.PrankSlash(cmd, arg)
     local db = DB()
     if ns.StomiSlash and ns.StomiSlash(cmd, arg) then return true end
     if ns.HaanSlash and ns.HaanSlash(cmd, arg) then return true end
+    if ns.WeeklySlash and ns.WeeklySlash(cmd, arg) then return true end
     if cmd == "angrib" or cmd == "emote" or cmd == "attack" then
         local name = FindFriend(arg)
         if name then ns.EmoteAttack(name) else Print(L("Hvem? Skriv fx |cffffd100/wc4ever angrib nick|r.")) end

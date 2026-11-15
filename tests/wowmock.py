@@ -132,7 +132,7 @@ function Fire(event, ...)
 end
 '''
 
-FILES = ["Locale.lua", "Locale_en.lua", "Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua", "Bank.lua", "Played.lua", "Gossip.lua", "Rares.lua", "Stomi.lua", "Haan.lua", "Bar.lua"]
+FILES = ["Locale.lua", "Locale_en.lua", "Sounds.lua", "WastedCoast.lua", "Groups.lua", "Drilleri.lua", "Dueller.lua", "Bank.lua", "Played.lua", "Gossip.lua", "Rares.lua", "Stomi.lua", "Haan.lua", "Weekly.lua", "Bar.lua"]
 
 
 def load_addon(lua, addon_dir, ns):

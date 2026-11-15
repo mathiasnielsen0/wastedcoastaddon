@@ -171,6 +171,11 @@ function Bar.Items(now, maxItems, maxAge)
         end
     end
 
+    -- v0.25: ugens pokaler (én linje pr. uddeling)
+    if ns.Weekly then
+        for _, it in ipairs(ns.Weekly.NewsItems(now)) do add(it.t, it.key, it.text) end
+    end
+
     table.sort(out, function(a, b)
         if a.t ~= b.t then return a.t > b.t end
         return a.key < b.key
@@ -262,6 +267,13 @@ function Bar.TooltipLines(s, now)
         if ps + pr > 0 then add(L("Prutter"), string.format(L("%d givet, %d fået"), ps, pr), 0.6, 0.6, 0.66) end
     end
     if s.chars and s.chars > 1 then add(L("Karakterer"), tostring(s.chars), 0.6, 0.6, 0.66) end
+    -- v0.25: ugens pokaler
+    local won = ns.Weekly and ns.Weekly.Won(s.name, now) or {}
+    if #won > 0 then
+        local names = {}
+        for i, x in ipairs(won) do names[i] = x.cup.name end
+        add(L("Ugens pokaler"), table.concat(names, ", "), 1, 0.82, 0.2)
+    end
     add(" ")
     add(L("Klik: se vennens karakterer"), nil, 0.5, 0.5, 0.56)
     return lines

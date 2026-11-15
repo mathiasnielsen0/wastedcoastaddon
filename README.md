@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.24.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.25.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` og (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` og (fra 0.25) `Weekly.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -67,7 +67,7 @@ nogle små undersider lige under fanerne:
 | **Rangliste** | Scoreboard, Spilletid, Race, Dueller, Bank & repair |
 | **Loot** | Loot, Rolls |
 | **Død** | Statistik, Instanser |
-| **Sjov** | Trofæer, Drilleri |
+| **Sjov** | Trofæer, Drilleri, Ugens pokaler |
 
 Klik på en vens kort for at se vennens karakterer.
 
@@ -381,6 +381,38 @@ laver din karakter også spillets egen `/fart` på vennen.
 - **Nye lydfiler kræver, at spillet genstartes helt** efter opdateringen. `/reload` er
   ikke nok, før WoW kan finde pruttefilerne.
 
+### Ugens pokaler (Sjov > Ugens pokaler)
+Hver **søndag kl. 20** (dansk tid, også om sommeren) kåres ugens vindere:
+
+| Pokal | Hvem vinder |
+|---|---|
+| Kirkegårdens stamgæst | Flest dødsfald |
+| Ugens pinligste død | Døde til det mob, der lå længst under ens eget level (mindst 3 levels, ikke PvP) |
+| Loot-goblin | Flest rare (eller bedre) items |
+| Need-goblin | Flest sager hos Need-politiet |
+| Ugens nolifer | Længst spilletid (mindst en time) |
+| Ding-maskinen | Flest levels |
+| Duel-kongen | Flest vundne dueller |
+| Rare-jægeren | Flest dræbte rare mobs |
+| Stomi-mesteren | Gav flest stomier |
+| Stomi-patienten | Fik flest stomier |
+| Prut-kongen | Pruttede mest af venner, der lige var døde (hån-knappen) |
+| Udødelig | Ingen dødsfald og mest spilletid (mindst to timer) |
+
+Ved uddelingen får alle en toast og en besked i chatten, og der kommer en linje i nyhederne.
+Vinderne har en lille pokal på deres kort i en uge (tallet ved siden af er antal pokaler), og
+kortets tooltip og bande-barens tooltip viser hvilke. Siden viser sidste uges vindere, hvem der
+fører i denne uge, hvor lang tid der er til næste uddeling, og **pokalskabet** med alle pokaler
+fra de seneste 26 uger. Hold musen over en pokal for at se top 5. `/wc4ever pokaler` skriver det
+samme i chatten.
+
+Alle får de samme vindere: ugen regnes ud fra spillets UTC-ur, og pokalerne bygger på data,
+der allerede synker (dødsfald, loot, Need-politiet, dueller, rare mobs, stomi og prutter). Står to lige,
+vinder den, der nåede tallet først. Spilletid og levels i ugen måler hver ven selv og sender
+til de andre. Kommer en vens data for sent (fx fordi vennen først logger ind om mandagen),
+bliver ugen rettet i en uge endnu; derefter står den fast i pokalskabet. Vennerne skal have
+0.25, for at deres spilletid og levels kommer med.
+
 ### Dødsannoncer
 Når en ven dør, får alle en popup med en dødsannonce, fx *"Nick blev overlistet af
 en level 12 Murloc Forager"*. Annoncen afhænger af, hvordan man døde (fald, drukning,
@@ -487,6 +519,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever announce` | Slå chat-beskeder til/fra (dødsfald og loot) |
 | `/wc4ever sladder` | Vis sladderen siden sidst igen (`sladder fra`/`til` styrer den ved login) |
 | `/wc4ever angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
+| `/wc4ever pokaler` | Vis sidste uges pokaler og hvem der fører i denne uge |
 | `/wc4ever stomi <ven>` | Sæt en stomi-fælde for en ven (`stomi test` viser popuppen, `stomi fra`/`til` slår den fra/til hos dig) |
 | `/wc4ever prut [ven]` | Prut af en ven, der lige er død (uden navn: den senest døde). `prut test` prøver lyden, `prut fra`/`til` slår prutter mod dig fra/til, `prut tal` viser flest givet og fået |
 | `/wc4ever annonce` | Slå dødsannoncer til/fra |
@@ -656,4 +689,6 @@ python3 tests/test_news.py WastedCoast              # nyhedspanelet i hovedvindu
 python3 tests/test_news.py WastedCoast forever      # det samme på WoW Forever
 python3 tests/test_haan.py WastedCoast              # hån-knappen: prut på dødsannoncen, cooldown, spam-værn, slå fra, nyheder og synk
 python3 tests/test_haan.py WastedCoast forever      # det samme på WoW Forever
+python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-tid, vindere, XW, uddeling, kort og side
+python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever
 ```
