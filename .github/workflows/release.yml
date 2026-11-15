@@ -2,10 +2,16 @@
 #
 # Sådan udløses den:
 #   - Når "## Version:" i WastedCoast/WastedCoast.toc ændres og lander på main.
-#     Workflowet laver så et tag (fx v0.26.2) og uploader den version.
-#     Er versionen allerede udgivet (tagget findes), sker der ingenting.
+#     Workflowet laver så et tag (fx v0.26.2) og starter en manuel kørsel af sig selv,
+#     som pakker og uploader den version. Er versionen allerede udgivet (tagget findes),
+#     sker der ingenting.
 #   - Manuelt fra fanen Actions ("Run workflow"), fx hvis en upload fejlede.
 #     Findes tagget allerede, pakkes og uploades den version igen.
+#
+# Hvorfor to kørsler: BigWigs-packageren pakker aldrig ved et push til en branch, hvis
+# HEAD har et tag ("Found future tag ..., not packaging"). Den regner med, at tag-pushet
+# starter sin egen kørsel, men tags pushet med GITHUB_TOKEN starter ikke workflows.
+# En workflow_dispatch-kørsel bliver ikke sprunget over, så push-kørslen starter én.
 #
 # Kræver repo-secret CF_API_KEY (CurseForge API-token).
 name: Release til CurseForge
@@ -19,6 +25,7 @@ on:
 
 permissions:
   contents: write
+  actions: write     # push-kørslen starter upload-kørslen (gh workflow run)
 
 concurrency:
   group: release
@@ -55,18 +62,28 @@ jobs:
           git tag -a "${{ steps.version.outputs.tag }}" -m "Wasted Coast Forever ${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
 
+      # Ved push: lad en manuel kørsel pakke og uploade (se øverst). Den finder tagget og
+      # går videre til "Brug det eksisterende tag".
+      - name: Start upload-kørslen
+        if: steps.version.outputs.exists == 'false' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run release.yml --repo "${{ github.repository }}" --ref "${{ github.ref_name }}"
+          echo "Upload af ${{ steps.version.outputs.tag }} kører nu som en manuel kørsel under Actions."
+
       - name: Brug det eksisterende tag (manuel genkørsel)
         if: steps.version.outputs.exists == 'true' && github.event_name == 'workflow_dispatch'
         run: git checkout "${{ steps.version.outputs.tag }}"
 
       - name: Lav release-noter for den nye version
-        if: steps.version.outputs.exists == 'false' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         run: |
           .github/scripts/changelog.sh > CHANGELOG-release.md
           cat CHANGELOG-release.md
 
       - name: Pak og upload til CurseForge
-        if: steps.version.outputs.exists == 'false' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         uses: BigWigsMods/packager@v2
         with:
           args: -p 1760154
@@ -75,7 +92,7 @@ jobs:
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Gem zip som artifact
-        if: steps.version.outputs.exists == 'false' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: WastedCoast-${{ steps.version.outputs.tag }}
