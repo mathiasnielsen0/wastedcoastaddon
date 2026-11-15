@@ -1,0 +1,62 @@
+# Data (SavedVariables)
+
+Alt gemmes i én global tabel, `WastedCoastDB` (`## SavedVariables` i `WastedCoast.toc`).
+I koden hedder den `db` (i modulerne via en lokal `DB()`-funktion). WoW skriver den til
+`WTF\Account\<konto>\SavedVariables\WastedCoastDB.lua` ved logout og `/reload`.
+
+`InitDB()` i `WastedCoast.lua` opretter kernens felter og laver migreringer.
+`SCHEMA = 5` (`db.schemaVersion`) er dataformatets version. Hvert modul opretter sine egne
+felter med `db.x = db.x or {}` første gang, det bruger dem.
+
+## Regler
+
+- **Spillernes data må aldrig gå tabt.** Nye felter oprettes med `or {}`/`== nil`-tjek, gamle
+  felter migreres i `InitDB` (se migreringen fra v0.2), og mappen hedder stadig `WastedCoast`,
+  så SavedVariables følger med.
+- Demo-data (`/wc4ever demo`) markeres med `demo = true` på posten (eller i `db.demoAch`), sendes
+  aldrig til vennerne og fjernes af `/wc4ever demo slut`. Nye moduler med demo-data skal følge
+  samme mønster (se `ns.MakePrankDemo` / `ns.ClearPrankDemo` i `Drilleri.lua`).
+- Lister, der vokser, har et loft (fx `LOG_MAX` i `Haan.lua`), så filen ikke bliver uendelig.
+- Nøglen til en ven er vennens faste ID (`Groups.lua`). De 8 oprindelige venner har deres navn
+  som ID (`ns.LEGACY_ROSTER`).
+
+## Kernen (`WastedCoast.lua`)
+
+| Felt | Indhold |
+|---|---|
+| `me`, `myId`, `myName` | Hvem du er (ID og valgt navn). Sættes af `Groups.lua` |
+| `group` | Din gruppe: id, kode, admin, `members`, fjernede medlemmer (`Groups.lua`) |
+| `friends[ven]` | `{ chars = { [karakter] = { class, level, gold, zone, seen, xp, surname, hb, prof, gear, rep, honor, played } }, session }` |
+| `chars[karakter]` | Hvilken ven en karakter tilhører |
+| `events`, `seen` | Dødsfald og ID'er til at fjerne dubletter |
+| `loot`, `lootSeen` | Loot wins og ID'er |
+| `runs[ven][instans]` | `{ wipes, clears, boss = { navn = antal }, last }` |
+| `ach[ven][trofæ]` | Tidspunkt trofæet blev låst op. `achInit`, `demoAch` |
+| `rolls[ven]` | Roll-statistik, need/greed-tal (`ROLL_TYPE_FIELDS`) og seneste rolls (`last`) |
+| `goldHist`, `goldChar`, `goldCharSince` | Guldmålinger (samlet og pr. karakter) |
+| `legacy[ven]` | Legacy points (Forever) |
+| `session` | Login-session (`ns.MySession`) |
+| `settings` | Indstillinger, se nedenfor |
+
+## Modulerne
+
+| Felt | Modul |
+|---|---|
+| `needWatch`, `needShame`, `emoteStats`, `levelAt`, `myLevelT` | `Drilleri.lua` |
+| `duels[ven]` | `Dueller.lua` |
+| `bank[ven]` | `Bank.lua` |
+| `gossip` | `Gossip.lua` |
+| `rareLog`, `rareKills` | `Rares.lua` |
+| `stomi` | `Stomi.lua` |
+| `haan` | `Haan.lua` |
+| `weekly` | `Weekly.lua` |
+
+Spilletid ligger på karakteren (`friends[ven].chars[karakter].played`, `Played.lua`).
+
+## `db.settings`
+
+Lokale valg, som aldrig synkes: `toasts`, `lootToasts`, `rareToasts`, `sound`, `announce`,
+`minQuality`, `fallbackSync`, `lang`, `skin`, `pos`, `minimapAngle`, `minimapHide`,
+`surnames`, `bar` (`Bar.lua`), `emotes`, `obits` (`Drilleri.lua`), `gossip`, `stomi`,
+`haan`. Standardværdier sættes i `InitDB` eller i modulet. Tjek altid `~= false` for
+indstillinger, der er slået til som standard, så gamle installationer uden feltet virker.

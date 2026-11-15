@@ -1,5 +1,8 @@
 # Fælles WoW-attrap til testene (en lille udgave af spillets API, nok til at addonet kan køre)
 MOCK = r'''
+-- Som i spillet: C-locale. Python sætter ellers LC_CTYPE til systemets tegnsæt (cp1252 på
+-- Windows), og så laver string.lower om på bytes i UTF-8-tegn som "å" ("bar lås").
+os.setlocale("C", "ctype")
 NOW = 1800000000
 CLOCK = 1000
 SENT = {}
