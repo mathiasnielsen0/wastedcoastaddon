@@ -135,26 +135,28 @@ gz("Andreas", "Mathias", 12, "555555", 1, NOW - 3 * 86400)
 check(not lastToast("levelup") and #db.gz.log == before + 2, "gamle gz gemmes uden popup")
 
 -- -----------------------------------------------------------------------------
--- Bande-baren: Gz i tids-kolonnen og klik på level-nyheden
+-- Bande-baren: v0.30.1 klik på level-nyheden siger IKKE tillykke (kun level-popuppen gør)
 -- -----------------------------------------------------------------------------
 local Bar = ns.Bar
 local jl
 for _, it in ipairs(Bar.Items(nil, 100)) do if it.ding == "Jeppe" and it.kind == "level" then jl = it end end
-check(jl and Bar.CanGz(jl), "Jeppes level kan bruges til gz")
+check(jl ~= nil and Bar.CanGz == nil, "Jeppes level står i nyhederne, men baren kan ikke sige gz")
 Bar.UpdateTicker()
 local row = ns.barFrame.rows[1]
 row.line = { text = "x", ago = "1m", item = jl }
 TT = {}
+local before = row.time.text_
 row.scripts.OnEnter(row)
-check(row.time.text_ == "Gz" and row.chip.shown, "musen over level-nyheden viser Gz")
-check(ttHas("sig tillykke til Jeppe"), "tooltippen forklarer klikket")
+check(row.time.text_ == before, "musen over level-nyheden viser bare tiden")
+check(not ttHas("sig tillykke"), "tooltippen lover ikke noget klik")
 row.scripts.OnLeave(row)
-check(row.time.text_ == "1m", "og tiden kommer tilbage")
 SENT = {}
 row.scripts.OnClick(row)
+check(#sentWith("XG;") == 0, "klik på level-nyheden sender ingen gz")
+check(Gz.Can("Jeppe"), "man kan stadig sige tillykke til Jeppe")
+ns.GzSend("Jeppe")
 msgs = sentWith("XG;")
-check(#msgs == 1 and split(msgs[1])[3] == "Jeppe", "klik på level-nyheden sender gz til Jeppe")
-check(not Bar.CanGz(jl), "bagefter kan den ikke bruges igen")
+check(#msgs == 1 and split(msgs[1])[3] == "Jeppe", "gz sendt på anden vis")
 local found
 for _, it in ipairs(Bar.Items(nil, 100)) do if it.kind == "gz" and it.text:find("sagde tillykke", 1, true) then found = true end end
 check(found, "gz står i nyhederne")

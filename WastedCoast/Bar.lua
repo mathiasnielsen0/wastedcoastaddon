@@ -123,7 +123,6 @@ function Bar.Items(now, maxItems, maxAge)
             else
                 text = F("%s døde til %s", Who(f, ev.class), killer)
             end
-            -- v0.24: dead = vennen, så linjen kan bruges til at prutte (Haan.lua)
             add(ev.time, "d" .. tostring(ev.id or ev.time), text, nil, f, ev.pvp == true and "gank" or "death", nil,
                 { demo = ev.demo })
         end
@@ -138,7 +137,6 @@ function Bar.Items(now, maxItems, maxAge)
             end
             local text = (e.l >= C.MAX_LEVEL) and F("%s ramte MAX LEVEL %d!", Who(f, class), e.l)
                 or F("%s dingede %d", Who(f, class), e.l)
-            -- v0.27: ding = vennen, så linjen kan bruges til at sige tillykke (Gz.lua)
             add(e.t, "l" .. f .. e.l, text, nil, nil, "level", nil, { demo = e.d or e.demo, ding = f })
         end
     end
@@ -668,61 +666,21 @@ local function RowEnter(self)
     else
         GameTooltip:AddLine(it.text, 1, 1, 1, true)
         GameTooltip:AddLine(C.FormatAgo(it.t), 0.6, 0.6, 0.66)
-        if Bar.CanTaunt(it) then
-            GameTooltip:AddLine(string.format(L("Klik: prut af %s"), Name(it.dead)), 0.85, 0.63, 0.36)
-        elseif Bar.CanGz(it) then
-            GameTooltip:AddLine(string.format(L("Klik: sig tillykke til %s"), Name(it.ding)), 0.4, 0.83, 0.42)
-        end
     end
     GameTooltip:Show()
 end
 
--- v0.24: en linje om et dødsfald kan bruges til at prutte af vennen, så længe det er friskt
-function Bar.CanTaunt(it)
-    if not (it and it.dead and ns.Haan) then return false end
-    return ns.Haan.Can(it.dead) and true or false
-end
-
--- v0.27: en linje om et level kan bruges til at sige tillykke, så længe det er friskt
-function Bar.CanGz(it)
-    if not (it and it.ding and ns.Gz) then return false end
-    return ns.Gz.Can(it.ding) and true or false
-end
-
--- v0.26: tids-kolonnen. Over et dødsfald, man kan prutte af, bliver tiden til en "Prut"-knap,
--- så man kan se, at linjen kan klikkes.
-local function SetRowTime(row, hover)
+-- v0.26: tids-kolonnen. v0.30.1: prut og gz sker kun fra popupperne (dødsannoncen og level-popuppen),
+-- ikke ved klik på nyhederne, så tiden står bare der.
+local function SetRowTime(row)
     local line = row.line
-    local it = line and line.item
-    if hover and it and Bar.CanTaunt(it) then
-        row.time:SetText(L("Prut"))
-        row.time:SetTextColor(0.94, 0.77, 0.54)
-        row.chip:SetColorTexture(0.85, 0.63, 0.36, 0.22)
-        row.chip:Show()
-    elseif hover and it and Bar.CanGz(it) then
-        -- v0.27: over et frisk level bliver tiden til "Gz"
-        row.time:SetText("Gz")
-        row.time:SetTextColor(0.55, 0.9, 0.55)
-        row.chip:SetColorTexture(0.4, 0.83, 0.42, 0.22)
-        row.chip:Show()
-    else
-        row.time:SetText(line and line.ago or "")
-        row.time:SetTextColor(TIME_DIM[1], TIME_DIM[2], TIME_DIM[3])
-        row.chip:Hide()
-    end
+    row.time:SetText(line and line.ago or "")
+    row.time:SetTextColor(TIME_DIM[1], TIME_DIM[2], TIME_DIM[3])
 end
 
+-- Klik på en nyhed: kun shift-klik på loot, der sender linket i chatten
 local function RowClick(self)
     local it = self.line and self.line.item
-    if it and it.dead and not it.link and ns.HaanSend and not (IsShiftKeyDown and IsShiftKeyDown()) then
-        if ns.Haan.FreshDeath(it.dead) then ns.HaanSend(it.dead) end
-        return
-    end
-    -- v0.27: klik på et frisk level siger tillykke
-    if it and it.ding and ns.GzSend and ns.Gz.FreshDing(it.ding) then
-        ns.GzSend(it.ding)
-        return
-    end
     if not (it and it.link and IsShiftKeyDown and IsShiftKeyDown() and ChatEdit_InsertLink) then return end
     for _, ev in ipairs(DB().loot or {}) do
         if ev.item == it.link then ChatEdit_InsertLink(C.LootLink(ev)) return end
@@ -744,11 +702,6 @@ local function MakeRow(i)
     row.fs:SetJustifyH("LEFT")
     row.fs:SetPoint("LEFT", row, "LEFT", GLYPH + 4, 0)
     row.fs:SetTextColor(TEXT_DIM[1], TEXT_DIM[2], TEXT_DIM[3])
-    row.chip = row:CreateTexture(nil, "BORDER")
-    row.chip:SetSize(TIME_W, TICK_H - 2)
-    row.chip:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-    row.chip:SetColorTexture(0.85, 0.63, 0.36, 0.22)
-    row.chip:Hide()
     row.time = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.time:SetPoint("RIGHT", row, "RIGHT", -2, 0)
     row.time:SetJustifyH("RIGHT")
@@ -759,11 +712,8 @@ local function MakeRow(i)
     row:RegisterForDrag("LeftButton")
     row:SetScript("OnDragStart", StartMove)
     row:SetScript("OnDragStop", StopMove)
-    row:SetScript("OnEnter", function(self) SetRowTime(self, true) RowEnter(self) end)
-    row:SetScript("OnLeave", function(self)
-        SetRowTime(self, false)
-        if GameTooltip then GameTooltip:Hide() end
-    end)
+    row:SetScript("OnEnter", RowEnter)
+    row:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     row:SetScript("OnClick", RowClick)
     return row
 end
@@ -828,7 +778,7 @@ function Bar.UpdateTicker()
         row.fs:SetText(line and line.text or "")
         row.glyph:SetShown(line ~= nil and line.icon ~= nil)
         if line and line.icon then row.glyph:SetTexture(line.icon) end
-        SetRowTime(row, false)
+        SetRowTime(row)
     end
 end
 

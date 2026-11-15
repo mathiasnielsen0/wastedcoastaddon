@@ -97,6 +97,7 @@ local addonName, ns = ...
 --             XR-beskeden fortæller vennerne, hvem der er prut-nægter (nyheder og bande-barens tooltip)
 --   * v0.30.2: prut- og gz-ventetiden gemmes ikke længere i db. GetTime nulstilles, når pc'en genstarter,
 --             så en gemt værdi gav ventetider på flere timer ("Du kan prutte igen om 16057 sek.")
+--             Prut og gz sker kun fra popupperne igen. Klik på nyhederne i bande-baren gør det ikke længere
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
