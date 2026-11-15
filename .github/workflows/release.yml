@@ -59,6 +59,12 @@ jobs:
         if: steps.version.outputs.exists == 'true' && github.event_name == 'workflow_dispatch'
         run: git checkout "${{ steps.version.outputs.tag }}"
 
+      - name: Lav release-noter for den nye version
+        if: steps.version.outputs.exists == 'false' || github.event_name == 'workflow_dispatch'
+        run: |
+          .github/scripts/changelog.sh > CHANGELOG-release.md
+          cat CHANGELOG-release.md
+
       - name: Pak og upload til CurseForge
         if: steps.version.outputs.exists == 'false' || github.event_name == 'workflow_dispatch'
         uses: BigWigsMods/packager@v2

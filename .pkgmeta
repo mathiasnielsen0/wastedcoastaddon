@@ -2,6 +2,12 @@
 # Addonet ligger i undermappen WastedCoast/, så den flyttes op og bliver selve zip-indholdet.
 package-as: WastedCoast
 
+# Release-noter laves af .github/scripts/changelog.sh i workflowet: kun den nye versions
+# ændringer og uden Co-Authored-By/Claude-Session-linjer.
+manual-changelog:
+  filename: CHANGELOG-release.md
+  markup-type: markdown
+
 move-folders:
   WastedCoast/WastedCoast: WastedCoast
 
@@ -11,4 +17,5 @@ ignore:
   - README.md
   - install.bat
   - .gitignore
-  - "*.md"
+  - CHANGELOG-release.md
+  - .github
