@@ -49,6 +49,8 @@ felter med `db.x = db.x or {}` første gang, det bruger dem.
 | `rareLog`, `rareKills` | `Rares.lua` |
 | `stomi` | `Stomi.lua` |
 | `haan` | `Haan.lua` |
+| `gz` | `Gz.lua` |
+| `hjemmesko` (kun `log`; AFK-tilstanden ligger kun i sessionen) | `Hjemmesko.lua` |
 | `weekly` | `Weekly.lua` |
 
 Spilletid ligger på karakteren (`friends[ven].chars[karakter].played`, `Played.lua`).
@@ -58,5 +60,5 @@ Spilletid ligger på karakteren (`friends[ven].chars[karakter].played`, `Played.
 Lokale valg, som aldrig synkes: `toasts`, `lootToasts`, `rareToasts`, `sound`, `announce`,
 `minQuality`, `fallbackSync`, `lang`, `skin`, `pos`, `minimapAngle`, `minimapHide`,
 `surnames`, `bar`, `barFolded` (`Bar.lua`), `emotes`, `obits` (`Drilleri.lua`), `gossip`, `stomi`,
-`haan`. Standardværdier sættes i `InitDB` eller i modulet. Tjek altid `~= false` for
+`haan`, `gz`, `hjemmesko`. Standardværdier sættes i `InitDB` eller i modulet. Tjek altid `~= false` for
 indstillinger, der er slået til som standard, så gamle installationer uden feltet virker.

@@ -85,6 +85,9 @@ local addonName, ns = ...
 --             Forsiden og baren deler ét ikonsystem: Bar.Items giver hver nyhed kind og icon
 --   * v0.27.0: gz-knappen (Gz.lua): sig tillykke til en ven, der lige er steget i level, fra level-popuppen,
 --             bande-baren (klik på level-nyheden) eller /wc4ever gz [ven]. XG-beskeden. Kan slås fra hos modtageren
+--   * v0.28.0: hjemmesko-alarmen (Hjemmesko.lua): en ven, der har stået AFK i en by i over 20 min., får zZz
+--             på bande-baren og kan vækkes med en vækkelyd (klik på ikonet eller /wc4ever væk [ven]).
+--             XZ (AFK-tilstand) og XV (prik). Vækkelyden kan slås fra hos modtageren
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -410,6 +413,7 @@ local FALLBACK_SOUND = {
     wipe = { "RAID_WARNING" },
     levelup = { "LEVELUP", 888 },
     achievement = { "LEVELUP", 888 },
+    vaek = { "READY_CHECK", "RAID_WARNING", 8960 },   -- v0.28: hjemmesko-alarmen (Hjemmesko.lua)
 }
 
 local function PickSound(event, friend)
@@ -4865,6 +4869,7 @@ local TOAST_STYLE = {
     emote       = { border = { 1.00, 0.45, 0.75 }, bg = { 0.10, 0.04, 0.08 } },
     stomi       = { border = { 0.85, 0.70, 0.55 }, bg = { 0.10, 0.08, 0.05 } },   -- v0.22
     haan        = { border = { 0.62, 0.50, 0.22 }, bg = { 0.08, 0.07, 0.03 } },   -- v0.24: prutter
+    hjemmesko   = { border = { 0.56, 0.72, 1.00 }, bg = { 0.04, 0.06, 0.11 } },   -- v0.28: vækning
     -- v0.16: loot efter kvalitet og sjældne mobs
     rareloot    = { border = { 0.00, 0.44, 0.87 }, bg = { 0.03, 0.06, 0.12 } },
     epicloot    = { border = { 0.64, 0.21, 0.93 }, bg = { 0.08, 0.04, 0.12 } },
@@ -6697,6 +6702,16 @@ do
             p.checks[#p.checks + 1] = cb
         end
 
+        -- v0.28: hjemmesko-alarmen (Hjemmesko.lua), til højre for "Synk uden guild"
+        do
+            local cb = MakeCheck(p, ns.L("Vækkelyd"), ns.L("Lyd, popup og blink, når en ven prikker til dig, mens du sover AFK i en by. Slået fra: kun en linje i chatten."),
+                function() return db.settings.hjemmesko ~= false end, function(v) if v then db.settings.hjemmesko = nil else db.settings.hjemmesko = false end end)
+            cb:SetPoint("TOPLEFT", p, "TOPLEFT", 300, -60 - (#checks - 1) * 44)
+            cb.tip:SetWidth(250)
+            if p.checks[#checks] and p.checks[#checks].tip then p.checks[#checks].tip:SetWidth(240) end
+            p.checks[#p.checks + 1] = cb
+        end
+
         local qh = Txt(p, "GameFontNormal")
         qh:SetPoint("TOPLEFT", p, "TOPLEFT", 18, -332)
         qh:SetText(ns.L("Minimumskvalitet for loot"))
@@ -7987,6 +8002,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print(ns.L("  /wc4ever angrib <ven> - send et emote-angreb til en ven"))
         print(ns.L("  /wc4ever stomi <ven>  - sæt en stomi-fælde for en ven  (|cffffd100stomi test|r, |cffffd100stomi fra|r)"))
         print(ns.L("  /wc4ever prut [ven]   - prut af en ven, der lige er død  (|cffffd100prut test|r, |cffffd100prut fra|r, |cffffd100prut tal|r)"))
+        print(ns.L("  /wc4ever væk [ven]    - væk en ven, der sover AFK i en by  (|cffffd100væk test|r, |cffffd100væk fra|r)"))
         print(ns.L("  /wc4ever annonce      - slå dødsannoncer til/fra"))
         print(ns.L("  /wc4ever emotes       - slå popups for emote-angreb mod dig til/fra"))
         print(ns.L("  /wc4ever testannonce  - vis en test-dødsannonce"))

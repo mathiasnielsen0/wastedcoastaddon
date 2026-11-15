@@ -651,6 +651,10 @@ function ns.HandlePrankMessage(kind, t)
         -- v0.27: gz (Gz.lua)
         if ns.HandleGzMessage then ns.HandleGzMessage(t) end
 
+    elseif kind == "XZ" or kind == "XV" then
+        -- v0.28: hjemmesko-alarmen (Hjemmesko.lua)
+        if ns.HandleHjemmeskoMessage then ns.HandleHjemmeskoMessage(kind, t) end
+
     elseif kind == "XD" then
         if ns.HandleDuelMessage then ns.HandleDuelMessage(t) end
 
@@ -700,12 +704,14 @@ function ns.SendPrankExtras(light)
     local db = DB()
     SendRecentRolls()
     SendMyLevel()
+    if ns.Hjemmesko then ns.Hjemmesko.SendSync() end
     -- Den lette synk (hvert 10. minut) springer historikken over: den sendes, når den sker
     if light then return end
     if ns.SendDuels then ns.SendDuels() end
     if ns.Stomi then ns.Stomi.SendLog() end
     if ns.Haan then ns.Haan.SendLog() end
     if ns.Gz then ns.Gz.SendLog() end
+    if ns.Hjemmesko then ns.Hjemmesko.SendLog() end
     local sent = 0
     for i = #db.needShame, 1, -1 do
         local e = db.needShame[i]
@@ -1033,6 +1039,7 @@ function ns.MakePrankDemo()
     if ns.Stomi then ns.Stomi.MakeDemo() end
     if ns.Haan then ns.Haan.MakeDemo() end
     if ns.Gz then ns.Gz.MakeDemo() end
+    if ns.Hjemmesko then ns.Hjemmesko.MakeDemo() end
 end
 
 function ns.ClearPrankDemo()
@@ -1042,6 +1049,7 @@ function ns.ClearPrankDemo()
     if ns.Stomi then ns.Stomi.ClearDemo() end
     if ns.Haan then ns.Haan.ClearDemo() end
     if ns.Gz then ns.Gz.ClearDemo() end
+    if ns.Hjemmesko then ns.Hjemmesko.ClearDemo() end
     for friend, e in pairs(db.levelAt) do
         if e.d then db.levelAt[friend] = nil end
     end
@@ -1062,6 +1070,7 @@ function ns.ResetPranks()
     if ns.Stomi then ns.Stomi.Reset() end
     if ns.Haan then ns.Haan.Reset() end
     if ns.Gz then ns.Gz.Reset() end
+    if ns.Hjemmesko then ns.Hjemmesko.Reset() end
 end
 
 -- Eksempler på de nye popups (gemmes og sendes ikke)
@@ -1098,6 +1107,7 @@ function ns.PrankSlash(cmd, arg)
     if ns.StomiSlash and ns.StomiSlash(cmd, arg) then return true end
     if ns.HaanSlash and ns.HaanSlash(cmd, arg) then return true end
     if ns.GzSlash and ns.GzSlash(cmd, arg) then return true end
+    if ns.HjemmeskoSlash and ns.HjemmeskoSlash(cmd, arg) then return true end
     if ns.WeeklySlash and ns.WeeklySlash(cmd, arg) then return true end
     if cmd == "angrib" or cmd == "emote" or cmd == "attack" then
         local name = FindFriend(arg)

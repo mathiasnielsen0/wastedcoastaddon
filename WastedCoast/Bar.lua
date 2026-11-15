@@ -12,6 +12,8 @@ local L = ns.L
 --   * Under ikonerne står de 5 seneste nyheder (levels, dødsfald, loot, trofæer, rare mobs og
 --     dueller), det nyeste øverst. Musen over loot viser itemets tooltip.
 --   * Træk for at flytte (med mindre den er låst), højreklik åbner indstillingerne.
+--   * v0.28: en ven, der sover AFK i en by, har zZz på ikonet; et klik vækker vennen (Hjemmesko.lua),
+--     shift-klik åbner karaktererne.
 -- Bygger kun på data, addonet allerede har og synker, så baren sender ingen beskeder.
 -- db.settings.bar (false = skjult), barLocked, barTicker (false = uden ticker),
 -- barPos = { point, relPoint, x, y }
@@ -81,6 +83,7 @@ local KIND_ICON = {
     stomi = IC("INV_Misc_Bag_10"),
     haan  = IC("Spell_Nature_Cyclone"),
     gz    = IC("Spell_Holy_SurgeOfLight"),
+    hjemmesko = IC("Spell_Nature_Sleep"),
     cup   = IC("INV_Misc_Coin_02"),
 }
 Bar.KIND_ICON = KIND_ICON
@@ -216,6 +219,14 @@ function Bar.Items(now, maxItems, maxAge)
         end
     end
 
+    -- v0.28: prik til sovende venner (Hjemmesko.lua)
+    for _, e in ipairs((db.hjemmesko and db.hjemmesko.log) or {}) do
+        if C.ROSTER_SET[e.to] and C.ROSTER_SET[e.from] then
+            add(e.t, "v" .. tostring(e.id), F("%s vækkede %s i hjemmeskoene", Who(e.from), Who(e.to)), nil, nil, "hjemmesko",
+                nil, { demo = e.demo })
+        end
+    end
+
     -- v0.25: ugens pokaler (én linje pr. uddeling)
     if ns.Weekly then
         for _, it in ipairs(ns.Weekly.NewsItems(now)) do add(it.t, it.key, it.text, nil, nil, "cup", it.icon) end
@@ -300,6 +311,12 @@ function Bar.TooltipLines(s, now)
     else
         add(L("Sidst set"), C.FormatAgo(s.seen) .. ((s.zone and s.zone ~= "") and (L(" i ") .. s.zone) or ""), 0.6, 0.6, 0.66)
     end
+    -- v0.28: sover i hjemmeskoene (Hjemmesko.lua)
+    local sleepMin, sleepZone = ns.Hjemmesko and ns.Hjemmesko.Asleep(s.name, now)
+    if sleepMin then
+        local where = (sleepZone and sleepZone ~= "") and (L(" i ") .. sleepZone) or ""
+        add(string.format(L("|cff8fb8ffzZz|r Sover i hjemmeskoene (AFK i %d min.%s)"), sleepMin, where), nil, 0.56, 0.72, 1)
+    end
     local d = DeathsToday(s.name, now)
     add(L("Døde i dag"), d > 0 and ("|cffff6060" .. d .. "|r") or "0", 0.6, 0.6, 0.66)
     if ns.HatHolder and ns.HatHolder() == s.name then add(L("Bærer |cffffd100Skammens hat|r (døde sidst)"), nil, 1, 0.5, 0.5) end
@@ -319,6 +336,12 @@ function Bar.TooltipLines(s, now)
         local gs, gr = sent[s.name] or 0, recv[s.name] or 0
         if gs + gr > 0 then add("Gz", string.format(L("%d givet, %d fået"), gs, gr), 0.6, 0.6, 0.66) end
     end
+    -- v0.28: prik til sovende venner
+    if ns.Hjemmesko then
+        local sent, recv = ns.Hjemmesko.Counts()
+        local vs, vr = sent[s.name] or 0, recv[s.name] or 0
+        if vs + vr > 0 then add(L("Vækninger"), string.format(L("%d givet, %d fået"), vs, vr), 0.6, 0.6, 0.66) end
+    end
     if s.chars and s.chars > 1 then add(L("Karakterer"), tostring(s.chars), 0.6, 0.6, 0.66) end
     -- v0.25: ugens pokaler
     local won = ns.Weekly and ns.Weekly.Won(s.name, now) or {}
@@ -328,7 +351,12 @@ function Bar.TooltipLines(s, now)
         add(L("Ugens pokaler"), table.concat(names, ", "), 1, 0.82, 0.2)
     end
     add(" ")
-    add(L("Klik: se vennens karakterer"), nil, 0.5, 0.5, 0.56)
+    if Bar.CanWake(s.name, now) then
+        add(string.format(L("Klik: væk %s med en vækkelyd"), Name(s.name)), nil, 0.56, 0.72, 1)
+        add(L("Shift-klik: se vennens karakterer"), nil, 0.5, 0.5, 0.56)
+    else
+        add(L("Klik: se vennens karakterer"), nil, 0.5, 0.5, 0.56)
+    end
     return lines
 end
 
@@ -426,6 +454,11 @@ local function StopMove()
     SavePos()
 end
 
+-- v0.28: en sovende ven (ikke dig) kan vækkes med et klik på ikonet
+function Bar.CanWake(friend, now)
+    return ns.Hjemmesko ~= nil and friend ~= DB().me and ns.Hjemmesko.Asleep(friend, now) ~= nil
+end
+
 local function OpenFriend(friend)
     if not ns.frame then return end
     ns.frame:Show()
@@ -468,6 +501,13 @@ local function MakeIcon()
     btn.stomi:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", -3, -3)
     btn.stomi:SetTexture(ns.Stomi and ns.Stomi.ICON or "Interface\\Icons\\INV_Misc_Bag_10")
     btn.stomi:Hide()
+    -- v0.28: zZz over ikonet hos en ven, der sover AFK i en by (Hjemmesko.lua)
+    btn.zzz = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    if btn.zzz.SetDrawLayer then btn.zzz:SetDrawLayer("OVERLAY", 7) end
+    btn.zzz:SetPoint("TOPLEFT", btn, "TOPLEFT", -2, 4)
+    btn.zzz:SetTextColor(0.56, 0.72, 1)
+    btn.zzz:SetText("zZz")
+    btn.zzz:Hide()
     local hl = btn:CreateTexture(nil, "HIGHLIGHT")
     hl:SetPoint("TOPLEFT", btn.icon, "TOPLEFT", 0, 0)
     hl:SetPoint("BOTTOMRIGHT", btn.icon, "BOTTOMRIGHT", 0, 0)
@@ -478,6 +518,9 @@ local function MakeIcon()
     btn:SetScript("OnClick", function(self, button)
         if button == "RightButton" then
             if ns.OpenOptions then ns.OpenOptions() end
+        elseif self.friend and Bar.CanWake(self.friend) and not (IsShiftKeyDown and IsShiftKeyDown()) then
+            if ns.HjemmeskoWake then ns.HjemmeskoWake(self.friend) end
+            Bar.MarkDirty()
         elseif self.friend then
             OpenFriend(self.friend)
         end
@@ -577,6 +620,10 @@ function Bar.Refresh()
             b.online = s.online
             b.hat:SetShown(hat ~= nil and hat == s.name)
             b.stomi:SetShown(ns.StomiHas ~= nil and ns.StomiHas(s.name) ~= nil)
+            local asleep = ns.Hjemmesko ~= nil and ns.Hjemmesko.Asleep(s.name) ~= nil
+            b.zzz:SetShown(asleep)
+            b.asleep = asleep
+            if asleep and s.online then b.icon:SetAlpha(0.7) end
         end
     end
     bar.online = online

@@ -20,6 +20,8 @@ samme private tabel `ns` (`local _, ns = ...`).
 | `Rares.lua` | Rare mobs |
 | `Stomi.lua` | Stomi-fælden |
 | `Haan.lua` | Hån-knappen (prutter) |
+| `Gz.lua` | Gz-knappen (tillykke med levelet) |
+| `Hjemmesko.lua` | Hjemmesko-alarmen: zZz på sovende AFK-venner og vækkelyd |
 | `Weekly.lua` | Ugens pokaler |
 | `Bar.lua` | Bande-baren og nyhedslisten (samler nyheder fra alle moduler) |
 
@@ -41,13 +43,13 @@ Kernen kalder modulerne gennem valgfrie hooks på `ns`, altid beskyttet med `if 
 
 | Hook | Kaldes når |
 |---|---|
-| `ns.HandlePrankMessage(kind, t)` | En `X*`-besked kommer ind (videre til `ns.HandleStomiMessage`, `ns.HandleHaanMessage`, `ns.HandleWeeklyMessage` …) |
+| `ns.HandlePrankMessage(kind, t)` | En `X*`-besked kommer ind (videre til `ns.HandleStomiMessage`, `ns.HandleHaanMessage`, `ns.HandleHjemmeskoMessage`, `ns.HandleWeeklyMessage` …) |
 | `ns.OnBankMessage`, `ns.OnPlayedMessage`, `ns.OnRareMessage` | Deres beskedtype kommer ind |
 | `ns.SendMyExtras(light)` | Synk-svar: kalder `ns.SendPrankExtras`, `ns.SendBank`, `ns.SendPlayed`, `ns.SendWeekly` |
 | `ns.OnFreshDeath(ev, friend)`, `ns.OnMyDeath(ev)` | Et nyt dødsfald (en vens eller dit eget) |
 | `ns.OnFriendHeartbeat(...)` | Livstegn fra en ven |
 | `ns.AfterEvent()` | Efter de fleste ændringer (trofæer m.m. tjekkes) |
-| `ns.PrankSlash(cmd, arg)` | Ukendt slash-kommando (videre til `ns.StomiSlash`, `ns.HaanSlash`, `ns.WeeklySlash`) |
+| `ns.PrankSlash(cmd, arg)` | Ukendt slash-kommando (videre til `ns.StomiSlash`, `ns.HaanSlash`, `ns.GzSlash`, `ns.HjemmeskoSlash`, `ns.WeeklySlash`) |
 | `ns.GossipSlash`, `ns.BarSlash` | Deres kommandoer |
 | `ns.MakePrankDemo`, `ns.ClearPrankDemo` | `/wc4ever demo` og `demo slut` |
 | `ns.RefreshUI()` | Kald den efter ændringer, der skal vises |

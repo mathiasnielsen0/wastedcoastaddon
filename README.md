@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.27.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.28.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua` og (fra 0.27) `Gz.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua`, (fra 0.27) `Gz.lua` og (fra 0.28) `Hjemmesko.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -410,6 +410,24 @@ level, er teksten lidt mere højtidelig.
 - Vil du ikke have popups, så skriv `/wc4ever gz fra`. Så kommer gz kun som en linje i chatten.
   `/wc4ever gz test` viser popuppen kun hos dig.
 
+### Hjemmesko-alarmen: væk de AFK-venner
+Står en ven **AFK i en by** (eller på en kro) i over **20 minutter**, er vennen faldet i søvn i
+hjemmeskoene: ikonet på bande-baren får et blåt **zZz**, og tooltippen viser, hvor længe og hvor
+vennen har sovet (*"Sover i hjemmeskoene (AFK i 34 min. i Stormwind City)"*).
+
+- **Klik på det sovende ikon** for at prikke til vennen. Vennen får en vækkelyd (ready check-lyden),
+  en popup og en linje i chatten, fx *"Mathias hælder koldt vand i hjemmeskoene på dig."*, og
+  spillets ikon blinker på proceslinjen. Shift-klik åbner vennens karakterer som før.
+- Det kan også gøres med `/wc4ever væk` (den, der har sovet længst) eller `/wc4ever væk nick`.
+- Højst én prik hvert **30. sekund** fra dig og én pr. **minut** til samme ven.
+- Når du selv kommer tilbage fra AFK, får du at vide, hvem der prikkede til dig, mens du sov.
+- Prik tælles: bande-barens tooltip viser vækninger givet og fået, og nyhederne viser
+  *"Mathias vækkede Nick i hjemmeskoene"*.
+- Vil du ikke vækkes, så slå **Vækkelyd** fra i indstillingerne (eller `/wc4ever væk fra`). Så
+  kommer prik kun som en linje i chatten. `/wc4ever væk test` viser popuppen kun hos dig. Din egen
+  lyd kan lægges ind som `vaek` i `Sounds.lua`.
+- Spillet logger selv folk ud efter lang tids AFK, så zZz når ikke altid at komme frem.
+
 ### Ugens pokaler (Sjov > Ugens pokaler)
 Hver **søndag kl. 20** (dansk tid, også om sommeren) kåres ugens vindere:
 
@@ -551,6 +569,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever pokaler` | Vis sidste uges pokaler og hvem der fører i denne uge |
 | `/wc4ever stomi <ven>` | Sæt en stomi-fælde for en ven (`stomi test` viser popuppen, `stomi fra`/`til` slår den fra/til hos dig) |
 | `/wc4ever gz [ven]` | Sig tillykke til en ven, der lige er steget i level (uden navn: den senest). `gz test` viser popuppen, `gz fra`/`til` slår gz-popups fra/til |
+| `/wc4ever væk [ven]` | Væk en ven, der sover AFK i en by (uden navn: den, der har sovet længst). `væk test` viser popuppen, `væk fra`/`til` slår vækkelyden fra/til hos dig (`vaek` og `wake` virker også) |
 | `/wc4ever prut [ven]` | Prut af en ven, der lige er død (uden navn: den senest døde). `prut test` prøver lyden, `prut fra`/`til` slår prutter mod dig fra/til, `prut tal` viser flest givet og fået |
 | `/wc4ever annonce` | Slå dødsannoncer til/fra |
 | `/wc4ever emotes` | Slå popups for emote-angreb mod dig til/fra |
@@ -728,6 +747,8 @@ python3 tests/test_haan.py WastedCoast              # hån-knappen: prut på dø
 python3 tests/test_haan.py WastedCoast forever      # det samme på WoW Forever
 python3 tests/test_gz.py WastedCoast                # gz-knappen: Gz på level-popuppen, cooldown, spam-værn, slå fra, baren og synk
 python3 tests/test_gz.py WastedCoast forever        # det samme på WoW Forever
+python3 tests/test_hjemmesko.py WastedCoast         # hjemmesko-alarmen: AFK i byen, zZz på baren, prik, cooldown, slå fra og synk
+python3 tests/test_hjemmesko.py WastedCoast forever # det samme på WoW Forever
 python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-tid, vindere, XW, uddeling, kort og side
 python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever
 ```

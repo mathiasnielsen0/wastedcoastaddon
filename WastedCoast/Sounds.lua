@@ -19,6 +19,7 @@
 --   achievement  nogen låser et achievement op
 --   bosskill     du dræber en boss
 --   haan         en ven prutter af dig, når du er død (standard: prut1-3.ogg, som følger med)
+--   vaek         en ven prikker til dig, mens du sover AFK i en by (standard: ready check-lyden)
 -- =============================================================================
 local _, ns = ...
 
@@ -32,6 +33,7 @@ ns.sounds = {
     -- achievement = { "tada.ogg" },
     -- bosskill    = { "boss.ogg" },
     -- haan        = { "minprut.ogg" },
+    -- vaek        = { "vaekkeur.ogg" },
 
     -- Egen lyd til bestemte venner. Den vinder over lydene ovenfor.
     -- Brug vennens navn, som det står i addonet (fx Mikkel, Mathias, Nick).
