@@ -93,6 +93,8 @@ local addonName, ns = ...
 --   * v0.30.0: Wasted Coast Tidende (Avis.lua): dagens sladder som en avis, der åbner ved hvert login og
 --             opsummerer alt, der er sket i dag. Forside, rubrikker, Kapløbet, Skammens hat, horoskop og
 --             annoncer. Hver historie har en betingelse og en vægt. Sjov > Avisen og /wc4ever avis
+--   * v0.30.1: prut- og gz-ventetiden gemmes ikke længere i db. GetTime nulstilles, når pc'en genstarter,
+--             så en gemt værdi gav ventetider på flere timer ("Du kan prutte igen om 16057 sek.")
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
