@@ -67,8 +67,8 @@ function Bar.Items(now, maxItems, maxAge)
     maxItems = maxItems or MAX_ITEMS
     local since = now - (maxAge or MAX_AGE)
     local out = {}
-    local function add(t, key, text, link)
-        if t and t > since and t <= now + 60 and text then out[#out + 1] = { t = t, key = key, text = text, link = link } end
+    local function add(t, key, text, link, dead)
+        if t and t > since and t <= now + 60 and text then out[#out + 1] = { t = t, key = key, text = text, link = link, dead = dead } end
     end
 
     -- Dødsfald
@@ -85,7 +85,8 @@ function Bar.Items(now, maxItems, maxAge)
             else
                 text = F("%s døde til %s", Who(f, ev.class), killer)
             end
-            add(ev.time, "d" .. tostring(ev.id or ev.time), text)
+            -- v0.24: dead = vennen, så linjen kan bruges til at prutte (Haan.lua)
+            add(ev.time, "d" .. tostring(ev.id or ev.time), text, nil, f)
         end
     end
 
@@ -160,6 +161,13 @@ function Bar.Items(now, maxItems, maxAge)
     for _, e in ipairs((db.stomi and db.stomi.log) or {}) do
         if e.r == "y" and C.ROSTER_SET[e.to] and C.ROSTER_SET[e.from] then
             add(e.t, "s" .. tostring(e.id), F("%s fik |cffd9b38cstomi|r af %s", Who(e.to), Who(e.from)))
+        end
+    end
+
+    -- v0.24: prutter
+    for _, e in ipairs((db.haan and db.haan.log) or {}) do
+        if C.ROSTER_SET[e.to] and C.ROSTER_SET[e.from] then
+            add(e.t, "h" .. tostring(e.id), F("%s pruttede af %s", Who(e.from), Who(e.to)))
         end
     end
 
@@ -246,6 +254,12 @@ function Bar.TooltipLines(s, now)
     local st = ns.StomiHas and ns.StomiHas(s.name, now)
     if st then
         add(string.format(L("Har |cffd9b38cstomi|r (fra %s, %s tilbage)"), Name(st.from), ns.Stomi.Hours(ns.Stomi.Remaining(s.name, now))), nil, 0.85, 0.7, 0.55)
+    end
+    -- v0.24: prutter givet og fået
+    if ns.Haan then
+        local sent, recv = ns.Haan.Counts()
+        local ps, pr = sent[s.name] or 0, recv[s.name] or 0
+        if ps + pr > 0 then add(L("Prutter"), string.format(L("%d givet, %d fået"), ps, pr), 0.6, 0.6, 0.66) end
     end
     if s.chars and s.chars > 1 then add(L("Karakterer"), tostring(s.chars), 0.6, 0.6, 0.66) end
     add(" ")
@@ -503,11 +517,25 @@ local function RowEnter(self)
     else
         GameTooltip:AddLine(it.text, 1, 1, 1, true)
         GameTooltip:AddLine(C.FormatAgo(it.t), 0.6, 0.6, 0.66)
+        if Bar.CanTaunt(it) then
+            GameTooltip:AddLine(string.format(L("Klik: prut af %s"), Name(it.dead)), 0.85, 0.63, 0.36)
+        end
     end
     GameTooltip:Show()
 end
+
+-- v0.24: en linje om et dødsfald kan bruges til at prutte af vennen, så længe det er friskt
+function Bar.CanTaunt(it)
+    if not (it and it.dead and ns.Haan) then return false end
+    return ns.Haan.Can(it.dead) and true or false
+end
+
 local function RowClick(self)
     local it = self.line and self.line.item
+    if it and it.dead and not it.link and ns.HaanSend and not (IsShiftKeyDown and IsShiftKeyDown()) then
+        if ns.Haan.FreshDeath(it.dead) then ns.HaanSend(it.dead) end
+        return
+    end
     if not (it and it.link and IsShiftKeyDown and IsShiftKeyDown() and ChatEdit_InsertLink) then return end
     for _, ev in ipairs(DB().loot or {}) do
         if ev.item == it.link then ChatEdit_InsertLink(C.LootLink(ev)) return end

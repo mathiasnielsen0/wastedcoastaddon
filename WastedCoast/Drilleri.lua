@@ -408,8 +408,15 @@ function ns.OnFreshDeath(ev, friend)
         else
             title = title .. " (level " .. tostring(ev.level or "?") .. ")"
         end
+        -- v0.24: hån-knappen (Haan.lua): prut af den døde ven
+        local action
+        if friend ~= db.me and ns.HaanSend then
+            action = { label = L("Prut"), done = L("Prut!"),
+                       tip = string.format(L("Send %s en pruttelyd og en lille hilsen."), Name(friend)),
+                       onClick = function() return ns.HaanSend(friend) end }
+        end
         ns.Toast({ kind = "obit", head = L("DØDSANNONCE"), title = title, text = ns.Obituary(ev, friend),
-                   icon = OBIT_ICON, class = ev.class, dur = 7, friend = friend })
+                   icon = OBIT_ICON, class = ev.class, dur = action and 10 or 7, friend = friend, action = action })
     end
     if db.settings.announce then
         local prev = LatestDeath(ev)
@@ -633,6 +640,10 @@ function ns.HandlePrankMessage(kind, t)
         -- v0.22: stomi-fælden (Stomi.lua)
         if ns.HandleStomiMessage then ns.HandleStomiMessage(kind, t) end
 
+    elseif kind == "XH" then
+        -- v0.24: prutter (Haan.lua)
+        if ns.HandleHaanMessage then ns.HandleHaanMessage(t) end
+
     elseif kind == "XD" then
         if ns.HandleDuelMessage then ns.HandleDuelMessage(t) end
 
@@ -682,6 +693,7 @@ function ns.SendPrankExtras(light)
     if light then return end
     if ns.SendDuels then ns.SendDuels() end
     if ns.Stomi then ns.Stomi.SendLog() end
+    if ns.Haan then ns.Haan.SendLog() end
     local sent = 0
     for i = #db.needShame, 1, -1 do
         local e = db.needShame[i]
@@ -1007,6 +1019,7 @@ function ns.MakePrankDemo()
     if ns.MakeDuelDemo then ns.MakeDuelDemo() end
     if ns.MakeBankDemo then ns.MakeBankDemo() end
     if ns.Stomi then ns.Stomi.MakeDemo() end
+    if ns.Haan then ns.Haan.MakeDemo() end
 end
 
 function ns.ClearPrankDemo()
@@ -1014,6 +1027,7 @@ function ns.ClearPrankDemo()
     if ns.ClearDuelDemo then ns.ClearDuelDemo() end
     if ns.ClearBankDemo then ns.ClearBankDemo() end
     if ns.Stomi then ns.Stomi.ClearDemo() end
+    if ns.Haan then ns.Haan.ClearDemo() end
     for friend, e in pairs(db.levelAt) do
         if e.d then db.levelAt[friend] = nil end
     end
@@ -1031,6 +1045,7 @@ function ns.ResetPranks()
     if ns.ResetDuels then ns.ResetDuels() end
     if ns.ResetBank then ns.ResetBank() end
     if ns.Stomi then ns.Stomi.Reset() end
+    if ns.Haan then ns.Haan.Reset() end
 end
 
 -- Eksempler på de nye popups (gemmes og sendes ikke)
@@ -1065,6 +1080,7 @@ end
 function ns.PrankSlash(cmd, arg)
     local db = DB()
     if ns.StomiSlash and ns.StomiSlash(cmd, arg) then return true end
+    if ns.HaanSlash and ns.HaanSlash(cmd, arg) then return true end
     if cmd == "angrib" or cmd == "emote" or cmd == "attack" then
         local name = FindFriend(arg)
         if name then ns.EmoteAttack(name) else Print(L("Hvem? Skriv fx |cffffd100/wc4ever angrib nick|r.")) end

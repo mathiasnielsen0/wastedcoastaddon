@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.23.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.24.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` og (fra 0.22) `Stomi.lua` og `media/stomi.tga`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` og (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -359,6 +359,28 @@ i spillet: der bliver ikke invitet, summonet, rezzet eller handlet noget. Vil du
 så slå **Stomi-fælden** fra i indstillingerne (eller `/wc4ever stomi fra`). Se, hvordan
 den ser ud, med `/wc4ever stomi test` (giver ikke stomi og sendes ikke).
 
+### Hån-knappen: prut af de døde
+Når en ven dør, har dødsannoncen en lille **Prut**-knap i højre side (annoncen bliver
+stående, mens musen er over den). Et klik sender vennen en **pruttelyd** og en lille
+hilsen, fx *"Mathias prutter af dig."* eller *"Mathias holder et minuts prutten for dig."*,
+som popup og i chatten. Du hører selv pruttet med, og står vennen lige ved siden af dig,
+laver din karakter også spillets egen `/fart` på vennen.
+
+- Du kan også klikke på dødsfaldet i bande-barens nyheder eller i nyhedspanelet, eller
+  skrive `/wc4ever prut` (den ven, der døde senest) eller `/wc4ever prut nick`.
+- Kun i **15 minutter** efter dødsfaldet, **én prut pr. dødsfald** fra hver ven og højst
+  én prut hver **20. sekund**.
+- Prutterne tælles: bande-barens tooltip viser prutter givet og fået, nyhederne viser
+  *"Mathias pruttede af Nick"*, sladderen hænger den værste prutter ud, og
+  `/wc4ever prut tal` viser, hvem der har givet og fået flest.
+- Vil du være fri, så slå **Prutter mod dig** fra i indstillingerne (eller
+  `/wc4ever prut fra`). Så kommer der ingen lyd og ingen popup, kun en linje i chatten.
+- Lyden er en af tre pruttere, der følger med i `sounds` (`prut1-3.ogg`). Vil du have din
+  egen, så skriv `haan = { "minprut.ogg" }` i `Sounds.lua`. `/wc4ever prut test` afspiller
+  en prut og viser popuppen kun hos dig.
+- **Nye lydfiler kræver, at spillet genstartes helt** efter opdateringen. `/reload` er
+  ikke nok, før WoW kan finde pruttefilerne.
+
 ### Dødsannoncer
 Når en ven dør, får alle en popup med en dødsannonce, fx *"Nick blev overlistet af
 en level 12 Murloc Forager"*. Annoncen afhænger af, hvordan man døde (fald, drukning,
@@ -466,6 +488,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever sladder` | Vis sladderen siden sidst igen (`sladder fra`/`til` styrer den ved login) |
 | `/wc4ever angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
 | `/wc4ever stomi <ven>` | Sæt en stomi-fælde for en ven (`stomi test` viser popuppen, `stomi fra`/`til` slår den fra/til hos dig) |
+| `/wc4ever prut [ven]` | Prut af en ven, der lige er død (uden navn: den senest døde). `prut test` prøver lyden, `prut fra`/`til` slår prutter mod dig fra/til, `prut tal` viser flest givet og fået |
 | `/wc4ever annonce` | Slå dødsannoncer til/fra |
 | `/wc4ever emotes` | Slå popups for emote-angreb mod dig til/fra |
 | `/wc4ever testannonce` | Vis eksempler på dødsannonce, Need-politi og emote-angreb |
@@ -631,4 +654,6 @@ python3 tests/test_bar.py WastedCoast forever       # det samme på WoW Forever
 python3 tests/test_rolls.py WastedCoast             # need/greed/disenchant/pass i rolls, synk, Rolls-siden og sladder
 python3 tests/test_news.py WastedCoast              # nyhedspanelet i hovedvinduet og "[Loot]"-rettelsen
 python3 tests/test_news.py WastedCoast forever      # det samme på WoW Forever
+python3 tests/test_haan.py WastedCoast              # hån-knappen: prut på dødsannoncen, cooldown, spam-værn, slå fra, nyheder og synk
+python3 tests/test_haan.py WastedCoast forever      # det samme på WoW Forever
 ```

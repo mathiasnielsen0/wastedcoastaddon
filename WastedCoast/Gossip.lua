@@ -562,6 +562,22 @@ local function Collect(since, snapOverride, stOverride, limit)
         end
     end
 
+    -- v0.24: prutter
+    if ns.Haan then
+        local sent, recv = ns.Haan.Counts(since, true)
+        local top, n = nil, 0
+        for name, v in pairs(sent) do if ROSTER_SET[name] and (v > n or (v == n and top and name < top)) then top, n = name, v end end
+        local vic, vn = nil, 0
+        for name, v in pairs(recv) do if ROSTER_SET[name] and (v > vn or (v == vn and vic and name < vic)) then vic, vn = name, v end end
+        if top and n >= 2 then
+            add(24, string.format(L("%s pruttede af de døde %d gange. %s"), Who(top), n,
+                Pick({ L("Ingen respekt for de afdøde."), L("Kirkegården lugter stadig."), L("Spirit healeren har klaget.") })))
+        end
+        if vic and vn >= 3 then
+            add(21, string.format(L("%s blev pruttet af %d gange. Det er det, der sker, når man dør så tit."), Who(vic), vn))
+        end
+    end
+
     -- Skammens hat
     local hat = ns.HatHolder and ns.HatHolder()
     if hat and deaths[hat] then

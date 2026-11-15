@@ -68,6 +68,9 @@ local addonName, ns = ...
 --   * v0.23.1: guldgrafen starter, hvor målingerne pr. karakter begyndte (ingen flade linjer trukket tilbage
 --             fra en alts gamle "sidst set"), klokkeslæt på x-aksen for korte perioder, ingen hak fra en vens
 --             lidt skæve ur, og en ødelagt guldværdi kan ikke længere fryse guldsiden
+--   * v0.24.0: hån-knappen (Haan.lua): når en ven dør, har dødsannoncen en "Prut"-knap, der sender vennen en
+--             pruttelyd (sounds/prut1-3.ogg) og en lille hilsen. Også fra nyhederne og /wc4ever prut [ven].
+--             Kun i 15 min efter dødsfaldet, én prut pr. dødsfald, 20 sek cooldown, kan slås fra hos modtageren
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -4789,6 +4792,7 @@ local TOAST_STYLE = {
     police      = { border = { 0.25, 0.45, 1.00 }, bg = { 0.04, 0.05, 0.12 } },
     emote       = { border = { 1.00, 0.45, 0.75 }, bg = { 0.10, 0.04, 0.08 } },
     stomi       = { border = { 0.85, 0.70, 0.55 }, bg = { 0.10, 0.08, 0.05 } },   -- v0.22
+    haan        = { border = { 0.62, 0.50, 0.22 }, bg = { 0.08, 0.07, 0.03 } },   -- v0.24: prutter
     -- v0.16: loot efter kvalitet og sjældne mobs
     rareloot    = { border = { 0.00, 0.44, 0.87 }, bg = { 0.03, 0.06, 0.12 } },
     epicloot    = { border = { 0.64, 0.21, 0.93 }, bg = { 0.08, 0.04, 0.12 } },
@@ -4838,11 +4842,45 @@ local function ToastFrame()
     f.pts:SetPoint("RIGHT", f, "RIGHT", -16, 0)
     f.pts:SetTextColor(1, 0.82, 0.2)
 
+    -- v0.24: en lille knap i højre side (fx "Prut" på dødsannoncen). opts.action = { label, done, tip, onClick }
+    f.action = MakeButton(f, 62, 26, "", function(self)
+        local a = toast.active and toast.active.action
+        if not a or self.used then return end
+        self.used = true
+        local ok = a.onClick and a.onClick()
+        if ok then
+            self.text:SetText(a.done or a.label or "")
+            -- Toasten lukker kort efter
+            f.t = math.max(f.t or 0, (f.dur or 5) - 1.2)
+        else
+            self.used = false
+        end
+    end)
+    f.action:SetPoint("RIGHT", f, "RIGHT", -12, 0)
+    f.action:SetScript("OnEnter", function(self)
+        self:SetBackdropBorderColor(COL_GOLD[1], COL_GOLD[2], COL_GOLD[3], 1)
+        local a = toast.active and toast.active.action
+        if a and a.tip and GameTooltip then
+            GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+            GameTooltip:AddLine(a.tip, 1, 1, 1, true)
+            GameTooltip:Show()
+        end
+    end)
+    f.action:SetScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(COL_BORDER[1], COL_BORDER[2], COL_BORDER[3], 1)
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+    f.action:Hide()
+
     f:SetScript("OnClick", function(self) self.t = math.max(self.t or 0, self.dur or 0) end)
     f:SetScript("OnUpdate", function(self, dt)
         if not toast.active then return end
         self.t = (self.t or 0) + dt
         local dur = self.dur or 5
+        -- v0.24: en toast med en knap bliver stående, mens musen er over den
+        if toast.active.action and self.t > 0.3 and self.t < dur - 0.5 and self.IsMouseOver and self:IsMouseOver() then
+            self.t = math.min(self.t, dur - 0.6)
+        end
         if self.t < 0.3 then
             local k = self.t / 0.3
             self:SetAlpha(k)
@@ -4908,6 +4946,13 @@ function ns.ToastNext()
     end
     f.text:SetText(opts.text or "")
     f.pts:SetText(opts.pts and tostring(opts.pts) or "")
+    local a = type(opts.action) == "table" and opts.action or nil
+    opts.action = a
+    f.action.used = false
+    f.action.text:SetText(a and (a.label or "") or "")
+    f.action:SetShown(a ~= nil)
+    f.title:SetWidth(a and 250 or 300)
+    f.text:SetWidth(a and 250 or 300)
 
     toast.active = opts
     f.t = 0
@@ -6567,6 +6612,16 @@ do
             local cb = MakeCheck(p, ns.L("Stomi-fælden"), ns.L("Vennerne kan sende dig stomi-popuppen. Slå fra, så kommer den aldrig."),
                 function() return db.settings.stomi ~= false end, function(v) if v then db.settings.stomi = nil else db.settings.stomi = false end end)
             cb:SetPoint("TOPLEFT", p, "TOPLEFT", 16, -60 - (#checks + 1) * 44)
+            cb.tip:SetWidth(250)
+            p.checks[#p.checks + 1] = cb
+        end
+
+        -- v0.24: prutter (Haan.lua)
+        do
+            local cb = MakeCheck(p, ns.L("Prutter mod dig"), ns.L("Lyd og popup, når en ven prutter af dig efter et dødsfald. Slået fra: kun en linje i chatten."),
+                function() return db.settings.haan ~= false end, function(v) if v then db.settings.haan = nil else db.settings.haan = false end end)
+            cb:SetPoint("TOPLEFT", p, "TOPLEFT", 300, -60 - (#checks + 1) * 44)
+            cb.tip:SetWidth(250)
             p.checks[#p.checks + 1] = cb
         end
 
@@ -7846,6 +7901,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print(ns.L("  /wc4ever sladder      - vis dagens sladder igen  (|cffffd100sladder fra|r/|cffffd100til|r ved login)"))
         print(ns.L("  /wc4ever angrib <ven> - send et emote-angreb til en ven"))
         print(ns.L("  /wc4ever stomi <ven>  - sæt en stomi-fælde for en ven  (|cffffd100stomi test|r, |cffffd100stomi fra|r)"))
+        print(ns.L("  /wc4ever prut [ven]   - prut af en ven, der lige er død  (|cffffd100prut test|r, |cffffd100prut fra|r, |cffffd100prut tal|r)"))
         print(ns.L("  /wc4ever annonce      - slå dødsannoncer til/fra"))
         print(ns.L("  /wc4ever emotes       - slå popups for emote-angreb mod dig til/fra"))
         print(ns.L("  /wc4ever testannonce  - vis en test-dødsannonce"))

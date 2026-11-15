@@ -18,6 +18,7 @@
 --   levelup      en ven stiger i level
 --   achievement  nogen låser et achievement op
 --   bosskill     du dræber en boss
+--   haan         en ven prutter af dig, når du er død (standard: prut1-3.ogg, som følger med)
 -- =============================================================================
 local _, ns = ...
 
@@ -30,6 +31,7 @@ ns.sounds = {
     -- levelup     = { "ding.ogg" },
     -- achievement = { "tada.ogg" },
     -- bosskill    = { "boss.ogg" },
+    -- haan        = { "minprut.ogg" },
 
     -- Egen lyd til bestemte venner. Den vinder over lydene ovenfor.
     -- Brug vennens navn, som det står i addonet (fx Mikkel, Mathias, Nick).
