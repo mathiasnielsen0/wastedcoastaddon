@@ -57,6 +57,6 @@ Spilletid ligger på karakteren (`friends[ven].chars[karakter].played`, `Played.
 
 Lokale valg, som aldrig synkes: `toasts`, `lootToasts`, `rareToasts`, `sound`, `announce`,
 `minQuality`, `fallbackSync`, `lang`, `skin`, `pos`, `minimapAngle`, `minimapHide`,
-`surnames`, `bar` (`Bar.lua`), `emotes`, `obits` (`Drilleri.lua`), `gossip`, `stomi`,
+`surnames`, `bar`, `barFolded` (`Bar.lua`), `emotes`, `obits` (`Drilleri.lua`), `gossip`, `stomi`,
 `haan`. Standardværdier sættes i `InitDB` eller i modulet. Tjek altid `~= false` for
 indstillinger, der er slået til som standard, så gamle installationer uden feltet virker.

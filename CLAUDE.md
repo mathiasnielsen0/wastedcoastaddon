@@ -18,6 +18,7 @@ Alt er på dansk: kode-kommentarer, brugertekst, README og commit-beskeder. Skri
   - [docs/protocol.md](docs/protocol.md): alle synk-beskedtyper og reglerne for dem
   - [docs/data.md](docs/data.md): `WastedCoastDB` og hvilket modul ejer hvad
   - [docs/testing.md](docs/testing.md): attrappen og hvordan en testfil skrives
+  - `docs/images/`, `docs/screenshots/`: før/efter-skærmbilleder af UI-ændringer
 
 ## Tests
 
