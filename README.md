@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.30.2. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.31.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua`, (fra 0.27) `Gz.lua`, (fra 0.28) `Hjemmesko.lua`, (fra 0.29) `Milestones.lua` og (fra 0.30) `Avis.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua`, (fra 0.27) `Gz.lua`, (fra 0.28) `Hjemmesko.lua`, (fra 0.29) `Milestones.lua`, (fra 0.30) `Avis.lua` og (fra 0.31) `Spilletid.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -64,7 +64,7 @@ nogle små undersider lige under fanerne:
 | Fane | Undersider |
 |---|---|
 | **Venner** | Kort (forsiden), Karakterer, Gear, Professions, Reputation, Guld |
-| **Rangliste** | Scoreboard, Spilletid, Race, Dueller, Bank & repair |
+| **Rangliste** | Scoreboard, Spilletid, Timer pr. dag, Race, Dueller, Bank & repair |
 | **Loot** | Loot, Rolls |
 | **Død** | Statistik, Instanser |
 | **Sjov** | Avisen, Trofæer, Drilleri, Ugens pokaler, Milepæle |
@@ -254,6 +254,17 @@ måles automatisk lidt efter login (uden at skrive "Total time played" i chatten
 tæller videre, mens du spiller, og sendes til de andre hvert kvarter og ved synk.
 Deaths/hr regnes kun på karakterer med kendt spilletid og mindst en halv times
 spil. Spilletiden kan også ses i karakter-tooltippen under Venner > Karakterer.
+
+### Timer pr. dag (Rangliste > Timer pr. dag)
+En graf over, hvor meget hver ven har spillet hver dag, lidt ligesom guldgrafen. Hver
+ven måler sin egen spilletid (alle karakterer lagt sammen) og sender tallene til de
+andre. Målingen starter den dag, du får versionen: spilletid fra før tæller ikke, og
+en gammel alt, du logger på første gang, giver ikke en kæmpe dag. Dagen følger dansk
+tid. Vælg 7, 14, 30 eller 90 dage, og skift mellem **Pr. dag** og **Samlet** (spilletiden
+lagt sammen hen over perioden). Klik på et navn for at skjule eller vise vennen, hold
+musen over et navn for at se i dag, i perioden, snit pr. dag og den længste dag, og
+hold musen over en dag i grafen for at se alles tal den dag. `/wc4ever timer` viser
+de sidste 7 dage i chatten.
 
 ### Statistik (under Død)
 **Dødsstatistik:** fordelingen mellem PvE og PvP, de tre mobs, der har slået flest af jer ihjel,
@@ -628,6 +639,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 | `/wc4ever avis` | Vis dagens avis igen. `avis fra`/`til` styrer den ved login, `avis discord` giver den som tekst til Discord (`news` virker også) |
 | `/wc4ever angrib <ven>` | Send et emote-angreb til en ven (det er nok at skrive starten af navnet) |
 | `/wc4ever pokaler` | Vis sidste uges pokaler og hvem der fører i denne uge |
+| `/wc4ever timer` | Vis hver vens spilletid de sidste 7 dage (grafen ligger under Rangliste > Timer pr. dag, `hours` virker også) |
 | `/wc4ever milepæle` | Vis bandens fælles mål og hvor langt I er. `milepæle test` viser fest-popuppen, `milepæle fra`/`til` slår den fra/til hos dig (`milestones` og `mål` virker også) |
 | `/wc4ever stomi <ven>` | Sæt en stomi-fælde for en ven (`stomi test` viser popuppen, `stomi fra`/`til` slår den fra/til hos dig) |
 | `/wc4ever gz [ven]` | Sig tillykke til en ven, der lige er steget i level (uden navn: den senest). `gz test` viser popuppen, `gz fra`/`til` slår gz-popups fra/til |
@@ -817,6 +829,8 @@ python3 tests/test_avis.py WastedCoast              # avisen: øjebliksbillede, 
 python3 tests/test_avis.py WastedCoast forever      # det samme på WoW Forever
 python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-tid, vindere, XW, uddeling, kort og side
 python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever
+python3 tests/test_spilletid.py WastedCoast         # timer pr. dag: måling, dansk dagsskifte, loft, XP, graf, tooltips, demo og timer
+python3 tests/test_spilletid.py WastedCoast forever # det samme på WoW Forever
 ```
 
 ---

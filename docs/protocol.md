@@ -82,6 +82,7 @@ guild, party/raid eller whisper. `/wc4ever status` viser det live.
 | `XT` | offer, fra, nonce, resultat, tid, lokkemad | Svar på stomi-fælde | `Stomi.lua` |
 | `XH` | fra, til, dødsfald-id, nonce, tekst-nr, lyd-nr, tid | Prut (hån-knappen) | `Haan.lua` |
 | `XW` | ven, uge-nr, spilletid, levels | Egen spilletid og levels i ugen | `Weekly.lua` |
+| `XP` | ven, `dag=sek,dag=sek,...` | Egen spilletid pr. dag (dagnummer i dansk tid). Største værdi vinder, deles op ved 255 tegn | `Spilletid.lua` |
 | `XG` | fra, til, level, nonce, tekst-nr, tid | Gz (tillykke med levelet) | `Gz.lua` |
 | `XZ` | ven, 1/0, sekunder AFK, zone | AFK i en by (1, ved start og hvert 5. min.) eller vågen (0) | `Hjemmesko.lua` |
 | `XV` | fra, til, nonce, tekst-nr, tid | Prik til en sovende ven (vækkelyd) | `Hjemmesko.lua` |

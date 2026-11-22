@@ -79,7 +79,7 @@ for _, c in ipairs({ "status", "sound", "toast", "loottoast", "raretoast", "kana
 for _, c in ipairs({ "testtoast", "testannonce", "test", "testloot", "loot", "loot epic", "loot rare", "efternavn",
                      "angrib", "angrib nick", "sound death", "sound xyz", "reset", "hjælp", "sync", "sladder", "gz test", "gz fra", "gz til", "gz nick", "gz",
                      "væk test", "væk fra", "væk til", "væk nick", "væk", "wake", "milepæle", "milepæle test", "milepæle fra", "milepæle til",
-                     "avis", "avis fra", "avis til", "avis discord" }) do
+                     "avis", "avis fra", "avis til", "avis discord", "timer", "hours" }) do
     pcall(slash, c)
     RunTimers()
 end
@@ -98,6 +98,9 @@ if ns.HjemmeskoWake then pcall(ns.HjemmeskoWake, "Nick") end
 -- v0.29: en gruppe-milepæl fra en ven (fest-popup og nyhed)
 Fire("CHAT_MSG_ADDON", "WCOAST", "XM;Nick;dead;10;" .. NOW .. ";Nick;", "GUILD", "Nickchar")
 Fire("CHAT_MSG_ADDON", "WCOAST", "XM;Nick;haan;10;" .. NOW .. ";Mathias;", "GUILD", "Nickchar")
+-- v0.31: spilletid pr. dag fra en ven, og grafen i "Samlet"
+Fire("CHAT_MSG_ADDON", "WCOAST", "XP;Nick;" .. ns.PlayedDays.Day() .. "=3600", "GUILD", "Nickchar")
+ns.PlayedDays.ui.mode = 2
 RunTimers()
 hoverAll()
 for i = 1, #ns.pages do pcall(ns.ShowTab, i) end

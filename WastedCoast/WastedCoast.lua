@@ -98,6 +98,9 @@ local addonName, ns = ...
 --   * v0.30.2: prut- og gz-ventetiden gemmes ikke længere i db. GetTime nulstilles, når pc'en genstarter,
 --             så en gemt værdi gav ventetider på flere timer ("Du kan prutte igen om 16057 sek.")
 --             Prut og gz sker kun fra popupperne igen. Klik på nyhederne i bande-baren gør det ikke længere
+--   * v0.31.0: spilletid pr. dag (Spilletid.lua): Rangliste > Timer pr. dag viser en graf over, hvor meget hver
+--             ven har spillet hver dag (eller samlet i perioden), målt fra den dag, man får versionen.
+--             XP-beskeden. /wc4ever timer viser de sidste 7 dage i chatten
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -3406,6 +3409,7 @@ function ns.SendMyExtras(light)
     if ns.SendBank then ns.SendBank() end   -- én lille besked, også ved den lette synk
     if ns.SendPlayed then ns.SendPlayed(light) end
     if ns.SendWeekly then ns.SendWeekly() end   -- v0.25: spilletid og levels i ugen (Weekly.lua)
+    if ns.SendPlayedDays then ns.SendPlayedDays(light) end   -- v0.31: spilletid pr. dag (Spilletid.lua)
 end
 
 ns.CheckBossDeath = CheckBossDeath
@@ -5873,6 +5877,7 @@ do
         { 0.75, 0.45, 1.00 }, { 1.00, 0.60, 0.25 }, { 0.30, 0.90, 0.90 }, { 0.95, 0.50, 0.80 },
         { 0.70, 0.90, 0.30 }, { 0.85, 0.85, 0.90 },
     }
+    ns.FRIEND_COLORS = FRIEND_COLORS   -- v0.31: samme farver i spilletidsgrafen (Spilletid.lua)
     local GRAPH_L, GRAPH_R, GRAPH_T, GRAPH_B = 58, 12, 12, 24
 
     local function GoldShort(copper)
@@ -6834,7 +6839,7 @@ local GROUPS = ns.LT({
     { label = "Venner",     icon = "INV_Misc_Head_Human_01",
       pages = { 1, 3, 11, 10, 12, 9 }, names = { "Kort", "Karakterer", "Gear", "Professions", "Reputation", "Guld" } },
     { label = "Rangliste",  icon = "Ability_Rogue_Sprint",
-      pages = { 2, 17, 7, 14, 15 },    names = { "Scoreboard", "Spilletid", "Race", "Dueller", "Bank & repair" } },
+      pages = { 2, 17, 21, 7, 14, 15 }, names = { "Scoreboard", "Spilletid", "Timer pr. dag", "Race", "Dueller", "Bank & repair" } },
     { label = "Loot",       icon = "INV_Misc_Bag_10",
       pages = { 4, 8 },                names = { "Loot", "Rolls" } },
     { label = "Død",        icon = "INV_Misc_Bone_HumanSkull_01",
@@ -8010,6 +8015,7 @@ SlashCmdList["WASTEDCOAST"] = function(input)
         print(ns.L("  /wc4ever sladder      - vis dagens sladder igen  (|cffffd100sladder fra|r/|cffffd100til|r ved login)"))
         print(ns.L("  /wc4ever avis         - vis dagens avis igen  (|cffffd100avis fra|r/|cffffd100til|r ved login, |cffffd100avis discord|r)"))
         print(ns.L("  /wc4ever pokaler      - se ugens pokaler og hvem der fører i denne uge"))
+        print(ns.L("  /wc4ever timer        - spilletid pr. ven de sidste 7 dage (grafen: Rangliste > Timer pr. dag)"))
         print(ns.L("  /wc4ever milepæle     - se bandens fælles mål  (|cffffd100milepæle test|r, |cffffd100milepæle fra|r)"))
         print(ns.L("  /wc4ever angrib <ven> - send et emote-angreb til en ven"))
         print(ns.L("  /wc4ever stomi <ven>  - sæt en stomi-fælde for en ven  (|cffffd100stomi test|r, |cffffd100stomi fra|r)"))

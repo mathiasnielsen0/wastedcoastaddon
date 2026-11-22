@@ -46,7 +46,7 @@ local realToast = ns.Toast
 ns.Toast = function(o) ns.toastsSeen[#ns.toastsSeen+1] = o return realToast(o) end
 
 -- Sider: 16 (fordelt på 5 faner), og Drilleri-siden findes
-check(#ns.pages == 20 and #ns.tabs == 5, "20 sider på 5 faner")
+check(#ns.pages == 21 and #ns.tabs == 5, "21 sider på 5 faner")
 
 -- XP-procent i level
 check(ns.LevelText(42, 63) == "42 |cff9a9aa6(63%)|r", "level med XP-procent: " .. ns.LevelText(42, 63))
@@ -553,7 +553,7 @@ check(db.bank.Nick.wg == 2000000, "ældre BK ignoreres")
 Fire("CHAT_MSG_ADDON", "WCOAST", "BK;Nick;" .. (NOW + 5) .. ";x", "GUILD", "Nickchar")
 check(db.bank.Nick.wg == 2000000, "ødelagt BK ignoreres")
 ns.ShowTab(15)
-check(ns.subTabs[2][5].active, "Bank & repair under Rangliste")
+check(ns.subTabs[2][6].active, "Bank & repair under Rangliste")
 check(ns.bankUI.bankFacts:GetText():find("Bankrøveren:|r .*Nick"), "Nick er bankrøver: " .. ns.bankUI.bankFacts:GetText())
 check(ns.bankUI.repFacts:GetText():find("Rustbunken:|r .*Nick"), "Nick er rustbunke: " .. ns.bankUI.repFacts:GetText())
 check(ns.bankUI.bankRows[1].f[2]:GetText() == "Nick", "Nick øverst på 'Taget'")

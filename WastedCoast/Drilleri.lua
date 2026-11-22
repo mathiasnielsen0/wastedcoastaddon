@@ -669,6 +669,10 @@ function ns.HandlePrankMessage(kind, t)
         -- v0.25: spilletid og levels i ugen (Weekly.lua)
         if ns.HandleWeeklyMessage then ns.HandleWeeklyMessage(t) end
 
+    elseif kind == "XP" then
+        -- v0.31: spilletid pr. dag (Spilletid.lua)
+        if ns.HandlePlayedDaysMessage then ns.HandlePlayedDaysMessage(t) end
+
     elseif kind == "XU" then
         local friend, char, level = t[2], t[3], tonumber(t[5])
         if ROSTER_SET[friend] and friend ~= db.me and char and char ~= "" and level
@@ -1052,6 +1056,7 @@ function ns.MakePrankDemo()
     if ns.Gz then ns.Gz.MakeDemo() end
     if ns.Hjemmesko then ns.Hjemmesko.MakeDemo() end
     if ns.Milestones then ns.Milestones.MakeDemo() end
+    if ns.PlayedDays then ns.PlayedDays.MakeDemo() end
 end
 
 function ns.ClearPrankDemo()
@@ -1063,6 +1068,7 @@ function ns.ClearPrankDemo()
     if ns.Gz then ns.Gz.ClearDemo() end
     if ns.Hjemmesko then ns.Hjemmesko.ClearDemo() end
     if ns.Milestones then ns.Milestones.ClearDemo() end
+    if ns.PlayedDays then ns.PlayedDays.ClearDemo() end
     for friend, e in pairs(db.levelAt) do
         if e.d then db.levelAt[friend] = nil end
     end
@@ -1085,6 +1091,7 @@ function ns.ResetPranks()
     if ns.Gz then ns.Gz.Reset() end
     if ns.Hjemmesko then ns.Hjemmesko.Reset() end
     if ns.Milestones then ns.Milestones.Reset() end
+    if ns.PlayedDays then ns.PlayedDays.Reset() end
 end
 
 -- Eksempler på de nye popups (gemmes og sendes ikke)
@@ -1124,6 +1131,7 @@ function ns.PrankSlash(cmd, arg)
     if ns.HjemmeskoSlash and ns.HjemmeskoSlash(cmd, arg) then return true end
     if ns.MilestonesSlash and ns.MilestonesSlash(cmd, arg) then return true end
     if ns.WeeklySlash and ns.WeeklySlash(cmd, arg) then return true end
+    if ns.PlayedDaysSlash and ns.PlayedDaysSlash(cmd, arg) then return true end
     if ns.AvisSlash and ns.AvisSlash(cmd, arg) then return true end
     if cmd == "angrib" or cmd == "emote" or cmd == "attack" then
         local name = FindFriend(arg)
