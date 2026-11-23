@@ -101,6 +101,8 @@ local addonName, ns = ...
 --   * v0.31.0: spilletid pr. dag (Spilletid.lua): Rangliste > Timer pr. dag viser en graf over, hvor meget hver
 --             ven har spillet hver dag (eller samlet i perioden), målt fra den dag, man får versionen.
 --             XP-beskeden. /wc4ever timer viser de sidste 7 dage i chatten
+--   * v0.31.1: samme ven med to ID'er vises kun én gang, også når navnene er forskellige: ID'er med den samme
+--             karakter samles, et nyt navn samler dem med det samme, og statistik fra begge ID'er flettes
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)

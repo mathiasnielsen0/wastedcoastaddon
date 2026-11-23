@@ -502,6 +502,63 @@ do
 end
 
 -- -----------------------------------------------------------------------------
+-- v0.31.1: Andreas to gange på kortet. Det gamle ID (McAndze) og et nyt ID (Andreas) har den samme
+-- karakter. De regnes for den samme ven, også før han omdøber det gamle, og et nyt navn midt i en
+-- session samler dem med det samme. Statistik fra begge ID'er flettes i stedet for at gå tabt.
+-- -----------------------------------------------------------------------------
+do
+    local g = db.group
+    local R, RS = ns.core.ROSTER, ns.core.ROSTER_SET
+    local before = #R
+    -- Det nye ID: sidst set i går, i Lakeshire
+    g.members.uANDREAS2 = { n = "Bjarke", nt = 5, j = 5 }   -- (Andreas findes allerede i testgruppen)
+    db.friends.uANDREAS2 = { chars = { Kjeldchar = { class = "DRUID", level = 24, xp = 22, surname = "Kjeld",
+                                                     zone = "Lakeshire Inn", seen = NOW - 70000 } } }
+    db.runs.uANDREAS2 = { ["The Hall of Thanes"] = { wipes = 1, clears = 1 }, Deadmines = { wipes = 3 } }
+    db.rolls = db.rolls or {}
+    db.rolls.uANDREAS2 = { rolls = 24, wins = 4 }
+    db.events[#db.events + 1] = { id = "andreas-new-death", friend = "uANDREAS2", name = "Kjeldchar", time = NOW - 70000 }
+    -- Det gamle ID har stadig sit gamle navn og er i gang nu
+    g.members.uMCANDZE4 = { n = "Bjarkeboy", nt = 1, j = 1 }
+    db.friends.uMCANDZE4 = { chars = { Kjeldchar = { class = "DRUID", level = 24, xp = 48, surname = "Kjeld",
+                                                     zone = "Redridge Mountains", seen = NOW - 5 } } }
+    db.runs.uMCANDZE4 = { Deadmines = { wipes = 2, clears = 1 } }
+    db.rolls.uMCANDZE4 = { rolls = 91, wins = 15 }
+    ns.RebuildRoster()
+    check(#R == before + 1, "samme karakter på to ID'er giver ét kort: " .. #R)
+    check(RS.uMCANDZE4 and not RS.uANDREAS2, "det aktive ID vises")
+    check(db.friends.uMCANDZE4.chars.Kjeldchar.zone == "Redridge Mountains", "de nyeste data vinder")
+    check(db.runs.uMCANDZE4["The Hall of Thanes"] and db.runs.uMCANDZE4.Deadmines.wipes == 3
+          and db.runs.uMCANDZE4.Deadmines.clears == 1, "instans-tal fra begge ID'er flettes")
+    check(db.rolls.uMCANDZE4.rolls == 91 and db.rolls.uANDREAS2 == nil, "rolls flettes uden at gå tabt")
+    check(db.events[#db.events].friend == "uMCANDZE4", "dødsfaldet flyttes over")
+    check(g.members.uANDREAS2.dup == "uMCANDZE4", "koblingen huskes")
+    -- Koblingen holder, selv om dubletten ikke længere har karakterer gemt
+    ns.RebuildRoster()
+    check(#R == before + 1 and not RS.uANDREAS2, "dubletten kommer ikke tilbage efter en genopbygning")
+
+    -- Samme karakternavn, men et andet efternavn: to forskellige venner
+    g.members.uANDREAS3 = { n = "Andersen", nt = 1, j = 9 }
+    db.friends.uANDREAS3 = { chars = { Kjeldchar = { class = "DRUID", level = 3, surname = "Anden", seen = NOW - 100 } } }
+    ns.RebuildRoster()
+    check(RS.uANDREAS3 and #R == before + 2, "en anden karakter med samme fornavn er en anden ven")
+    g.members.uANDREAS3, db.friends.uANDREAS3 = nil, nil
+    g.members.uANDREAS2, g.members.uMCANDZE4 = nil, nil   -- plads på kortet til næste del
+
+    -- Omdøbning midt i en session: to ID'er, der først nu får samme navn, samles med det samme
+    g.members.uRENAME22 = { n = "Gammelnavn", nt = 1, j = 20 }
+    g.members.uRENAME33 = { n = "Nytnavn", nt = 1, j = 21 }
+    ns.RebuildRoster()
+    check(RS.uRENAME22 and RS.uRENAME33, "to forskellige navne er to venner")
+    msg(table.concat({ "GM", "uRENAME22", g.id, "uRENAME22", "Nytnavn", NOW, 20 }, ";"), "GUILD", "Gammelchar")
+    check(not (RS.uRENAME22 and RS.uRENAME33), "efter omdøbningen vises de kun én gang")
+
+    for _, id in ipairs({ "uRENAME22", "uRENAME33" }) do g.members[id] = nil end
+    ns.RebuildRoster()
+    check(#R == before, "tilbage til den normale gruppe")
+end
+
+-- -----------------------------------------------------------------------------
 -- v0.18.1: online i guild-listen tæller, og livstegnet går også i guild, til vennen er hørt i kanalen
 -- -----------------------------------------------------------------------------
 do

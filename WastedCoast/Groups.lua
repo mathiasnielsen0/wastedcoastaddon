@@ -138,8 +138,11 @@ end
 
 -- =============================================================================
 -- Dubletter: samme ven med to ID'er (fx nyt ID efter geninstallation, en anden WoW-konto eller
--- et oprindeligt ID plus et nyt). Medlemmer med samme navn regnes for den samme ven: kun ét ID
--- vises (dit eget, ellers det, der sidst har været aktivt), og det andet ID's data flettes ind.
+-- et oprindeligt ID plus et nyt). To medlemmer regnes for den samme ven, hvis de har samme navn,
+-- eller hvis de har den samme karakter (samme navn og klasse, og samme efternavn, hvis begge
+-- kendes). Kun ét ID vises (dit eget, ellers det, der sidst har været aktivt), og det andet ID's
+-- data flettes ind. Koblingen huskes i members[id].dup (kun lokalt), så den holder, selv om
+-- dubletten ikke længere har karakterer gemt, eller navnene senere er forskellige.
 -- =============================================================================
 ns.memberAlias = {}   -- skjult dublet-ID -> det ID, der vises
 
@@ -161,7 +164,27 @@ local function Activity(id)
     return best
 end
 
--- Flyt det, der er gemt om "from", over på "to". Findes noget allerede hos "to", beholdes det.
+-- Fletter src ind i dst uden at miste noget: manglende nøgler kopieres, tabeller flettes
+-- rekursivt, og ved to tal vinder det største (tællere og tidsstempler). Lister (fx guldgrafen)
+-- blandes ikke: den længste beholdes.
+local function MergeInto(dst, src)
+    if type(dst) ~= "table" or type(src) ~= "table" then return end
+    if src[1] ~= nil or dst[1] ~= nil then
+        if #src > #dst then
+            wipe(dst)
+            for i, v in ipairs(src) do dst[i] = v end
+        end
+        return
+    end
+    for k, v in pairs(src) do
+        local d = dst[k]
+        if d == nil then dst[k] = v
+        elseif type(d) == "table" and type(v) == "table" then MergeInto(d, v)
+        elseif type(d) == "number" and type(v) == "number" and v > d then dst[k] = v end
+    end
+end
+
+-- Flyt det, der er gemt om "from", over på "to". Findes noget allerede hos "to", flettes det.
 local KEYED = { "runs", "ach", "rolls", "goldHist", "goldChar", "legacy", "levelAt", "bank", "duels", "rareKills", "playedDay", "playedDayLast", "playedDayDemo" }
 function ns.MergeMemberData(from, to)
     local db = DB()
@@ -189,7 +212,9 @@ function ns.MergeMemberData(from, to)
     for _, key in ipairs(KEYED) do
         local t = db[key]
         if type(t) == "table" and t[from] ~= nil then
-            if t[to] == nil then t[to] = t[from] end
+            if t[to] == nil then t[to] = t[from]
+            elseif type(t[to]) == "table" then MergeInto(t[to], t[from])
+            elseif type(t[to]) == "number" and type(t[from]) == "number" and t[from] > t[to] then t[to] = t[from] end
             t[from] = nil
         end
     end
@@ -206,38 +231,83 @@ function ns.MergeMemberData(from, to)
     end
 end
 
--- Samler medlemmer med samme navn. Returnerer listen uden dubletter.
+-- Karakterer, et medlem har: "navn|klasse" -> efternavn ("" hvis ukendt)
+local function CharKeys(id)
+    local db = DB()
+    local info = db and db.friends and db.friends[id]
+    local out = {}
+    for cn, c in pairs((info and info.chars) or {}) do
+        if type(c) == "table" and not c.demo and type(cn) == "string" and cn ~= "" then
+            out[cn:lower() .. "|" .. tostring(c.class or "")] = tostring(c.surname or ""):lower()
+        end
+    end
+    return out
+end
+
+-- Samler medlemmer, der er den samme ven. Returnerer listen uden dubletter.
 local function Dedupe(list)
     local db = DB()
     wipe(ns.memberAlias)
-    local byName, out = {}, {}
+    -- Union-find: hver ven får én "rod"
+    local parent, byId = {}, {}
+    local function Find(e)
+        while parent[e] ~= e do
+            parent[e] = parent[parent[e]]
+            e = parent[e]
+        end
+        return e
+    end
+    local function Union(a, b)
+        local ra, rb = Find(a), Find(b)
+        if ra ~= rb then parent[rb] = ra end
+    end
+    for _, e in ipairs(list) do parent[e] = e; byId[e.id] = e end
+
+    local byName, byChar = {}, {}
     for _, e in ipairs(list) do
+        -- Samme navn
         local key = NameKey(e.m, e.id)
-        local cur = byName[key]
-        if not cur then
-            byName[key] = e
+        if byName[key] then Union(byName[key], e) else byName[key] = e end
+        -- Samme karakter
+        for ck, sur in pairs(CharKeys(e.id)) do
+            local o = byChar[ck]
+            if not o then
+                byChar[ck] = { e = e, sur = sur }
+            elseif o.e ~= e and (o.sur == "" or sur == "" or o.sur == sur) then
+                Union(o.e, e)
+            end
+        end
+        -- Kendt dublet fra tidligere
+        local d = e.m.dup and byId[e.m.dup]
+        if d then Union(d, e) end
+    end
+
+    -- Hvem vises? Dig selv, ellers den senest aktive, ellers den, der kom først med
+    local function Better(a, b)
+        if a.id == db.me then return true end
+        if b.id == db.me then return false end
+        local aa, ab = Activity(a.id), Activity(b.id)
+        if aa ~= ab then return aa > ab end
+        local ja, jb = a.m.j or 0, b.m.j or 0
+        if ja ~= jb then return ja < jb end
+        return a.id < b.id
+    end
+    local best = {}
+    for _, e in ipairs(list) do
+        local r = Find(e)
+        if not best[r] or Better(e, best[r]) then best[r] = e end
+    end
+    local out = {}
+    for _, e in ipairs(list) do
+        local keep = best[Find(e)]
+        if keep == e then
             out[#out + 1] = e
         else
-            -- Hvem vises? Dig selv, ellers den senest aktive, ellers den, der kom først med
-            local keep
-            if e.id == db.me then keep = e
-            elseif cur.id == db.me then keep = cur
-            else
-                local ae, ac = Activity(e.id), Activity(cur.id)
-                if ae ~= ac then keep = (ae > ac) and e or cur
-                else keep = ((e.m.j or 0) < (cur.m.j or 0)) and e or cur end
-            end
-            local drop = (keep == e) and cur or e
-            if keep == e then
-                for i, x in ipairs(out) do if x == cur then out[i] = e end end
-                byName[key] = e
-            end
-            ns.memberAlias[drop.id] = keep.id
+            ns.memberAlias[e.id] = keep.id
+            e.m.dup = keep.id
         end
     end
     for from, to in pairs(ns.memberAlias) do
-        while ns.memberAlias[to] do to = ns.memberAlias[to] end
-        ns.memberAlias[from] = to
         ns.MergeMemberData(from, to)
     end
     return out
@@ -445,6 +515,8 @@ function ns.OnGroupMessage(kind, t, sender)
             m.n, m.nt = name, nt
             if (m.j or 0) == 0 and j > 0 then m.j = j end
             if old ~= name and from == id then Print((old or id) .. L(" hedder nu |cffffd100") .. name .. "|r.") end
+            -- Et nyt navn kan gøre to ID'er til den samme ven
+            if old ~= name then Rebuild() end
             Refresh()
         end
 
