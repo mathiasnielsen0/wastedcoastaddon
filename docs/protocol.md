@@ -44,6 +44,11 @@ guild, party/raid eller whisper. `/wc4ever status` viser det live.
    `ns.SendMyExtras(light)`, som kalder hvert moduls sende-funktion.
 3. Et nyt modul, der har data at synke, kobles på i `ns.SendMyExtras`
    (`WastedCoast.lua`, søg efter `function ns.SendMyExtras`).
+4. Videresendelse (v0.31.2, `Videresend.lua`): `RequestSync` sender også `QV` med det nyeste,
+   spørgeren kender om hver ven. Andre online venner svarer efter 3-11 s med `CV`, `D` og `L` for
+   venner, der er offline, men kun det, der er nyere (ældste først, højst 25 pr. ven og 120 i alt).
+   Noget, der lige er set på kanalen, sendes ikke igen i 2 minutter. Kun karakterer, dødsfald og
+   loot gives videre; resten (instanser, guldhistorik, spilletid osv.) kommer stadig fra vennen selv.
 
 ## Beskedtyper
 
@@ -86,6 +91,8 @@ guild, party/raid eller whisper. `/wc4ever status` viser det live.
 | `XG` | fra, til, level, nonce, tekst-nr, tid | Gz (tillykke med levelet) | `Gz.lua` |
 | `XZ` | ven, 1/0, sekunder AFK, zone | AFK i en by (1, ved start og hvert 5. min.) eller vågen (0) | `Hjemmesko.lua` |
 | `XV` | fra, til, nonce, tekst-nr, tid | Prik til en sovende ven (vækkelyd) | `Hjemmesko.lua` |
+| `QV` | ven, `navn=d.l.c,...` | "Hvad har jeg"-resumé efter `Q`: nyeste dødsfald, loot og sidst set pr. ven (base 36). Deles op ved 255 tegn (v0.31.2) | `Videresend.lua` |
+| `CV` | videresender, ven, karakter, klasse, level, guld, zone, sidst set, xp, efternavn | En offline vens karakter, givet videre af en anden. Bruges kun, hvis sidst set er nyere (v0.31.2) | `Videresend.lua` |
 | `XM` | fra, kategori, mål, tid, udløser, stille | Gruppe-milepæl nået (v0.29). Tidligste tid vinder; stille = ingen fest | `Milestones.lua` |
 
 ## Ny beskedtype: tjekliste

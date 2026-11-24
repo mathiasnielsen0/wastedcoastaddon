@@ -25,6 +25,7 @@ samme private tabel `ns` (`local _, ns = ...`).
 | `Weekly.lua` | Ugens pokaler |
 | `Spilletid.lua` | Timer pr. dag: spilletid pr. ven pr. dag og grafen (side 21) |
 | `Milestones.lua` | Gruppe-milepæle (fælles mål og fest-popup) |
+| `Videresend.lua` | Online venner giver karakterer, dødsfald og loot videre om offline venner (`QV`/`CV`) |
 | `Avis.lua` | Wasted Coast Tidende: dagens avis ved login (historier med betingelser og vægt) |
 | `Bar.lua` | Bande-baren og nyhedslisten (samler nyheder fra alle moduler) |
 

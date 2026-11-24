@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.31.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.31.2. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -51,7 +51,7 @@ med den nye version. Første gang med 0.4 låser addonet de trofæer op, du alle
 fortjent, uden at vise en byge af popups.
 **Alle bør opdatere**, ellers kan nogle ikke se hinandens instans-tal, trofæer
 og popups.
-**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua`, (fra 0.27) `Gz.lua`, (fra 0.28) `Hjemmesko.lua`, (fra 0.29) `Milestones.lua`, (fra 0.30) `Avis.lua` og (fra 0.31) `Spilletid.lua`. Kopiér hele
+**Nye filer:** `Sounds.lua`, mappen `sounds`, (fra 0.6) `Drilleri.lua`, (fra 0.7.2) mappen `media`, (fra 0.9) `Dueller.lua`, (fra 0.10) `Groups.lua` (fra 0.11) `Bank.lua` og `Gossip.lua` (fra 0.13) `Played.lua`, (fra 0.16) `Rares.lua`, (fra 0.18) `Locale.lua` og `Locale_en.lua` (fra 0.20) `Bar.lua` (fra 0.22) `Stomi.lua` og `media/stomi.tga` (fra 0.24) `Haan.lua` og `sounds/prut1.ogg`, `prut2.ogg`, `prut3.ogg` (fra 0.25) `Weekly.lua`, (fra 0.27) `Gz.lua`, (fra 0.28) `Hjemmesko.lua`, (fra 0.29) `Milestones.lua`, (fra 0.30) `Avis.lua` (fra 0.31) `Spilletid.lua` og (fra 0.31.2) `Videresend.lua`. Kopiér hele
 `WastedCoast`-mappen.
 
 ---
@@ -703,6 +703,13 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 - **Når du logger ind:** Addonet beder vennerne om at sende deres egne karakterer,
   dødsfald og loot (de seneste 60 af hver), så du får historikken, selvom du har
   været offline.
+- **Videresendelse (fra 0.31.2):** Venner, der er online, giver også det videre, de ved
+  om venner, der er offline: karakterer (level, XP, guld, zone, sidst set), dødsfald og
+  loot. Så ser du en vens nye level, selvom I aldrig har været online samtidig. Ved hver
+  synk sender addonet et lille resumé af, hvad du allerede har, og de andre sender kun
+  det, der er nyere. Store huller fyldes op lidt ad gangen (højst 25 dødsfald og loot pr.
+  ven ad gangen, resten ved næste synk 10 minutter senere). Det virker kun, når både du
+  og den, der giver det videre, har version 0.31.2 eller nyere.
 
 ---
 
@@ -831,6 +838,8 @@ python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-t
 python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever
 python3 tests/test_spilletid.py WastedCoast         # timer pr. dag: måling, dansk dagsskifte, loft, XP, graf, tooltips, demo og timer
 python3 tests/test_spilletid.py WastedCoast forever # det samme på WoW Forever
+python3 tests/test_videresend.py WastedCoast        # videresendelse: QV-resumé, CV, D/L nyere end spørgerens, loft, ingen gentagelse og ødelagte beskeder
+python3 tests/test_videresend.py WastedCoast forever # det samme på WoW Forever
 ```
 
 ---

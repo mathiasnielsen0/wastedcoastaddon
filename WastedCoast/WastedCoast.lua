@@ -103,6 +103,9 @@ local addonName, ns = ...
 --             XP-beskeden. /wc4ever timer viser de sidste 7 dage i chatten
 --   * v0.31.1: samme ven med to ID'er vises kun én gang, også når navnene er forskellige: ID'er med den samme
 --             karakter samles, et nyt navn samler dem med det samme, og statistik fra begge ID'er flettes
+--   * v0.31.2: online venner giver data om offline venner videre (Videresend.lua). Før så man kun en vens nye
+--             level, guld, dødsfald og loot, hvis man selv var online samtidig med vennen. Synk sender nu et
+--             resumé (QV), og de andre svarer med det nyere: CV for karakterer, D og L for dødsfald og loot
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -1510,6 +1513,8 @@ local function RequestSync(force, light)
     local msg = "Q;" .. db.me .. (force and ";1" or (light and ";0;L" or ""))
     Send(msg)
     route.Probe(msg)
+    -- v0.31.2: "hvad har jeg"-resumé, så online venner kan give data om offline venner videre (Videresend.lua)
+    if ns.SendSyncDigest then ns.SendSyncDigest() end
 end
 
 local function IsLocalOnly(id)
@@ -3455,11 +3460,17 @@ local function OnAddonMessage(prefix, message, chatType, sender)
 
     if kind == "D" then
         local ev = DeserializeDeath(t)
-        if ev then AddDeath(ev) end   -- dubletter (inkl. vores egne) filtreres fra via id
+        if ev then
+            if ns.RelayHeard then ns.RelayHeard(ev.id) end   -- set på kanalen: videresend ikke igen lige nu
+            AddDeath(ev)   -- dubletter (inkl. vores egne) filtreres fra via id
+        end
 
     elseif kind == "L" then
         local ev = DeserializeLoot(t)
-        if ev then AddLoot(ev) end
+        if ev then
+            if ns.RelayHeard then ns.RelayHeard(ev.id) end
+            AddLoot(ev)
+        end
 
     elseif kind == "H" then
         local friend = t[2]
@@ -3497,6 +3508,10 @@ local function OnAddonMessage(prefix, message, chatType, sender)
             }, (seen and seen > 0) and seen or 1)
             if ns.RefreshUI then ns.RefreshUI() end
         end
+
+    elseif kind == "QV" or kind == "CV" then
+        -- v0.31.2: videresendelse af offline venners data (Videresend.lua)
+        if ns.HandleRelayMessage then ns.HandleRelayMessage(kind, t) end
 
     elseif kind == "RM" then
         -- v0.16: en ven har dræbt et sjældent mob (Rares.lua)
@@ -8058,4 +8073,7 @@ ns.core = {
     ClassName = ClassName, ICON_TEX = ICON_TEX, COL_MUTED = COL_MUTED, FormatAgoShort = FormatAgoShort,
     -- v0.21: need/greed i tickeren
     HOW_LABEL = HOW_LABEL,
+    -- v0.31.2: videresendelse (Videresend.lua)
+    SerializeDeath = SerializeDeath, SerializeLoot = SerializeLoot, IsLocalOnly = IsLocalOnly,
+    LootFriend = LootFriend, Clean = Clean,
 }
