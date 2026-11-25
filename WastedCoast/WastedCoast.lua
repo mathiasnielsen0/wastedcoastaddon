@@ -111,6 +111,10 @@ local addonName, ns = ...
 --   * v0.31.4: sendekøen. Samme besked står kun i køen én gang (før lagde hvert nyt synk-svar sig oven i det
 --             forrige, og køen løb fuld og smed videresendelsen væk). Q, QV og videresendelse springer foran
 --             synk-historikken, en fuld kø smider historik væk først, og "for hurtigt" pauser 2 s i stedet for 5
+--   * v0.32.0: avisen er skåret ned til det væsentlige: forsiden med dagens fire tal, rubrikkerne Dødsfald,
+--             Loot, Levels og Bedrifter med én linje og et klokkeslæt pr. begivenhed, og level-løbet på én
+--             linje. Horoskop, annoncer, vejret, hatten og skandalerne er ude. Alle dødsfald kommer nu med
+--             (før kunne tallet sige 2, mens rubrikken skrev "Ingen døde i dag")
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)

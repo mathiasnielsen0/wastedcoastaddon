@@ -54,7 +54,7 @@ felter med `db.x = db.x or {}` første gang, det bruger dem.
 | `weekly` | `Weekly.lua` |
 | `playedDay[ven][dag]` (sekunder spillet den dag; dag = dagnummer i dansk tid), `playedDayLast[ven][karakter]` (`{ s, at }`, kun dine egne: spilletid ved sidste måling), `playedDaySince`, `playedDayDemo` (demo, sendes aldrig) | `Spilletid.lua` |
 | `milestones` (`hit["kategori:mål"] = { t, by, s, shown }`, `init`) | `Milestones.lua` |
-| `avis` (`day`, `n`, `base` = dagens øjebliksbillede, `hist[dato]` = levels de seneste 14 dage, `on`, `peak`, `duo` = hvem der var online hvornår og sammen) | `Avis.lua` |
+| `avis` (`day`, `n`, `base` = dagens øjebliksbillede, `hist[dato]` = levels de seneste 14 dage; `on`, `peak` og `duo` fra v0.30 bruges ikke længere) | `Avis.lua` |
 
 Spilletid ligger på karakteren (`friends[ven].chars[karakter].played`, `Played.lua`).
 

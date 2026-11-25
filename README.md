@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.31.4. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.32.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -503,33 +503,32 @@ popups). `/wc4ever milepæle` skriver fremskridtet i chatten, `milepæle test` v
 
 ### Wasted Coast Tidende: dagens avis (Sjov > Avisen)
 Hver gang du logger ind (ikke ved `/reload` eller zone-skift), kommer der efter et halvt minut en
-**avis** med alt, der er sket i banden i dag (fra kl. 00.00 til nu). Forsiden er dagens største
-historie, fx *"Skandale i Westfall: Frode (level 30) blev slået ihjel af en level 12 Defias
-Trapper"*. Under den står rubrikkerne:
+**avis** med det vigtigste, der er sket i banden i dag (fra kl. 00.00 til nu). Fra 0.32 er den
+skåret ned til det væsentlige: én faktuel linje pr. begivenhed med klokkeslæt, nyeste først.
+
+Øverst står **dagens store begivenhed**, fx *"Blok ryddede Gnomeregan"*, og ved siden af fire tal:
+dødsfald, loot, levels og bedrifter i dag. Under den står fire rubrikker:
 
 | Rubrik | Hvad står der |
 |---|---|
-| **Dødsfald** | Pinlige dødsfald (mob langt under ens level), fald, drukning, lava, mange dødsfald, samme dræber igen, én mob mod flere venner, dobbelt-tragedier, død lige efter et ding eller ny loot, om natten, på max level, karakterens første død, gank og fejder |
-| **Børsen** | Legendary og epic loot (og den første epic nogensinde), rare items, Need-politiet, need-goblins og pass-helgener, RNG-ofre, item level, guld op og ned, guild bank og repair |
-| **Levels og karriere** | Max level, mange levels, runde levels, ding uden et eneste gz (eller med gz fra hele banden), nye alts, professions, reputation, spilletid, instanser og wipes, rare mobs, trofæer, honor kills og legacy points |
-| **Kapløbet** | Stillingen i level-løbet med dagens levels, ny fører, overhalinger, fotofinish, hvem der stikker af, hvornår førstemanden når max level i det nuværende tempo, og sneglen |
-| **Skandaler** | Stomi (også pose nummer to på en uge, hævn og stomi-terrorister), kollektive prutter, prut-baroner, gz-engle, savnede venner, venner tilbage fra de døde, natteugler, pjækkere, hele banden online og makkerpar i samme zone |
+| **Dødsfald** | Alle dagens dødsfald: hvem, hvad der dræbte dem (med mobbens level) og hvor |
+| **Loot** | Rare, epic og legendary items. Legendary og epic står øverst |
+| **Levels** | Hvem der fik levels, fx *"Søren nåede level 29"* eller *"Nick gik fra level 20 til 23"* |
+| **Bedrifter** | Instanser ryddet (med antal bosser), max level, maxet profession, Revered og Exalted, rare mobs og trofæer |
 
-Derudover **Skammens hat** (hvem, siden hvornår og fra hvem), et **horoskop** til hver ven
-(tegnet følger klassen, fx Dæmonen for warlocks, og teksten vennens vigtigste historie), **små
-annoncer** og **vejret** (zonen med flest dødsfald). Hver historie har en betingelse i dagens data
-og en vægt: den tungeste bliver forsiden, og der er højst 3 historier om samme ven, så længe der er
-andet at skrive om. Er der ingen historier i en rubrik, står der en reservetekst. Teksterne er de
-samme hele dagen, også hvis du åbner avisen igen.
+Nederst står stillingen i **level-løbet** på én linje med dagens levels i parentes. Der er højst 4
+linjer i hver rubrik i vinduet, og en rubrik uden indhold vises slet ikke, så avisen er kort på en
+stille dag. Forsiden er den tungeste begivenhed: legendary og max level slår første epic, som slår
+mange levels, instanser og Exalted. Horoskop, annoncer, vejret, Skammens hat og skandalerne er
+taget ud af avisen (hatten og drillerierne findes stadig andre steder i addonet).
 
 **Kopiér til Discord** giver avisen som ren tekst, klar til Ctrl+C. Sjov > Avisen viser dagens
-overskrifter i hovedvinduet. `/wc4ever avis` viser avisen igen, og `avis fra`/`til` slår den fra/til
+linjer i hovedvinduet. `/wc4ever avis` viser avisen igen, og `avis fra`/`til` slår den fra/til
 ved login. Når avisen er slået til, popper den daglige sladder ikke op (`/wc4ever sladder` virker stadig).
 
 Avisen sender ingen beskeder. Den bygger på det, addonet allerede har og synker. Levels, professions,
-spilletid og lignende sammenlignes med et øjebliksbillede, der tages første gang addonet kører på
-en ny dato. Natteugler, pjækkere, hvor mange der var online på én gang, og makkerpar kan avisen kun
-se, mens du selv er online. Demo-data kommer aldrig i avisen.
+reputation og instanser sammenlignes med et øjebliksbillede, der tages første gang addonet kører på
+en ny dato. Demo-data kommer aldrig i avisen.
 
 ### Dødsannoncer
 Når en ven dør, får alle en popup med en dødsannonce, fx *"Nick blev overlistet af
@@ -839,7 +838,7 @@ python3 tests/test_hjemmesko.py WastedCoast         # hjemmesko-alarmen: AFK i b
 python3 tests/test_hjemmesko.py WastedCoast forever # det samme på WoW Forever
 python3 tests/test_milestones.py WastedCoast        # gruppe-milepæle: tal, stille første gang, fest, XM, dubletter, synk, demo og side
 python3 tests/test_milestones.py WastedCoast forever # det samme på WoW Forever
-python3 tests/test_avis.py WastedCoast              # avisen: øjebliksbillede, historier og betingelser, forside, kapløb, hat, horoskop, login, Discord og side
+python3 tests/test_avis.py WastedCoast              # avisen: øjebliksbillede, de fire rubrikker, tal, forside, level-løb, tomme rubrikker, login, Discord og side
 python3 tests/test_avis.py WastedCoast forever      # det samme på WoW Forever
 python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-tid, vindere, XW, uddeling, kort og side
 python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever

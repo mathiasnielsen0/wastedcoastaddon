@@ -26,7 +26,7 @@ samme private tabel `ns` (`local _, ns = ...`).
 | `Spilletid.lua` | Timer pr. dag: spilletid pr. ven pr. dag og grafen (side 21) |
 | `Milestones.lua` | Gruppe-milepæle (fælles mål og fest-popup) |
 | `Videresend.lua` | Online venner giver karakterer, dødsfald og loot videre om offline venner (`QV`/`CV`) |
-| `Avis.lua` | Wasted Coast Tidende: dagens avis ved login (historier med betingelser og vægt) |
+| `Avis.lua` | Wasted Coast Tidende: dagens avis ved login (dødsfald, loot, levels og bedrifter med vægt til forsiden) |
 | `Bar.lua` | Bande-baren og nyhedslisten (samler nyheder fra alle moduler) |
 
 `tests/wowmock.py` har sin egen kopi af fillisten (`FILES`). Den skal holdes i takt med `.toc`.
@@ -73,7 +73,7 @@ Der er to udseender: spillets egne rammer (`ns.native`, standard på Forever) og
 mørke stil (standard på TBC). `ns.UseNativeSkin()` afgør det, og `/wc4ever stil` skifter.
 Test begge (`tests/test_drilleri.py WastedCoast native`).
 
-Nyhedspanelet og bande-baren henter nyheder i `Bar.lua`, sladderen i `Gossip.lua` og avisen i `Avis.lua` (hver historie er et `add(rubrik, vægt, ven, overskrift, tekst)` i `A.Collect`). Et modul,
+Nyhedspanelet og bande-baren henter nyheder i `Bar.lua`, sladderen i `Gossip.lua` og avisen i `Avis.lua` (hver linje er et `add(rubrik, vægt, ven, overskrift, tekst, tidspunkt)` i `A.Collect`). Et modul,
 der skal give nyheder eller sladder, tilføjes eksplicit der.
 
 ## Spilversioner
