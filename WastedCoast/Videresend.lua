@@ -1,4 +1,5 @@
-local _, ns = ...
+local addonName, ns = ...
+local L = ns.L
 
 -- =============================================================================
 -- Videresendelse (v0.31.2): venner, der er online, giver data videre om venner, der er offline
@@ -23,7 +24,10 @@ local _, ns = ...
 --   QV;ven;navn=d.l.c,navn=d.l.c,...   d/l/c = nyeste dødsfald, loot og sidst set (base 36, 0 = intet)
 --                                      Deles op i flere beskeder ved 255 tegn.
 --   CV;videresender;ven;karakter;klasse;level;guld;zone;sidst set;xp;efternavn
--- Ingen db-felter: alt ligger i db.friends, db.events og db.loot i forvejen.
+-- v0.31.3: H har addonets version i felt 11. Den gemmes i db.friends[ven].ver og vises i
+--   /wc4ever status sammen med, hvad der er givet videre (begge veje) siden login. Videresendelse
+--   kræver nemlig, at både spørgeren og den, der svarer, har 0.31.2 eller nyere.
+-- db.friends[ven].ver = vennens version (fra livstegnet). Ellers ingen nye db-felter.
 -- =============================================================================
 
 local C = ns.core
@@ -39,6 +43,51 @@ local RELAY = {
     pending = false,
 }
 ns.Relay = RELAY
+RELAY.stats = { qvIn = 0, sent = 0, cvIn = 0, cvUsed = 0 }
+
+-- -----------------------------------------------------------------------------
+-- Versioner (v0.31.3)
+-- -----------------------------------------------------------------------------
+do
+    local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+    local ok, v = pcall(function() return get and get(addonName, "Version") end)
+    ns.VERSION = (ok and type(v) == "string" and v:match("^%d+%.%d+%.%d+$")) and v or nil
+end
+
+function ns.NoteVersion(friend, v)
+    local info = WastedCoastDB and WastedCoastDB.friends[friend]
+    if info and type(v) == "string" and v:match("^%d+%.%d+%.%d+$") and #v <= 12 then info.ver = v end
+end
+
+-- Sammenlign "0.31.2" med "0.31.10" tal for tal
+function RELAY.VersionAtLeast(v, want)
+    if type(v) ~= "string" then return false end
+    local a, b = { v:match("^(%d+)%.(%d+)%.(%d+)$") }, { want:match("^(%d+)%.(%d+)%.(%d+)$") }
+    if not a[1] then return false end
+    for i = 1, 3 do
+        local x, y = tonumber(a[i]), tonumber(b[i])
+        if x ~= y then return x > y end
+    end
+    return true
+end
+
+-- " (v0.31.3)" efter navnet i /wc4ever status. Ukendt = en version fra før 0.31.3 (eller ikke hørt)
+function ns.VersionTag(friend)
+    local info = WastedCoastDB.friends[friend]
+    local v = info and info.ver
+    if not v then return L(" |cff9aa0a6(version ukendt)|r") end
+    local col = (ns.VERSION and not RELAY.VersionAtLeast(v, ns.VERSION)) and "|cffff6060" or "|cff9aa0a6"
+    return " " .. col .. "(v" .. v .. ")|r"
+end
+
+function ns.PrintRelayStatus()
+    local st = RELAY.stats
+    print(string.format(L("  Videresendelse siden login: %d resuméer fra andre, %d beskeder sendt videre, %d karakterer modtaget (%d brugt, resten var ældre)."),
+        st.qvIn, st.sent, st.cvIn, st.cvUsed))
+    if ns.VERSION then
+        print(string.format(L("  Din version: v%s. Rødt = ældre end din. Videresendelse kræver 0.31.2 hos begge."), ns.VERSION))
+    end
+end
 
 -- -----------------------------------------------------------------------------
 -- Base 36 (tider fylder 6 tegn i stedet for 10)
@@ -155,6 +204,7 @@ function RELAY.Respond()
     local function send(key, msg)
         if budget <= 0 or Fresh(key) then return false end
         budget = budget - 1
+        RELAY.stats.sent = RELAY.stats.sent + 1
         RELAY.heard[key] = GetTime()
         C.Send(msg)
         return true
@@ -218,6 +268,7 @@ local function OnDigest(t)
             any = true
         end
     end
+    if any then RELAY.stats.qvIn = RELAY.stats.qvIn + 1 end
     if any and not RELAY.pending then
         RELAY.pending = true
         C_Timer.After(RELAY.WAIT + math.random() * 8, RELAY.Respond)
@@ -233,11 +284,13 @@ local function OnChar(t)
     if not seen or seen <= 0 or not level then return end
     if seen > time() then seen = time() end   -- vennens ur kan gå forkert
     ns.RelayHeard(CharKey(friend, char, t[9]))
+    RELAY.stats.cvIn = RELAY.stats.cvIn + 1
     local info = db.friends[friend]
     local c = info and info.chars and info.chars[char]
     if c and (c.seen or 0) >= seen then return end   -- vi har nyere (eller det samme)
     local zone = t[8] and t[8]:sub(1, 60)
     local sur = t[11] and t[11]:sub(1, 30)
+    RELAY.stats.cvUsed = RELAY.stats.cvUsed + 1
     C.UpdateChar(friend, char, {
         class = t[5] and t[5]:sub(1, 20), level = level, gold = tonumber(t[7]), zone = zone,
         xp = tonumber(t[10]), surname = sur,

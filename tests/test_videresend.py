@@ -18,6 +18,7 @@ C_Item = {
 }
 GetItemInfo, IsEquippableItem, IsEquippedItem, GetItemCount, GetItemIcon = nil, nil, nil, nil, nil
 ''')
+lua.execute('function GetAddOnMetadata(name, field) if field == "Version" then return "0.31.3" end end')
 ns = lua.table()
 load_addon(lua, ADDON, ns)
 
@@ -213,6 +214,30 @@ local parts = sentWith("QV;")
 check(#parts >= 2, "resuméet deles op: " .. #parts)
 for _, p in ipairs(parts) do check(#p <= 255, "hver del højst 255 tegn") end
 for i = #roster, n0 + 1, -1 do ns.core.ROSTER_SET[roster[i]] = nil roster[i] = nil end
+
+-- -----------------------------------------------------------------------------
+-- v0.31.3: versionen i livstegnet og /wc4ever status
+-- -----------------------------------------------------------------------------
+check(ns.VERSION == "0.31.3", "egen version læses fra .toc")
+SENT = {}
+ns.core.SendHeartbeat()
+local h = sentWith("H;")
+check(#h >= 1 and split(h[#h])[11] == "0.31.3", "H: version i felt 11")
+check(R.VersionAtLeast("0.31.10", "0.31.3") and R.VersionAtLeast("0.31.3", "0.31.3")
+    and not R.VersionAtLeast("0.31.2", "0.31.3") and not R.VersionAtLeast(nil, "0.31.3"), "versioner sammenlignes tal for tal")
+msg(table.concat({ "H", "Nick", "Nickchar", "MAGE", 33, 100, "Westfall", 10, "", "1", "0.31.2" }, ";"), "Nickchar")
+check(db.friends.Nick.ver == "0.31.2", "vennens version gemmes")
+check(ns.VersionTag("Nick"):find("0.31.2", 1, true) and ns.VersionTag("Nick"):find("ff6060", 1, true), "ældre version vises med rødt")
+msg(table.concat({ "H", "Nick", "Nickchar", "MAGE", 33, 100, "Westfall", 10, "", "1", "x;y" }, ";"), "Nickchar")
+msg(table.concat({ "H", "Nick", "Nickchar", "MAGE", 33, 100, "Westfall", 10, "", "1", "hej" }, ";"), "Nickchar")
+check(db.friends.Nick.ver == "0.31.2", "ugyldig version ignoreres")
+msg(table.concat({ "H", "Nick", "Nickchar", "MAGE", 33, 100, "Westfall", 10, "", "1" }, ";"), "Nickchar")
+check(db.friends.Nick.ver == "0.31.2", "ældre livstegn uden version sletter den ikke")
+check(ns.VersionTag("Rasmus"):find("ukendt", 1, true), "ukendt version")
+PRINTS = {}
+ns.PrintRoutes()
+local all = table.concat(PRINTS, "\n")
+check(all:find("v0.31.2", 1, true) and all:find("Videresendelse siden login", 1, true), "status viser versioner og videresendelse")
 
 return PASSES
 '''

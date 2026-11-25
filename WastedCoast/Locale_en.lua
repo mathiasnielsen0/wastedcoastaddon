@@ -1431,4 +1431,8 @@ ns.EN = {
     ["lør"] = "Sat",
     ["søn"] = "Sun",
     ["Timer pr. dag"] = "Hours per day",
+    -- v0.31.3: videresendelse og versioner i /wc4ever status (Videresend.lua)
+    [" |cff9aa0a6(version ukendt)|r"] = " |cff9aa0a6(version unknown)|r",
+    ["  Videresendelse siden login: %d resuméer fra andre, %d beskeder sendt videre, %d karakterer modtaget (%d brugt, resten var ældre)."] = "  Relaying since login: %d summaries from others, %d messages relayed, %d characters received (%d used, the rest were older).",
+    ["  Din version: v%s. Rødt = ældre end din. Videresendelse kræver 0.31.2 hos begge."] = "  Your version: v%s. Red = older than yours. Relaying needs 0.31.2 on both sides.",
 }

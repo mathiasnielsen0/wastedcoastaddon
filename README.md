@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.31.2. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.31.3. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -709,7 +709,10 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
   synk sender addonet et lille resumé af, hvad du allerede har, og de andre sender kun
   det, der er nyere. Store huller fyldes op lidt ad gangen (højst 25 dødsfald og loot pr.
   ven ad gangen, resten ved næste synk 10 minutter senere). Det virker kun, når både du
-  og den, der giver det videre, har version 0.31.2 eller nyere.
+  og den, der giver det videre, har version 0.31.2 eller nyere, og I er online samtidig.
+- **Versioner (fra 0.31.3):** `/wc4ever status` viser hver vens version (rød = ældre end
+  din, "version ukendt" = ældre end 0.31.3 eller ikke hørt endnu) og hvor meget der er
+  givet videre siden login. Brug den, hvis en vens scoreboard ikke opdaterer.
 
 ---
 
@@ -838,7 +841,7 @@ python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-t
 python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever
 python3 tests/test_spilletid.py WastedCoast         # timer pr. dag: måling, dansk dagsskifte, loft, XP, graf, tooltips, demo og timer
 python3 tests/test_spilletid.py WastedCoast forever # det samme på WoW Forever
-python3 tests/test_videresend.py WastedCoast        # videresendelse: QV-resumé, CV, D/L nyere end spørgerens, loft, ingen gentagelse og ødelagte beskeder
+python3 tests/test_videresend.py WastedCoast        # videresendelse: QV-resumé, CV, D/L nyere end spørgerens, loft, ingen gentagelse, ødelagte beskeder og versioner
 python3 tests/test_videresend.py WastedCoast forever # det samme på WoW Forever
 ```
 

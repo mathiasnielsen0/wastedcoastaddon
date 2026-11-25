@@ -106,6 +106,8 @@ local addonName, ns = ...
 --   * v0.31.2: online venner giver data om offline venner videre (Videresend.lua). Før så man kun en vens nye
 --             level, guld, dødsfald og loot, hvis man selv var online samtidig med vennen. Synk sender nu et
 --             resumé (QV), og de andre svarer med det nyere: CV for karakterer, D og L for dødsfald og loot
+--   * v0.31.3: livstegnet (H) har addonets version i felt 11. /wc4ever status viser hver vens version (rød =
+--             ældre end din) og hvor meget der er givet videre siden login
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -1471,7 +1473,9 @@ local function SendHeartbeat()
     UpdateChar(db.me, char, { class = class, level = level, gold = gold, zone = zone, xp = xp, surname = sur }, time())
     -- Forrest i køen, så online-status og level ikke venter bag et stort synk-svar.
     -- Felt 9: efternavn (Forever, kan være tomt). Felt 10: login-session (se ns.MySession).
-    Send(table.concat({ "H", db.me, char, class or "", level, gold, zone, xp, sur, ns.MySession() }, ";"), true, true)
+    -- Felt 11 (v0.31.3): addonets version, så /wc4ever status kan vise, hvem der mangler at opdatere
+    Send(table.concat({ "H", db.me, char, class or "", level, gold, zone, xp, sur, ns.MySession() }, ";")
+        .. (ns.VERSION and (";" .. ns.VERSION) or ""), true, true)
     if ns.AfterEvent then ns.AfterEvent() end
 end
 
@@ -3491,6 +3495,7 @@ local function OnAddonMessage(prefix, message, chatType, sender)
             }, time())
             if hc then hc.hb = time() end   -- sidst hørt livstegn direkte fra vennen (se ns.CharOnline)
             if session then db.friends[friend].session = session end
+            if ns.NoteVersion then ns.NoteVersion(friend, t[11]) end
             ns.OnFriendHeartbeat(friend, char, t[4], level, t[7], came, prevLevel)
             if ns.RefreshUI then ns.RefreshUI() end
         end
@@ -7666,7 +7671,7 @@ do
                 if route.Recent(w) then via[#via + 1] = "whisper (" .. w.char .. ")" end
                 local how = (#via > 0) and ("|cff40ff40" .. table.concat(via, ", ") .. "|r")
                     or ns.L("|cff9aa0a6ikke hørt fra de seneste 3 minutter|r")
-                print("  " .. Name(friend) .. ": " .. how)
+                print("  " .. Name(friend) .. (ns.VersionTag and ns.VersionTag(friend) or "") .. ": " .. how)
             end
         end
         local paths = {}
@@ -7674,6 +7679,7 @@ do
         local st = route.stats
         print(string.format(ns.L("  Sender via: %s.  Kø: %d.  Sendt: %d, ventet på spillets grænse: %d, droppet: %d."),
             #paths > 0 and table.concat(paths, ", ") or ns.L("ingen"), #queue, st.sent, st.throttled, st.dropped))
+        if ns.PrintRelayStatus then ns.PrintRelayStatus() end
     end
 end
 

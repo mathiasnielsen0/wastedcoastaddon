@@ -54,7 +54,7 @@ guild, party/raid eller whisper. `/wc4ever status` viser det live.
 
 | Type | Felter efter typen | Hvad | Hvor (sender / modtager) |
 |---|---|---|---|
-| `H` | ven, karakter, klasse, level, guld, zone, xp, efternavn, session | Livstegn hvert minut | `SendHeartbeat` / `OnAddonMessage` |
+| `H` | ven, karakter, klasse, level, guld, zone, xp, efternavn, session, version (v0.31.3) | Livstegn hvert minut | `SendHeartbeat` / `OnAddonMessage` |
 | `C` | ven, karakter, klasse, level, guld, zone, sidst set, xp, efternavn | En (måske offline) karakter | `RespondToSync` / `OnAddonMessage` |
 | `Q` | ven, tvunget, let | Synk-forespørgsel | `RequestSync` / `OnAddonMessage` |
 | `D` | id, navn, klasse, dræber, evne, level, zone, tid, ven, dræber-level, efternavn, pvp | Dødsfald | `SerializeDeath` / `DeserializeDeath` |

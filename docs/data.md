@@ -26,7 +26,7 @@ felter med `db.x = db.x or {}` første gang, det bruger dem.
 |---|---|
 | `me`, `myId`, `myName` | Hvem du er (ID og valgt navn). Sættes af `Groups.lua` |
 | `group` | Din gruppe: id, kode, admin, `members`, fjernede medlemmer (`Groups.lua`). `members[id].dup` = det ID, en dublet er slået sammen med (kun lokalt, sendes ikke) |
-| `friends[ven]` | `{ chars = { [karakter] = { class, level, gold, zone, seen, xp, surname, hb, prof, gear, rep, honor, played } }, session }` |
+| `friends[ven]` | `{ chars = { [karakter] = { class, level, gold, zone, seen, xp, surname, hb, prof, gear, rep, honor, played } }, session, ver }` (`ver` = vennens addon-version fra livstegnet, v0.31.3) |
 | `chars[karakter]` | Hvilken ven en karakter tilhører |
 | `events`, `seen` | Dødsfald og ID'er til at fjerne dubletter |
 | `loot`, `lootSeen` | Loot wins og ID'er |
