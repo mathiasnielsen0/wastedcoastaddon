@@ -152,7 +152,7 @@ function ns.SendSyncDigest()
     local head = "QV;" .. db.me .. ";"
     local parts = {}
     local function flush()
-        if #parts > 0 then C.Send(head .. table.concat(parts, ",")) end
+        if #parts > 0 then C.Send(head .. table.concat(parts, ","), "soon") end
         parts = {}
     end
     local len = #head
@@ -206,7 +206,7 @@ function RELAY.Respond()
         budget = budget - 1
         RELAY.stats.sent = RELAY.stats.sent + 1
         RELAY.heard[key] = GetTime()
-        C.Send(msg)
+        C.Send(msg, "soon")   -- foran synk-historikken i køen (v0.31.4)
         return true
     end
 

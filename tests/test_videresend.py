@@ -216,6 +216,34 @@ for _, p in ipairs(parts) do check(#p <= 255, "hver del højst 255 tegn") end
 for i = #roster, n0 + 1, -1 do ns.core.ROSTER_SET[roster[i]] = nil roster[i] = nil end
 
 -- -----------------------------------------------------------------------------
+-- v0.31.4: køen. Dubletter, "soon" foran synk-historikken, og fuld kø smider bulk væk
+-- -----------------------------------------------------------------------------
+pump()
+SENT = {}
+local Send = ns.core.Send
+for i = 1, 5 do Send("S;Mathias;Inst" .. i .. ";0;0;0") end
+for i = 1, 5 do Send("S;Mathias;Inst" .. i .. ";0;0;0") end   -- samme svar igen: lægges ikke i kø
+Send("CV;Mathias;soon", "soon")
+Send("H;prio", true)
+pump()
+local order = {}
+for _, x in ipairs(SENT) do if order[#order] ~= x.msg then order[#order + 1] = x.msg end end
+local cnt = 0
+for _, m in ipairs(order) do if m:find("^S;Mathias;Inst") then cnt = cnt + 1 end end
+check(cnt == 5, "samme besked står kun i køen én gang: " .. cnt)
+check(order[1] == "H;prio" and order[2] == "CV;Mathias;soon", "prioritet forrest, så videresendelse, så historik")
+-- Efter afsendelse kan den samme besked sendes igen
+SENT = {}
+Send("S;Mathias;Inst1;0;0;0")
+check(#sentWith("S;Mathias;Inst1") == 1, "sendt besked kan sendes igen")
+-- Fuld kø: bulk smides væk, ikke videresendelsen
+SENT = {}
+for i = 1, 520 do Send("S;Mathias;Fyld" .. i .. ";0;0;0") end
+Send("CV;Mathias;vigtig", "soon")
+for i = 521, 540 do Send("S;Mathias;Fyld" .. i .. ";0;0;0") end
+check(#sentWith("CV;Mathias;vigtig") == 1, "videresendelsen overlever en fuld kø")
+
+-- -----------------------------------------------------------------------------
 -- v0.31.3: versionen i livstegnet og /wc4ever status
 -- -----------------------------------------------------------------------------
 check(ns.VERSION == "0.31.3", "egen version læses fra .toc")

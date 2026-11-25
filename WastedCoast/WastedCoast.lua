@@ -108,6 +108,9 @@ local addonName, ns = ...
 --             resumé (QV), og de andre svarer med det nyere: CV for karakterer, D og L for dødsfald og loot
 --   * v0.31.3: livstegnet (H) har addonets version i felt 11. /wc4ever status viser hver vens version (rød =
 --             ældre end din) og hvor meget der er givet videre siden login
+--   * v0.31.4: sendekøen. Samme besked står kun i køen én gang (før lagde hvert nyt synk-svar sig oven i det
+--             forrige, og køen løb fuld og smed videresendelsen væk). Q, QV og videresendelse springer foran
+--             synk-historikken, en fuld kø smider historik væk først, og "for hurtigt" pauser 2 s i stedet for 5
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -1157,6 +1160,42 @@ local TITLE_ORDER = ns.LT({ "Klovnen", "Lootgoblin", "Rigmanden", "Højest level
 -- Netværk: kø, beskeder og synkronisering
 -- =============================================================================
 local queue = {}
+-- v0.31.4: køen. Samme besked til samme sted står kun i køen én gang (queue.keys), så et nyt
+-- synk-svar ikke lægger sig oven i et, der stadig er ved at blive sendt. Almindelige beskeder er
+-- "bulk" (synk-historik); de smides først væk, når køen er fuld, og "soon"-beskeder (videresendelse)
+-- springer foran dem. Kun felter i tabellen: hovedfilen er tæt på grænsen for lokale variabler.
+queue.keys = {}
+function queue.Key(item) return item[1] .. "\1" .. item[2] .. "\1" .. (item[3] or "") end
+function queue.Add(item, priority)
+    local key = queue.Key(item)
+    if queue.keys[key] then return false end
+    queue.keys[key] = true
+    if priority == true then
+        table.insert(queue, 1, item)
+    elseif priority == "soon" then
+        local at = #queue + 1
+        for i = 1, #queue do
+            if queue[i].bulk then at = i break end
+        end
+        table.insert(queue, at, item)
+    else
+        item.bulk = true
+        queue[#queue + 1] = item
+    end
+    return true
+end
+function queue.Done(item) queue.keys[queue.Key(item)] = nil end
+-- Fuld kø: smid den nyeste bulk-besked (eller den nyeste af alle, hvis der ingen bulk er)
+function queue.Trim(limit, stats)
+    while #queue > limit do
+        local at = #queue
+        for i = #queue, 1, -1 do
+            if queue[i].bulk then at = i break end
+        end
+        queue.Done(table.remove(queue, at))
+        stats.dropped = stats.dropped + 1
+    end
+end
 
 -- Synk uden fælles guild: ud over party/raid og guild sendes alt i en skjult kanal,
 -- som alle med addonet melder sig ind i. Virker kanalen ikke (eller er I på hver sin
@@ -1317,7 +1356,7 @@ do
                 n = n + 1
             end
         end
-        for _, char in ipairs(targets) do queue[#queue + 1] = { msg, "WHISPER", char } end
+        for _, char in ipairs(targets) do queue.Add({ msg, "WHISPER", char }) end
     end
 
     -- Hvem har sendt beskeden, og ad hvilken vej? Bruges til at vælge, hvor vi sender hen
@@ -1371,15 +1410,12 @@ local function Send(msg, priority, bootstrap)
         route.stats.dropped = route.stats.dropped + 1
         return
     end
+    -- priority = true: forrest (livstegn, hændelser). "soon": foran synk-historikken (videresendelse).
+    -- Ellers bagerst. Står den samme besked allerede i køen til samme sted, tilføjes den ikke igen.
     for _, c in ipairs(route.Targets(bootstrap)) do
-        local item = { msg, c[1], c[2] }
-        if priority then table.insert(queue, 1, item) else queue[#queue + 1] = item end
+        queue.Add({ msg, c[1], c[2] }, priority)
     end
-    -- Fuld kø: smid de nyeste almindelige beskeder (synk-svar), ikke de vigtige forrest
-    while #queue > 500 do
-        table.remove(queue)
-        route.stats.dropped = route.stats.dropped + 1
-    end
+    queue.Trim(500, route.stats)
 end
 
 local function StartPump()
@@ -1398,11 +1434,14 @@ local function StartPump()
             if item.tries < 20 then
                 table.insert(queue, 1, item)
             else
+                queue.Done(item)
                 route.stats.dropped = route.stats.dropped + 1
             end
-            pauseUntil = GetTime() + 5
-        elseif ok then
-            route.stats.sent = route.stats.sent + 1
+            -- Spærret (boss): vent 5 s. Bare for hurtigt: vent kun 2 s, ellers står køen stille
+            pauseUntil = GetTime() + ((res == R.AddOnMessageLockdown) and 5 or 2)
+        else
+            queue.Done(item)
+            if ok then route.stats.sent = route.stats.sent + 1 end
         end
     end)
 end
@@ -1515,7 +1554,7 @@ end
 local function RequestSync(force, light)
     if not db.me then return end
     local msg = "Q;" .. db.me .. (force and ";1" or (light and ";0;L" or ""))
-    Send(msg)
+    Send(msg, "soon")   -- v0.31.4: ikke bag et langt synk-svar i køen
     route.Probe(msg)
     -- v0.31.2: "hvad har jeg"-resumé, så online venner kan give data om offline venner videre (Videresend.lua)
     if ns.SendSyncDigest then ns.SendSyncDigest() end

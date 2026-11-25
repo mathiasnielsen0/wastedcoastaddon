@@ -30,6 +30,8 @@ Modulernes header-kommentar beskriver deres egne beskeder i detaljer.
 `Send(msg, priority, bootstrap)` i `WastedCoast.lua` (eksporteres som `ns.core.Send`) lægger
 beskeden i en kø, som tømmes af en ticker hvert 0,3 s (spillet tillader ca. én besked pr.
 sekund). `priority = true` lægger den forrest (brug det til hændelser, ikke til synk-svar).
+`priority = "soon"` (v0.31.4) lægger den foran synk-historikken (`Q`, `QV`, videresendelse). Den samme
+besked til samme sted står kun i køen én gang, og en fuld kø (500) smider historik væk først.
 
 `route.Targets()` vælger vejene: den skjulte kanal (`WC4Lsync` for den gamle gruppe, ellers
 afledt af gruppekoden i `Groups.lua`), og kun for venner, der ikke er hørt i kanalen, også

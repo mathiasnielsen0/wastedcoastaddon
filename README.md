@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.31.3. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.31.4. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -671,6 +671,10 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
   currently playing" for karakterer, der er offline, bliver skjult.
   **Første gang** uden fælles guild: tilføj vennernes karakterer til vennelisten
   (`/friend Navn`), så finder addonet dem selv.
+- **Køen (fra 0.31.4):** Den samme besked står kun i køen én gang, så et nyt synk-svar ikke
+  lægger sig oven i et, der stadig er ved at blive sendt. Synk-forespørgsler og videresendelse
+  springer foran historikken, og løber køen fuld (500), smides historikken væk først. Kø og
+  droppede beskeder kan ses med `/wc4ever status`.
 - **Hver besked sendes kun én gang:** Spillet lader et addon sende omkring én besked i
   sekundet. Er den skjulte kanal forbundet, går alt derigennem, og guild og party bruges
   kun til venner, der ikke er hørt i kanalen. (Før 0.10.1 blev alt sendt både i guild og
