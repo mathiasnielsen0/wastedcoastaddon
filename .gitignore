@@ -5,3 +5,5 @@ web/next-env.d.ts
 web/*.tsbuildinfo
 web/.env*
 web/.lokal-data/
+web/.wrangler/
+web/.dev.vars
