@@ -739,7 +739,7 @@ Dataene kommer fra filen ovenfor. Det lille program `WC4everSync.exe` (mappen `s
 Windows. Da addonet synker alles data i spillet, er det nok, at én af jer kører det.
 
 - Brug programmet: se [sync/README.md](sync/README.md)
-- Sæt websitet op (Cloudflare, gratis): se [web/README.md](web/README.md)
+- Sæt websitet op (Vercel og Neon, gratis): se [web/README.md](web/README.md)
 
 ---
 

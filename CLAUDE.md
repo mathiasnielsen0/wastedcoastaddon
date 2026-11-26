@@ -12,7 +12,7 @@ Alt er på dansk: kode-kommentarer, brugertekst, README og commit-beskeder. Skri
 - `WastedCoast/`: addonet. Filrækkefølgen styres af `WastedCoast.toc`.
   `WastedCoast.lua` er kernen (~8000 linjer), resten er ét modul pr. feature.
 - `tests/`: Python + `lupa` mod en WoW-attrap (`wowmock.py`).
-- `web/`: websitet skammenshat.dk (Cloudflare Worker + side, der læser SavedVariables i browseren). Se web/README.md
+- `web/`: websitet skammenshat.dk (Next.js på Vercel, Neon Postgres). Læser SavedVariables på serveren. Se web/README.md
 - `sync/`: WC4everSync.exe (Go), der sender SavedVariables-filen til websitet. `cd sync && go test ./...`
 - `README.md`: brugervejledningen til spillerne (installation, features, kommandoer).
 - `docs/`: udviklerdokumentation, slå op efter behov:

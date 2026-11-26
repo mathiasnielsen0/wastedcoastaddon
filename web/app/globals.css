@@ -58,11 +58,11 @@ button { font: inherit; }
 .sync { font-size: 13px; color: var(--muted); text-align: right; }
 .sync b { color: var(--ink); font-weight: 600; }
 .flavors { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
-.flavors button {
-  border: 0; background: transparent; color: var(--muted); padding: 5px 12px; border-radius: 999px; cursor: pointer;
+.flavors a {
+  color: var(--muted); padding: 5px 12px; border-radius: 999px; text-decoration: none;
   font-size: 13px; font-weight: 600;
 }
-.flavors button[aria-pressed="true"] { background: var(--gold); color: #1a1206; }
+.flavors a[aria-current="page"] { background: var(--gold); color: #1a1206; }
 
 /* Hatten */
 .hero {
@@ -142,6 +142,7 @@ th {
   border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--panel);
 }
 th[aria-sort] { color: var(--gold); }
+th:first-child { cursor: default; }
 th[aria-sort="descending"]::after { content: " ▾"; }
 th[aria-sort="ascending"]::after { content: " ▴"; }
 tbody tr:nth-child(even) { background: rgba(255, 255, 255, .02); }
