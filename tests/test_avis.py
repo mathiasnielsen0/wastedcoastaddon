@@ -221,14 +221,19 @@ local nh = 0 for _ in pairs(db.avis.hist) do nh = nh + 1 end
 check(nh == 2, "historikken har to dage")
 P = A.Collect()
 check(P.stats.dod == 0 and P.lead.h == "Stille dag i Wasted Coast", "en ny dag starter stille")
--- En stille dag: tomme rubrikker skjules
+-- En stille dag: alle fire rubrikker står der stadig med en grå linje, og avisen holder sin størrelse
 slash("avis")
-for _, k in ipairs(A.SECTIONS) do check(not A.ui.box[k].shown, "tom rubrik skjult: " .. k) end
+local quietH = A.ui.height
+for _, k in ipairs(A.SECTIONS) do check(A.ui.box[k].shown and A.ui.box[k].count.text_ == "0", "tom rubrik vises: " .. k) end
+check(A.ui.box.dod.title.text_ == "Dødsfald" and A.ui.box.dod.rows[1].t.text_ == "Ingen dødsfald i dag.", "tom rubrik har en kort linje")
 check(A.ui.race.shown ~= false, "level-løbet vises stadig")
--- Kun ét level: kun Levels vises, i første kolonne
+check(quietH >= 560, "avisen er ikke lille på en stille dag: " .. tostring(quietH))
+-- Kun ét level: alle rubrikker vises, Levels har linjen, og forsiden gentager ikke bare overskriften
 C.UpdateChar("Jeppe", "Jepchar", { class = "MAGE", level = 20, gold = 0, zone = "Loch Modan" }, NOW)
 slash("avis")
-check(A.ui.box.lvl.shown and not A.ui.box.dod.shown, "kun Levels vises")
+check(A.ui.box.lvl.shown and A.ui.box.dod.shown and A.ui.box.lvl.rows[1].t.text_ == "Jeppe nåede level 20.", "Levels har linjen")
+check(A.ui.head.text_ == "Jeppe nåede level 20" and A.ui.body.text_:find("nummer", 1, true) and not A.ui.body.text_:find("nåede level", 1, true), "forsidens tekst: " .. tostring(A.ui.body.text_))
+check(A.ui.height == quietH, "samme størrelse med én linje")
 ns.GossipStats = realStats
 return PASSES
 '''

@@ -115,6 +115,8 @@ local addonName, ns = ...
 --             Loot, Levels og Bedrifter med én linje og et klokkeslæt pr. begivenhed, og level-løbet på én
 --             linje. Horoskop, annoncer, vejret, hatten og skandalerne er ude. Alle dødsfald kommer nu med
 --             (før kunne tallet sige 2, mens rubrikken skrev "Ingen døde i dag")
+--   * v0.32.1: avisen viser altid alle fire rubrikker (en tom får en grå linje) og holder sin størrelse,
+--             mere luft og større skrift, og forsidens tekst gentager ikke bare overskriften
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)

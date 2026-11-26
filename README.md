@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.32.0. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.32.1. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -517,8 +517,8 @@ dødsfald, loot, levels og bedrifter i dag. Under den står fire rubrikker:
 | **Bedrifter** | Instanser ryddet (med antal bosser), max level, maxet profession, Revered og Exalted, rare mobs og trofæer |
 
 Nederst står stillingen i **level-løbet** på én linje med dagens levels i parentes. Der er højst 4
-linjer i hver rubrik i vinduet, og en rubrik uden indhold vises slet ikke, så avisen er kort på en
-stille dag. Forsiden er den tungeste begivenhed: legendary og max level slår første epic, som slår
+linjer i hver rubrik i vinduet. Alle fire rubrikker står der altid, også på en stille dag, hvor en
+tom rubrik får en kort grå linje (*"Ingen dødsfald i dag."*), så avisen holder sin størrelse. Forsiden er den tungeste begivenhed: legendary og max level slår første epic, som slår
 mange levels, instanser og Exalted. Horoskop, annoncer, vejret, Skammens hat og skandalerne er
 taget ud af avisen (hatten og drillerierne findes stadig andre steder i addonet).
 
@@ -838,7 +838,7 @@ python3 tests/test_hjemmesko.py WastedCoast         # hjemmesko-alarmen: AFK i b
 python3 tests/test_hjemmesko.py WastedCoast forever # det samme på WoW Forever
 python3 tests/test_milestones.py WastedCoast        # gruppe-milepæle: tal, stille første gang, fest, XM, dubletter, synk, demo og side
 python3 tests/test_milestones.py WastedCoast forever # det samme på WoW Forever
-python3 tests/test_avis.py WastedCoast              # avisen: øjebliksbillede, de fire rubrikker, tal, forside, level-løb, tomme rubrikker, login, Discord og side
+python3 tests/test_avis.py WastedCoast              # avisen: øjebliksbillede, de fire rubrikker, tal, forside, level-løb, tomme rubrikker og størrelse, login, Discord og side
 python3 tests/test_avis.py WastedCoast forever      # det samme på WoW Forever
 python3 tests/test_weekly.py WastedCoast            # ugens pokaler: dansk uge-tid, vindere, XW, uddeling, kort og side
 python3 tests/test_weekly.py WastedCoast forever    # det samme på WoW Forever

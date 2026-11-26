@@ -9,8 +9,8 @@ local L = ns.L
 --   * v0.32: kun det væsentlige. Fire rubrikker med én faktuel linje pr. begivenhed og klokkeslæt:
 --     Dødsfald (alle dagens dødsfald), Loot (rare, epic og legendary), Levels og Bedrifter
 --     (instanser, max level, maxet profession, Revered/Exalted, rare mobs og trofæer).
---     Højst 4 linjer pr. rubrik i vinduet, nyeste først. En tom rubrik vises ikke, og vinduet
---     bliver lavere. Forsiden er dagens tungeste begivenhed (se vægtene i Collect) med fire tal
+--     Højst 4 linjer pr. rubrik i vinduet, nyeste først. Alle fire rubrikker vises altid (v0.32.1),
+--     en tom med en kort grå linje, og rubrikkerne fylder mindst SEC_MIN_H, så avisen ikke bliver lille. Forsiden er dagens tungeste begivenhed (se vægtene i Collect) med fire tal
 --     ved siden af, og level-løbet står på én linje nederst. Horoskop, annoncer, vejret,
 --     Skammens hat og skandalerne er fjernet fra avisen (hatten og drillerierne findes stadig
 --     andre steder i addonet).
@@ -164,6 +164,8 @@ end
 A.SECTIONS = { "dod", "loot", "lvl", "bed" }
 local SEC_NAME = ns.LT({ dod = "Dødsfald", loot = "Loot", lvl = "Levels", bed = "Bedrifter" })
 local STAT_NAME = ns.LT({ dod = "dødsfald", loot = "loot", lvl = "levels", bed = "bedrifter" })
+local SEC_EMPTY = ns.LT({ dod = "Ingen dødsfald i dag.", loot = "Ingen rare eller epic loot i dag.",
+                          lvl = "Ingen levels i dag.", bed = "Ingen bedrifter i dag." })
 A.SEC_NAME = SEC_NAME
 
 local WEEKDAYS = ns.LT({ "søndag", "mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag" })
@@ -363,6 +365,20 @@ function A.Collect()
     end
     table.sort(race, function(x, y) if x.ls ~= y.ls then return x.ls > y.ls end return x.f < y.f end)
     P.race = race
+
+    -- Forsidens tekst: linjen (hvis den siger mere end overskriften), klokkeslæt og pladsen i level-løbet
+    if lead then
+        local parts = {}
+        if lead.t ~= lead.h .. "." then parts[#parts + 1] = lead.t end
+        if lead.at then parts[#parts + 1] = string.format(L("Kl. %s."), Clock(lead.at)) end
+        for i, x in ipairs(race) do
+            if x.f == lead.f then
+                parts[#parts + 1] = string.format(L("%s ligger nummer %d i level-løbet."), Name(x.f), i)
+                break
+            end
+        end
+        P.lead = { sec = lead.sec, w = lead.w, f = lead.f, h = lead.h, at = lead.at, t = table.concat(parts, " ") }
+    end
     return P
 end
 
@@ -430,13 +446,14 @@ local GREY = { 0.35, 0.29, 0.21 }
 local RED = { 0.54, 0.11, 0.07 }
 local HEAD_FONT = "Fonts\\MORPHEUS.TTF"
 local BODY_FONT = "Fonts\\FRIZQT__.TTF"
-local WIN_W = 980
-local PAD = 22
+local WIN_W = 1000
+local PAD = 28
 local W = WIN_W - 28 - 2 * PAD          -- avisens indre bredde
-local COL_GAP = 22
+local COL_GAP = 28
 local COL_W = math.floor((W - 3 * COL_GAP) / 4)
-local TIME_W = 34
+local TIME_W = 38
 local LEAD_W = 600
+local SEC_MIN_H = 220     -- rubrikkerne fylder altid mindst så meget, så avisen ikke bliver lille
 
 local function Ink(parent, size, font, col, justify)
     local fs = C.Txt(parent, "GameFontHighlight")
@@ -466,19 +483,19 @@ end
 local function Section(parent)
     local box = CreateFrame("Frame", nil, parent)
     box:SetSize(COL_W, 40)
-    box.title = Ink(box, 16, HEAD_FONT, INK)
+    box.title = Ink(box, 19, HEAD_FONT, INK)
     box.title:SetPoint("TOPLEFT", box, "TOPLEFT", 0, 0)
     box.title:SetWidth(COL_W - 30)
     box.count = Ink(box, 11, BODY_FONT, GREY, "RIGHT")
-    box.count:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -3)
+    box.count:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -5)
     box.count:SetWidth(30)
     local r = box:CreateTexture(nil, "ARTWORK")
     C.BarFill(r, INK[1], INK[2], INK[3], 1)
-    r:SetPoint("TOPLEFT", box, "TOPLEFT", 0, -21)
+    r:SetPoint("TOPLEFT", box, "TOPLEFT", 0, -26)
     r:SetSize(COL_W, 2)
     box.rows = {}
     for i = 1, A.PER_SECTION do
-        local row = { t = Ink(box, 11), c = Ink(box, 10, BODY_FONT, GREY, "RIGHT") }
+        local row = { t = Ink(box, 12), c = Ink(box, 11, BODY_FONT, GREY, "RIGHT") }
         row.t:SetWidth(COL_W - TIME_W - 6)
         row.c:SetWidth(TIME_W)
         box.rows[i] = row
@@ -486,11 +503,13 @@ local function Section(parent)
     return box
 end
 
--- Fylder rubrikken og giver dens højde
-local function Fill(box, title, list)
+-- Fylder rubrikken og giver dens højde. En tom rubrik får en kort grå linje.
+local function Fill(box, title, list, empty)
     box.title:SetText(title)
     box.count:SetText(tostring(#list))
-    local y = -30
+    local blank = #list == 0
+    if blank then list = { { t = empty } } end
+    local y = -38
     for i, row in ipairs(box.rows) do
         local e = list[i]
         if e and i == A.PER_SECTION and #list > A.PER_SECTION then
@@ -500,12 +519,14 @@ local function Fill(box, title, list)
         row.c:ClearAllPoints()
         if e then
             row.t:SetText(e.t)
+            local c = blank and GREY or INK
+            row.t:SetTextColor(c[1], c[2], c[3])
             row.c:SetText(e.at and Clock(e.at) or "")
             row.t:SetPoint("TOPLEFT", box, "TOPLEFT", 0, y)
             row.c:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, y - 1)
             row.t:Show()
             row.c:Show()
-            y = y - Height(row.t) - 8
+            y = y - Height(row.t) - 12
         else
             row.t:Hide()
             row.c:Hide()
@@ -545,45 +566,45 @@ local function BuildWindow()
     ui.paper = paper
 
     local function at(fs, x, y, w) fs:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD + x, y) if w then fs:SetWidth(w) end end
-    ui.dateL = Ink(paper, 10) at(ui.dateL, 0, -12, 400)
-    ui.dateR = Ink(paper, 10, nil, nil, "RIGHT") at(ui.dateR, W - 200, -12, 200)
-    ui.mast = Ink(paper, 40, HEAD_FONT, INK, "CENTER") at(ui.mast, 0, -24, W)
+    ui.dateL = Ink(paper, 11) at(ui.dateL, 0, -16, 400)
+    ui.dateR = Ink(paper, 11, nil, nil, "RIGHT") at(ui.dateR, W - 200, -16, 200)
+    ui.mast = Ink(paper, 46, HEAD_FONT, INK, "CENTER") at(ui.mast, 0, -32, W)
     ui.mast:SetText(L("Wasted Coast Tidende"))
-    Rule(paper, 2):SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, -74)
-    Rule(paper, 1):SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, -78)
+    Rule(paper, 2):SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, -92)
+    Rule(paper, 1):SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, -96)
 
     -- Forsiden: overskrift til venstre, dagens fire tal til højre
-    ui.kick = Ink(paper, 10, BODY_FONT, RED) at(ui.kick, 0, -92, LEAD_W)
+    ui.kick = Ink(paper, 11, BODY_FONT, RED) at(ui.kick, 0, -116, LEAD_W)
     ui.kick:SetText(L("DAGENS STORE BEGIVENHED"))
-    ui.head = Ink(paper, 30, HEAD_FONT, INK) at(ui.head, 0, -106, LEAD_W)
-    ui.body = Ink(paper, 13, BODY_FONT, INK)
-    ui.body:SetPoint("TOPLEFT", ui.head, "BOTTOMLEFT", 0, -6)
+    ui.head = Ink(paper, 34, HEAD_FONT, INK) at(ui.head, 0, -134, LEAD_W)
+    ui.body = Ink(paper, 14, BODY_FONT, INK)
+    ui.body:SetPoint("TOPLEFT", ui.head, "BOTTOMLEFT", 0, -10)
     ui.body:SetWidth(LEAD_W)
     local vr = paper:CreateTexture(nil, "ARTWORK")
     C.BarFill(vr, INK[1], INK[2], INK[3], 1)
-    vr:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD + LEAD_W + 24, -96)
-    vr:SetSize(1, 52)
-    local sx = LEAD_W + 44
+    vr:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD + LEAD_W + 24, -118)
+    vr:SetSize(1, 70)
+    local sx = LEAD_W + 48
     local sw = math.floor((W - sx) / 4)
     ui.statN, ui.statL = {}, {}
     for i, k in ipairs(A.SECTIONS) do
-        ui.statN[i] = Ink(paper, 24, HEAD_FONT, INK) at(ui.statN[i], sx + (i - 1) * sw, -98, sw)
-        ui.statL[i] = Ink(paper, 10, BODY_FONT, GREY) at(ui.statL[i], sx + (i - 1) * sw, -128, sw)
+        ui.statN[i] = Ink(paper, 30, HEAD_FONT, INK) at(ui.statN[i], sx + (i - 1) * sw, -120, sw)
+        ui.statL[i] = Ink(paper, 11, BODY_FONT, GREY) at(ui.statL[i], sx + (i - 1) * sw, -160, sw)
         ui.statL[i]:SetText(STAT_NAME[k])
     end
     ui.midRule = Rule(paper, 1)
 
-    -- Rubrikkerne (placeres i Render, så tomme springes over)
+    -- Rubrikkerne: altid alle fire, side om side
     ui.box = {}
     for _, k in ipairs(A.SECTIONS) do ui.box[k] = Section(paper) end
 
     -- Level-løbet på én linje
     ui.raceRule1 = Rule(paper, 2)
     ui.raceRule2 = Rule(paper, 1)
-    ui.raceKick = Ink(paper, 10, BODY_FONT, RED)
+    ui.raceKick = Ink(paper, 11, BODY_FONT, RED)
     ui.raceKick:SetWidth(W)
     ui.raceKick:SetText(L("STILLINGEN I LEVEL-LØBET"))
-    ui.race = Ink(paper, 12, BODY_FONT, INK)
+    ui.race = Ink(paper, 13, BODY_FONT, INK)
     ui.race:SetWidth(W)
 
     -- Knapper
@@ -618,26 +639,22 @@ local function Render(P)
     for i, k in ipairs(A.SECTIONS) do ui.statN[i]:SetText(tostring(P.stats[k] or 0)) end
 
     -- Under forsiden: lige under overskrift og tekst, men mindst under tallene
-    local y = -math.max(150, 106 + Height(ui.head) + 6 + Height(ui.body) + 14)
+    local bodyH = (P.lead.t ~= "" and (10 + Height(ui.body))) or 0
+    local y = -math.max(206, 134 + Height(ui.head) + bodyH + 24)
     ui.midRule:ClearAllPoints()
     ui.midRule:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, y)
-    y = y - 14
+    y = y - 22
 
-    -- Rubrikkerne: kun dem med indhold, fra venstre
-    local col, tallest = 0, 0
-    for _, k in ipairs(A.SECTIONS) do
-        local box, list = ui.box[k], P.sec[k]
+    -- Rubrikkerne: alle fire, også de tomme
+    local tallest = SEC_MIN_H
+    for i, k in ipairs(A.SECTIONS) do
+        local box = ui.box[k]
         box:ClearAllPoints()
-        if #list > 0 then
-            box:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD + col * (COL_W + COL_GAP), y)
-            tallest = math.max(tallest, Fill(box, SEC_NAME[k], list))
-            box:Show()
-            col = col + 1
-        else
-            box:Hide()
-        end
+        box:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD + (i - 1) * (COL_W + COL_GAP), y)
+        tallest = math.max(tallest, Fill(box, SEC_NAME[k], P.sec[k], SEC_EMPTY[k]))
+        box:Show()
     end
-    if col > 0 then y = y - tallest - 8 end
+    y = y - tallest - 16
 
     -- Level-løbet
     local raceShown = #P.race > 0
@@ -648,12 +665,13 @@ local function Render(P)
     if raceShown then
         ui.raceRule1:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, y)
         ui.raceRule2:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, y - 4)
-        ui.raceKick:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, y - 14)
+        ui.raceKick:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, y - 18)
         ui.race:SetText(A.RaceLine(P, true))
-        ui.race:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, y - 28)
-        y = y - 28 - Height(ui.race)
+        ui.race:SetPoint("TOPLEFT", paper, "TOPLEFT", PAD, y - 36)
+        y = y - 36 - Height(ui.race)
     end
-    p:SetHeight(36 + (-y + 18) + 48)
+    ui.height = 36 + (-y + 24) + 48
+    p:SetHeight(ui.height)
     return p
 end
 
