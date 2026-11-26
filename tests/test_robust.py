@@ -681,6 +681,28 @@ do
     check(#db.goldChar.Frode.Frodo <= 300, "loft over målinger pr. karakter")
     check(db.goldChar.Frode.Frodo[1][1] == 6000000 + 30, "den første måling beholdes")
 
+    -- v0.33.1: spillet svarer 0 på GetMoney() ved logout. En 0 lige efter et beløb er ikke ægte guld.
+    NOW = NOW + 3600
+    msg("H;Jeppe;Jeppemain;WARRIOR;60;0;Orgrimmar;0;;13", "GUILD", "Jeppemain")
+    check(db.friends.Jeppe.chars.Jeppemain.gold == 520 * G, "guld falder ikke til 0 ved logout")
+    msg("GC;Jeppe;Jeppemain;" .. (NOW + 1) .. ":0", "GUILD", "Jeppemain")
+    local hz = db.goldChar.Jeppe.Jeppemain
+    check(hz[#hz][2] == 520 * G, "logout-nul fra synk gemmes ikke")
+    -- Gamle logout-nuller i historikken springes over i grafen
+    table.insert(hz, { NOW + 2, 0 })
+    local ptsz = ns.GoldTotalSeries("Jeppe", start - 86400, NOW + 10)
+    local loz = math.huge
+    for _, p in ipairs(ptsz) do if p[2] < loz then loz = p[2] end end
+    check(loz >= 450 * G and ptsz[#ptsz][2] == 527 * G, "gamle logout-nuller dykker ikke grafen: " .. loz / G)
+    table.remove(hz)
+    -- Dit eget guld ved logout: det senest kendte beløb, ikke GetMoney() = 0
+    local oldGM = GetMoney
+    GetMoney = function() return 0 end
+    ns.SampleMyGold(true)
+    GetMoney = oldGM
+    local mine = db.friends[db.me].chars[UnitName("player")]
+    check(not mine or mine.gold ~= 0 or oldGM() == 0, "eget guld nulstilles ikke ved logout")
+
     -- Guldsiden: "Samlet for de viste" er det samme som summen af hver vens karakterer
     ns.frame:Show()
     if ns.goldInfo then

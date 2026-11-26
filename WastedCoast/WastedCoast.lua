@@ -120,6 +120,9 @@ local addonName, ns = ...
 --   * v0.33.0: rolls-siden: tabt-procenten tæller kun need-rolls (greed og disenchant tæller ikke), og
 --             en ny kolonne viser track recorden for de seneste 10 need-rolls (V/T). Et need er tabt, når en
 --             anden vinder itemet, eller der ikke kommer en sejr inden 3 minutter. Sendes som felt 16 i R
+--   * v0.33.1: guldgrafen dykker ikke længere til 0 mellem hver session. Spillet svarer 0 på GetMoney() ved
+--             logout, og det blev gemt og sendt som karakterens guld. Nu bruges det senest kendte beløb, en 0
+--             lige efter et beløb afvises (også fra ældre versioner), og de gamle nuller fjernes fra historikken
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
@@ -561,6 +564,23 @@ local function InitDB()
         end
         db.goldCharSince = since or time()
     end
+    -- v0.33.1: fjern logout-nuller fra guldhistorikken (0 lige efter et beløb, gemt af ældre versioner,
+    -- fordi GetMoney() svarer 0 ved logout). Karakterens guld sættes tilbage til det senest kendte beløb.
+    if not db.goldZeroFix then
+        for friend, byChar in pairs(db.goldChar) do
+            local chars = db.friends[friend] and db.friends[friend].chars
+            for cn, h in pairs(byChar) do
+                local i, last = 1, nil
+                while h[i] do
+                    if h[i][2] == 0 and last and last > 0 then table.remove(h, i)
+                    else last = h[i][2]; i = i + 1 end
+                end
+                local c = chars and chars[cn]
+                if c and c.gold == 0 and last and last > 0 then c.gold = last end
+            end
+        end
+        db.goldZeroFix = true
+    end
     db.legacy = db.legacy or {}      -- ven -> { p = legacy points, c = klarede challenges, t } (kun WoW Forever)
     if db.settings.toasts == nil then db.settings.toasts = true end
     if db.settings.lootToasts == nil then db.settings.lootToasts = true end
@@ -708,7 +728,10 @@ local function UpdateChar(friend, char, data, seenAt, soft)
     if not c then c = {}; info.chars[char] = c end
     if data then
         for k, v in pairs(data) do
-            if v ~= nil and v ~= "" and not (k == "level" and v <= 0) then
+            -- v0.33.1: guld falder aldrig fra et beløb til 0. Spillet svarer 0 på GetMoney(), når man logger ud,
+            -- og ældre versioner gemte og sendte det, så grafen dykkede til 0 mellem hver session.
+            if v ~= nil and v ~= "" and not (k == "level" and v <= 0)
+                and not (k == "gold" and v == 0 and (c.gold or 0) > 0) then
                 if not soft or c[k] == nil then c[k] = v end
             end
         end
@@ -2442,10 +2465,11 @@ do
         return true
     end
 
-    -- Summen af guld på alle dine karakterer, med den aktuelle karakter opdateret
-    local function MyTotalGold()
+    -- Summen af guld på alle dine karakterer, med den aktuelle karakter opdateret.
+    -- atLogout: GetMoney() svarer 0, mens man logger ud, så karakterens senest kendte beløb bruges.
+    local function MyTotalGold(atLogout)
         if not db.me then return nil end
-        UpdateChar(db.me, UnitName("player"), { gold = GetMoney() }, time())
+        if not atLogout then UpdateChar(db.me, UnitName("player"), { gold = GetMoney() }, time()) end
         local total = 0
         for _, c in pairs((db.friends[db.me] and db.friends[db.me].chars) or {}) do
             if not c.demo then total = total + (c.gold or 0) end
@@ -2454,8 +2478,8 @@ do
     end
 
     -- Måles når du logger ud (og første gang, så grafen ikke er tom)
-    local function SampleMyGold()
-        local total = MyTotalGold()
+    local function SampleMyGold(atLogout)
+        local total = MyTotalGold(atLogout)
         if not total then return end
         local h = db.goldHist[db.me]
         local last = h and h[#h]
@@ -2532,6 +2556,8 @@ do
             return true
         end
         if prev and prev[2] == copper then return false end   -- uændret
+        -- v0.33.1: 0 lige efter et beløb er spillets svar ved logout (fra ældre versioner), ikke ægte guld
+        if copper == 0 and prev and prev[2] > 0 then return false end
         -- En ældre måling, der lander midt i historikken (fx fra en vens synk med et lidt andet ur):
         -- har vi allerede en måling under 10 minutter fra den, beholdes den, så grafen ikke hakker.
         local nxt = h[pos]
@@ -2568,7 +2594,17 @@ do
             if noDemo and c.demo then
                 -- demo-karakterer tæller ikke med i sladderen
             elseif h and #h > 0 then
-                lists[#lists + 1] = h
+                -- v0.33.1: spring logout-nuller over (0 lige efter et beløb), se UpdateChar
+                local clean, last = nil, nil
+                for i, smp in ipairs(h) do
+                    if smp[2] == 0 and last and last > 0 then
+                        if not clean then clean = {}; for k = 1, i - 1 do clean[k] = h[k] end end
+                    else
+                        if clean then clean[#clean + 1] = smp end
+                        last = smp[2]
+                    end
+                end
+                lists[#lists + 1] = clean or h
             elseif type(c.gold) == "number" and c.gold >= 0 and c.gold < 1e15 then   -- ikke "1e400" fra en ødelagt besked
                 lists[#lists + 1] = { { c.seen or 1, c.gold } }
             end
@@ -7942,7 +7978,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         TouchMe()
 
     elseif event == "PLAYER_LOGOUT" then
-        if db and db.me then ns.SampleMyGold() end
+        if db and db.me then ns.SampleMyGold(true) end
 
     elseif event == "SKILL_LINES_CHANGED" then
         if db and db.me then ns.ScheduleScan("prof", 3) end

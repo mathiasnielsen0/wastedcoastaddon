@@ -34,7 +34,7 @@ felter med `db.x = db.x or {}` første gang, det bruger dem.
 | `runs[ven][instans]` | `{ wipes, clears, boss = { navn = antal }, last }` |
 | `ach[ven][trofæ]` | Tidspunkt trofæet blev låst op. `achInit`, `demoAch` |
 | `rolls[ven]` | Roll-statistik, need/greed-tal (`ROLL_TYPE_FIELDS`), seneste rolls (`last`) og need-track record (`nh`, "V"/"T", v0.33) |
-| `goldHist`, `goldChar`, `goldCharSince` | Guldmålinger (samlet og pr. karakter) |
+| `goldHist`, `goldChar`, `goldCharSince`, `goldZeroFix` | Guldmålinger (samlet og pr. karakter). `goldZeroFix`: logout-nuller er fjernet (v0.33.1) |
 | `legacy[ven]` | Legacy points (Forever) |
 | `session` | Login-session (`ns.MySession`) |
 | `settings` | Indstillinger, se nedenfor |

@@ -74,6 +74,45 @@ const list = (x: any): any[] => (Array.isArray(x) ? x : x && typeof x === "objec
 const obj = (x: any): Record<string, any> => (x && typeof x === "object" && !Array.isArray(x) ? x : {});
 const num = (x: any): number => (typeof x === "number" && isFinite(x) ? x : 0);
 
+// Samlet guld over tid for én ven, som guldgrafen i addonet (ns.GoldTotalSeries): summen af alle
+// karakterer, hvor hver karakter tæller med sit senest kendte beløb. 0 lige efter et beløb springes
+// over: spillet svarer 0 på GetMoney() ved logout, og ældre versioner gemte det (v0.33.1).
+function goldTotalSeries(byChar: any, charsObj: any, oldHist: any[]): [number, number][] {
+  const lists: [number, number][][] = [];
+  for (const k of Object.keys(charsObj)) {
+    const c = obj(charsObj[k]);
+    if (c.demo) continue;
+    const h: [number, number][] = [];
+    for (const smp of list(byChar[k])) {
+      if (!Array.isArray(smp) || smp.d) continue;
+      const t = num(smp[0]), v = num(smp[1]);
+      if (!t) continue;
+      if (v === 0 && h.length && h[h.length - 1][1] > 0) continue;
+      h.push([t, v]);
+    }
+    h.sort((a, b) => a[0] - b[0]);
+    if (h.length) lists.push(h);
+    else if (num(c.gold) > 0) lists.push([[num(c.seen) || 1, num(c.gold)]]);
+  }
+  if (!lists.some((h) => h.length > 1)) {
+    // Ingen målinger pr. karakter: de gamle samlede målinger
+    return oldHist.filter((p) => Array.isArray(p) && num(p[1]) > 0).map((p) => [num(p[0]), num(p[1])] as [number, number]);
+  }
+  const cur = lists.map((h) => h[0][1]);
+  let total = cur.reduce((s, v) => s + v, 0);
+  const ev = lists.flatMap((h, i) => h.map((p) => [p[0], i, p[1]] as [number, number, number]))
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const pts: [number, number][] = [];
+  for (const [t, i, v] of ev) {
+    total += v - cur[i];
+    cur[i] = v;
+    const last = pts[pts.length - 1];
+    if (last && last[0] === t) last[1] = total;
+    else if (!last || last[1] !== total) pts.push([t, total]);
+  }
+  return pts;
+}
+
 export function buildModel(db: any) {
   const members = obj(db?.group?.members);
   const kicked = obj(db?.group?.kicked);
@@ -133,7 +172,7 @@ export function buildModel(db: any) {
       loot: loot.filter((l) => canon(l.friend) === id).length, wins: num(rolls.wins),
       needLoss: nr >= 5 ? Math.round((Math.max(0, nr - nw) / nr) * 100) : null, needRec: nh,
       pts: trophies.reduce((s, t) => s + t.pts, 0), trophies,
-      goldHist: list(db?.goldHist?.[id]).filter((p) => Array.isArray(p) && num(p[1]) > 0).map((p) => [num(p[0]), num(p[1])] as [number, number]),
+      goldHist: goldTotalSeries(obj(db?.goldChar?.[id]), charsObj, list(db?.goldHist?.[id])),
     };
   }).sort((a, b) => b.main.level - a.main.level || b.main.xp - a.main.xp);
   const byId: Record<string, Person> = Object.fromEntries(people.map((p) => [p.id, p]));
