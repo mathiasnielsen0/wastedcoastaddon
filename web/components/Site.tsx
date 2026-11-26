@@ -76,6 +76,21 @@ function Totals({ m }: { m: Model }) {
   return <div className="totals">{[box(t.levels, "Levels tilsammen"), box(t.deaths, "Dødsfald"), box(t.bosses, "Boss-kills"), box(t.hours, "Timer spillet"), box(t.gold, "Guld i alt")]}</div>;
 }
 
+// De seneste need-rolls som grønne og røde prikker, nyeste til højre
+function NeedRec({ rec, loss }: { rec: string; loss: number | null }) {
+  const won = rec.split("").filter((c) => c === "V").length;
+  const label = `Seneste ${rec.length} need: ${won} vundet, ${rec.length - won} tabt`;
+  return (
+    <div className="needrec" title={label}>
+      <span>Need</span>
+      <span className="dots" role="img" aria-label={label}>
+        {rec.split("").map((c, i) => <i key={i} className={c === "V" ? "w" : "l"} />)}
+      </span>
+      <span>{won}/{rec.length}{loss !== null ? ` · ${loss}% tabt` : ""}</span>
+    </div>
+  );
+}
+
 function Card({ m, p, snapT }: { m: Model; p: Person; snapT: number }) {
   const c = p.main;
   const now = Date.now() / 1000;
@@ -105,6 +120,7 @@ function Card({ m, p, snapT }: { m: Model; p: Person; snapT: number }) {
       {p.goldHist.length > 1 && (
         <div className="spark"><Sparkline hist={p.goldHist} /><span>{fmt(goldOf(p.goldHist[p.goldHist.length - 1][1]))} g</span></div>
       )}
+      {p.needRec && <NeedRec rec={p.needRec} loss={p.needLoss} />}
       <div className="seen">
         {online ? "Online nu" : `Sidst set ${ago(p.seen)}`} · {p.chars.length} karakter{p.chars.length === 1 ? "" : "er"}
       </div>
@@ -214,7 +230,7 @@ export default function Site({ m, flavors, meta }: { m: Model; flavors: Meta[]; 
   const rows = m.people.map((p) => ({
     id: p.id, name: p.name, color: p.color,
     values: { levels: p.levels, deaths: p.deaths, pvp: p.pvp, bosses: p.bosses, clears: p.clears, wipes: p.wipes,
-      loot: p.loot, wins: p.wins, pts: p.pts, hours: Math.round(p.played / 3600), gold: goldOf(p.gold) },
+      loot: p.loot, wins: p.wins, needLoss: p.needLoss ?? undefined, pts: p.pts, hours: Math.round(p.played / 3600), gold: goldOf(p.gold) },
   }));
   return (
     <div className="wrap">

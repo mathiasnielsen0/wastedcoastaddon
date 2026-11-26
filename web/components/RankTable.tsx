@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
 
-export type RankRow = { id: string; name: string; color: string; values: Record<string, number> };
-const COLS = [
+export type RankRow = { id: string; name: string; color: string; values: Record<string, number | undefined> };
+const COLS: { k: string; l: string; pct?: boolean }[] = [
   { k: "levels", l: "Levels" }, { k: "deaths", l: "Døde" }, { k: "pvp", l: "PvP-døde" }, { k: "bosses", l: "Bosser" },
   { k: "clears", l: "Clears" }, { k: "wipes", l: "Wipes" }, { k: "loot", l: "Loot" }, { k: "wins", l: "Rolls vundet" },
+  { k: "needLoss", l: "Need tabt", pct: true },
   { k: "pts", l: "Trofæpoint" }, { k: "hours", l: "Timer" }, { k: "gold", l: "Guld" },
 ];
 
@@ -33,8 +34,10 @@ export default function RankTable({ rows }: { rows: RankRow[] }) {
             <tr key={r.id}>
               <td><span className="rank">{i + 1}</span><b style={{ color: r.color }}>{r.name}</b></td>
               {COLS.map((c) => {
-                const v = r.values[c.k] || 0;
-                return <td key={c.k} className={v && v === best[c.k] ? "best" : undefined}>{v.toLocaleString("da-DK")}</td>;
+                const raw = r.values[c.k];
+                if (raw === undefined) return <td key={c.k} className="none">–</td>;
+                const v = raw || 0;
+                return <td key={c.k} className={v && v === best[c.k] ? "best" : undefined}>{v.toLocaleString("da-DK")}{c.pct ? "%" : ""}</td>;
               })}
             </tr>
           ))}

@@ -1,5 +1,5 @@
 # Test af need/greed/disenchant/pass i rolls (v0.21): optælling, synk med nye og gamle versioner,
-# Rolls-siden, tickeren og sladderen.
+# Rolls-siden, tickeren og sladderen. v0.33: tabt-procent kun over need og need-track record.
 # Kør: pip install lupa && python3 tests/test_rolls.py WastedCoast [forever]
 import sys, lupa.lua51 as L
 from wowmock import MOCK, load_addon
@@ -24,6 +24,7 @@ LOOT_ROLL_DISENCHANT_SELF = "You have selected Disenchant for: %s"
 LOOT_ROLL_PASSED_SELF = "You passed on: %s"
 LOOT_ROLL_PASSED_SELF_AUTO = "You automatically passed on: %s because you cannot loot that item."
 LOOT_ROLL_ROLLED_GREED = "Greed Roll - %d for %s by %s"
+LOOT_ROLL_WON = "%s won: %s"
 TT = {}
 GameTooltip.AddLine = function(_, s) TT[#TT+1] = tostring(s) end
 GameTooltip.AddDoubleLine = function(_, a, b) TT[#TT+1] = tostring(a) .. " | " .. tostring(b) end
@@ -91,7 +92,8 @@ RunTimers()
 local rm = findSent("R;Mathias;")
 check(rm ~= nil, "R sendes")
 local f = { strsplit(";", rm) }
-check(#f == 15, "R har 15 felter: " .. rm)
+check(#f == 16, "R har 16 felter: " .. rm)
+check(f[16] == "V", "need-track recorden sendes sidst: " .. rm)
 check(f[3] == "4" and f[4] == "3", "gamle felter uændret først: " .. rm)
 check(f[9] == "1" and f[10] == "1" and f[11] == "2" and f[12] == "1" and f[13] == "1" and f[14] == "0" and f[15] == "3",
     "need/greed/de/pass sidst: " .. rm)
@@ -173,12 +175,84 @@ do
     check(not txt:find("needede") and not txt:find("trykkede Need"), "5 need og 5 greed er ikke grådigt")
 end
 
+-- -----------------------------------------------------------------------------
+-- v0.33: tabt-procenten tæller kun need, og de seneste need-rolls huskes som V/T
+-- -----------------------------------------------------------------------------
+wipe(db.rolls)
+loot("You have selected Need for: " .. link(30001, "A"))
+loot("You won: " .. link(30001, "A"))                                  -- V
+loot("You have selected Need for: " .. link(30002, "B"))
+loot("Nickchar won: " .. link(30002, "B"))                              -- T (en anden vandt)
+loot("You have selected Need for: " .. link(30003, "C"))
+loot("You have selected Greed for: " .. link(30004, "D"))
+loot("Nickchar won: " .. link(30004, "D"))                              -- greed: ingen track record
+local me = db.rolls.Mathias
+check(me.nh == "VT", "V og T, mens C stadig venter: " .. tostring(me.nh))
+CLOCK = CLOCK + 200
+RunTimers()
+check(me.nh == "VTT", "need uden svar tæller som tabt efter et stykke tid: " .. tostring(me.nh))
+check(ns.LossRate(me) == nil, "ingen rating under 5 need-rolls")
+-- Mange greed-tab må ikke trække need-tabt op
+for i = 1, 6 do loot("You have selected Greed for: " .. link(31000 + i, "G" .. i)) end
+loot("You have selected Need for: " .. link(30005, "E"))
+loot("You won: " .. link(30005, "E"))
+loot("You have selected Need for: " .. link(30006, "F"))
+loot("You won: " .. link(30006, "F"))
+check(me.nr == 5 and me.nw == 3 and me.rolls == 12, "tal: " .. me.nr .. "/" .. me.nw .. "/" .. me.rolls)
+check(math.abs(ns.LossRate(me) - 0.4) < 0.001, "need tabt = 2 af 5 need: " .. tostring(ns.LossRate(me)))
+local rec = ns.NeedRecord(me)
+check(rec.n == 5 and rec.won == 3 and rec.lost == 2 and rec.streak == 2 and rec.kind == "V", "track record VTTVV")
+-- Kun de seneste 10 huskes
+for i = 1, 8 do
+    loot("You have selected Need for: " .. link(32000 + i, "N" .. i))
+    loot("Nickchar won: " .. link(32000 + i, "N" .. i))
+end
+check(me.nh == "VVTTTTTTTT", "højst 10, ældste først: " .. tostring(me.nh))
+check(ns.NeedRecord(me).streak == 8 and ns.NeedRecord(me).kind == "T", "taberstime på 8")
+-- To ens items på én gang: hvert need får sit eget resultat
+loot("You have selected Need for: " .. link(33000, "Twin"))
+loot("You have selected Need for: " .. link(33000, "Twin"))
+CLOCK = CLOCK + 5
+loot("You won: " .. link(33000, "Twin"))
+loot("Nickchar won: " .. link(33000, "Twin"))
+check(me.nh:sub(-2) == "VT", "to ens items: " .. me.nh)
+
+-- Synk: felt 16 modtages, valideres og slettes ikke af ældre versioner
+msg("R;Nick;30;10;800;20;2;98;20;5;10;5;0;0;7;VVTVT")
+check(db.rolls.Nick.nh == "VVTVT", "track record modtages")
+check(math.abs(ns.LossRate(db.rolls.Nick) - 0.75) < 0.001, "Nicks need tabt 15 af 20")
+msg("R;Nick;31;10;800;20;2;98;20;5;10;5;0;0;7")
+check(db.rolls.Nick.nh == "VVTVT", "besked uden felt 16 beholder track recorden")
+msg("R;Nick;32;10;800;20;2;98;20;5;10;5;0;0;7;VXV")
+check(db.rolls.Nick.nh == "VVTVT", "ugyldig track record ignoreres")
+msg("R;Nick;33;10;800;20;2;98;20;5;10;5;0;0;7;VVVVVVVVVVV")
+check(db.rolls.Nick.nh == "VVTVT", "for lang track record ignoreres")
+msg("R;Frode;10;3;500;10;2;99", "Frodex")
+check(ns.LossRate(db.rolls.Frode) == nil, "gammel version uden need-tal: ingen rating")
+
+-- Rolls-siden viser need tabt og V/T
+ns.core.EXTRA_PAGES[8].refresh()
+byName = {}
+for _, row in ipairs(ns.rollRows) do local d = rawget(row, "data") if type(d) == "table" then byName[d.name] = row end end
+check(byName.Nick.f[5]:GetText() == "75%", "Nicks need tabt: " .. tostring(byName.Nick.f[5]:GetText()))
+local vt = tostring(byName.Nick.f[9]:GetText()):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+check(vt == "V V T V T", "track record på siden: " .. vt)
+check(tostring(byName.Frode.f[9]:GetText()):find("-", 1, true), "ingen track record viser -")
+TT = {}
+byName.Nick.scripts.OnEnter(byName.Nick)
+tt = table.concat(TT, "\n")
+check(tt:find("Need tabt | 75% (15 / 20)", 1, true) and tt:find("Seneste 5 need | 3 vundet, 2 tabt", 1, true), "tooltip: " .. tt)
+TT = {}
+byName.Mathias.scripts.OnEnter(byName.Mathias)
+check(table.concat(TT, "\n"):find("Tabt de sidste", 1, true) == nil, "Mathias sluttede på VT: ingen stime")
+
 -- Demo-data har også need/greed
 wipe(db.rolls)
 SlashCmdList["WASTEDCOAST"]("demo")
 local anyTyped = false
 for _, rr in pairs(db.rolls) do if ns.HasRollTypes(rr) then anyTyped = true end end
 check(anyTyped, "demo-data har need/greed")
+for _, rr in pairs(db.rolls) do check(rr.nh == nil or ns.ValidNeedHist(rr.nh), "demo-track record er gyldig") end
 
 return PASSES
 '''

@@ -130,6 +130,12 @@ h2 small { font: 400 13px var(--font-body); color: var(--muted); letter-spacing:
 .spark { display: flex; align-items: end; gap: 8px; font-size: 12px; color: var(--muted); }
 .spark svg { flex: 1; height: 30px; overflow: visible; }
 .spark span { font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.needrec { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.needrec .dots { display: flex; gap: 3px; flex: 1; }
+.needrec .dots i { width: 8px; height: 8px; border-radius: 50%; }
+.needrec .dots i.w { background: #66e680; }
+.needrec .dots i.l { background: #ff7373; }
+td.none { color: var(--muted); }
 .card .seen { font-size: 12px; color: var(--muted); }
 
 /* Rangliste */

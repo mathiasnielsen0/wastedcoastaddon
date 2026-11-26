@@ -33,7 +33,7 @@ felter med `db.x = db.x or {}` første gang, det bruger dem.
 | `loot`, `lootSeen` | Loot wins og ID'er |
 | `runs[ven][instans]` | `{ wipes, clears, boss = { navn = antal }, last }` |
 | `ach[ven][trofæ]` | Tidspunkt trofæet blev låst op. `achInit`, `demoAch` |
-| `rolls[ven]` | Roll-statistik, need/greed-tal (`ROLL_TYPE_FIELDS`) og seneste rolls (`last`) |
+| `rolls[ven]` | Roll-statistik, need/greed-tal (`ROLL_TYPE_FIELDS`), seneste rolls (`last`) og need-track record (`nh`, "V"/"T", v0.33) |
 | `goldHist`, `goldChar`, `goldCharSince` | Guldmålinger (samlet og pr. karakter) |
 | `legacy[ven]` | Legacy points (Forever) |
 | `session` | Login-session (`ns.MySession`) |

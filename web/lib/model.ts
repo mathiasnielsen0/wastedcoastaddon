@@ -60,6 +60,8 @@ export type Person = {
   id: string; name: string; color: string; chars: Char[]; main: Char; seen: number;
   gold: number; played: number; levels: number; bosses: number; clears: number; wipes: number;
   deaths: number; pvp: number; loot: number; wins: number; pts: number;
+  // Need-rolls: tabt-procent (kun need, null under 5 need-rolls) og de seneste need-rolls som "V"/"T"
+  needLoss: number | null; needRec: string;
   trophies: { id: string; name: string; desc: string; pts: number; t: number }[];
   goldHist: [number, number][];
 };
@@ -122,11 +124,14 @@ export function buildModel(db: any) {
       .map((k) => ({ id: k, name: TROPHIES[k][0], desc: TROPHIES[k][1], pts: TROPHIES[k][2], t: num(ach[k]) }))
       .sort((a, b) => a.t - b.t);
     const rolls = obj(db?.rolls?.[id]);
+    const nr = num(rolls.nr), nw = num(rolls.nw);
+    const nh = typeof rolls.nh === "string" && /^[VT]{1,10}$/.test(rolls.nh) ? rolls.nh : "";
     const main = chars[0] || { key: "", name: "?", level: 0, xp: 0, seen: 0 };
     return {
       id, name: name(id), color: CLASS_COLORS[main.class || ""] || "var(--ink)", chars, main, seen, gold, played, levels,
       bosses, clears, wipes, deaths: mine.length, pvp: mine.filter((e) => e.pvp).length,
       loot: loot.filter((l) => canon(l.friend) === id).length, wins: num(rolls.wins),
+      needLoss: nr >= 5 ? Math.round((Math.max(0, nr - nw) / nr) * 100) : null, needRec: nh,
       pts: trophies.reduce((s, t) => s + t.pts, 0), trophies,
       goldHist: list(db?.goldHist?.[id]).filter((p) => Array.isArray(p) && num(p[1]) > 0).map((p) => [num(p[0]), num(p[1])] as [number, number]),
     };

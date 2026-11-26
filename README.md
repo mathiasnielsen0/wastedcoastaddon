@@ -7,7 +7,7 @@ levelling-race, dødsstatistik, uheldsrating for rolls, en guldgraf, professions
 gear, reputation og drillerier (dødsannoncer, Skammens hat, Need-politiet,
 emote-angreb og held-rangering). Alt synkroniserer mellem jer.
 
-Version 0.32.1. Virker på både TBC Classic Anniversary (interface 20506) og
+Version 0.33.0. Virker på både TBC Classic Anniversary (interface 20506) og
 WoW Forever (interface 16001). Samme mappe bruges til begge.
 
 Addonet hed før WC4L. Mappen hedder stadig `WastedCoast`, så jeres gemte data,
@@ -275,10 +275,17 @@ slog dem ihjel og hvor.
 ### Rolls (under Loot)
 **Uheldsrating for rolls:** hver gang du vælger Need, Greed eller Disenchant på et
 item, tæller det som et roll. Addonet gemmer, hvor mange du har deltaget i, hvor
-mange du vandt, og selve tallene du slog. **Tabt** er andelen af dine rolls, du
-ikke vandt (fra 5 rolls), og **Snit** er dit gennemsnitlige roll (held er 50,5).
-Den med højest tabt-procent står øverst og får titlen *Uheldsfuglen*. Kun rolls
-fra den nye version tæller.
+mange du vandt, og selve tallene du slog. **Need tabt** er andelen af dine
+*need*-rolls, du ikke vandt (fra 5 need-rolls); greed og disenchant tæller ikke med.
+**Snit** er dit gennemsnitlige roll (held er 50,5). Den med højest need-tabt-procent
+står øverst og får titlen *Uheldsfuglen*.
+
+**Seneste need** (fra 0.33) er din track record for de seneste 10 items, du har
+needet på: grønt **V** for vundet og rødt **T** for tabt, nyeste til højre. Et need
+tæller som tabt, når en anden vinder itemet, eller hvis der ikke kommer en sejr
+inden for 3 minutter. Hold musen over en ven for at se fx "3 vundet, 7 tabt" og en
+eventuel stime ("Tabt de sidste 4 i træk"). Websitet viser det samme som prikker
+på hvert vennekort og *Need tabt* i ranglisten.
 
 **Need / Greed og Pass** (fra 0.21): addonet skelner mellem dine valg. Kolonnen
 *Need / Greed* viser, hvor mange gange du har trykket hvad, og *Pass* hvor mange
@@ -602,7 +609,7 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 - **Alt-junkie**: flest karakterer (mindst to)
 - **Wipe-konge**: flest wipes
 - **Faldskade-konge**: flest dødsfald af fald
-- **Uheldsfuglen**: højest andel tabte rolls (mindst 5 rolls)
+- **Uheldsfuglen**: højest andel tabte need-rolls (mindst 5 need-rolls)
 - **Fætter Højben**: bedst held i de seneste rolls (over 50%)
 - **Skammens hat**: den, der døde sidst
 - **Level-snegl**: længst bagud i level
@@ -838,7 +845,7 @@ python3 tests/test_language.py WastedCoast          # engelsk: ingen dansk tekst
 python3 tests/test_language.py WastedCoast forever  # det samme på WoW Forever
 python3 tests/test_bar.py WastedCoast               # bande-baren: ikoner, XP-ring, tooltip, nyheder, hat, flyt og lås
 python3 tests/test_bar.py WastedCoast forever       # det samme på WoW Forever
-python3 tests/test_rolls.py WastedCoast             # need/greed/disenchant/pass i rolls, synk, Rolls-siden og sladder
+python3 tests/test_rolls.py WastedCoast             # need/greed/disenchant/pass i rolls, need tabt og track record, synk, Rolls-siden og sladder
 python3 tests/test_news.py WastedCoast              # nyhedspanelet i hovedvinduet og "[Loot]"-rettelsen
 python3 tests/test_news.py WastedCoast forever      # det samme på WoW Forever
 python3 tests/test_haan.py WastedCoast              # hån-knappen: prut på dødsannoncen, cooldown, spam-værn, slå fra, nyheder og synk

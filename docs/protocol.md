@@ -65,7 +65,7 @@ guild, party/raid eller whisper. `/wc4ever status` viser det live.
 | `B` | ven, instans, boss, antal | Boss-kills | samme |
 | `W` | ven, instans, tid | Wipe (toast hos alle) | samme |
 | `A` | ven, trofæ-id, tid | Trofæ låst op | samme |
-| `R` | ven, rolls, wins, sum, cnt, low, high, nr, nw, gr, gw, dr, dw, pr | Roll-statistik (need/greed/de/pass fra v0.21) | `ns.SendRollSummary` / `HandleExtraMessage` |
+| `R` | ven, rolls, wins, sum, cnt, low, high, nr, nw, gr, gw, dr, dw, pr, nh | Roll-statistik (need/greed/de/pass fra v0.21, need-track record `nh` = op til 10 × `V`/`T` fra v0.33) | `ns.SendRollSummary` / `HandleExtraMessage` |
 | `G` | ven, `tid:kobber,...` | Guldhistorik (samlet, til ældre versioner) | `ns.SendGoldHistory` / samme |
 | `GC` | ven, karakter, `tid:kobber,...` | Guld pr. karakter (v0.18.7) | samme |
 | `P` | ven, karakter, professions | Professions | `ns.SendProf` / samme |
