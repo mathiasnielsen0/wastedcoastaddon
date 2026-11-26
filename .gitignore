@@ -1,1 +1,4 @@
 __pycache__/
+web/.dev.vars
+web/.wrangler/
+web/node_modules/

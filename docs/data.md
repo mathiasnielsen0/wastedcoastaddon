@@ -2,7 +2,8 @@
 
 Alt gemmes i én global tabel, `WastedCoastDB` (`## SavedVariables` i `WastedCoast.toc`).
 I koden hedder den `db` (i modulerne via en lokal `DB()`-funktion). WoW skriver den til
-`WTF\Account\<konto>\SavedVariables\WastedCoastDB.lua` ved logout og `/reload`.
+`WTF\Account\<konto>\SavedVariables\WastedCoast.lua` (filen
+hedder efter addonet). Websitet læser den samme fil, se `web/README.md` ved logout og `/reload`.
 
 `InitDB()` i `WastedCoast.lua` opretter kernens felter og laver migreringer.
 `SCHEMA = 5` (`db.schemaVersion`) er dataformatets version. Hvert modul opretter sine egne

@@ -724,11 +724,22 @@ Uddeles automatisk og vises på kortene og under scoreboardet:
 Når du logger ud eller skriver `/reload`, gemmer WoW dem her:
 
 ```
-World of Warcraft\_anniversary_\WTF\Account\<DIT KONTONAVN>\SavedVariables\WastedCoastDB.lua
+World of Warcraft\_anniversary_\WTF\Account\<DIT KONTONAVN>\SavedVariables\WastedCoast.lua
 ```
 
-(Eller `_classic_` / `_classic_era_` / Forever-mappen afhængigt af version.) Den fil kan senere
-bruges til at uploade data til et website.
+(Eller `_classic_` / `_classic_era_` / `_forever_` afhængigt af version.)
+
+## Websitet: skammenshat.dk
+
+[skammenshat.dk](https://skammenshat.dk) viser bandens data uden for spillet: hvem der bærer
+Skammens hat, et kort til hver ven, ranglisten, kirkegården, loot, drillerier og trofæskabet.
+
+Dataene kommer fra filen ovenfor. Det lille program `WC4everSync.exe` (mappen `sync/`) holder
+øje med filen og sender den til websitet, hver gang WoW gemmer den. Det starter selv med
+Windows. Da addonet synker alles data i spillet, er det nok, at én af jer kører det.
+
+- Brug programmet: se [sync/README.md](sync/README.md)
+- Sæt websitet op (Cloudflare, gratis): se [web/README.md](web/README.md)
 
 ---
 

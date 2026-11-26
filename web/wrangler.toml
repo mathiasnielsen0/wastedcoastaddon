@@ -1,0 +1,14 @@
+# Cloudflare Worker: websitet (public/) og API'et (worker.js), som sync-programmet uploader til.
+# Deployes automatisk af Cloudflare (Workers Builds), når der pushes til main. Se web/README.md.
+name = "wc4ever"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Her gemmes den seneste SavedVariables-fil pr. spilversion. Cloudflare opretter selv
+# KV-lageret ved første deploy, når der ikke står noget id.
+[[kv_namespaces]]
+binding = "WC_DATA"
