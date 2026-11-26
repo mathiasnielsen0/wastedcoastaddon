@@ -84,7 +84,7 @@ function goldTotalSeries(byChar: any, charsObj: any, oldHist: any[]): [number, n
     if (c.demo) continue;
     const h: [number, number][] = [];
     for (const smp of list(byChar[k])) {
-      if (!Array.isArray(smp) || smp.d) continue;
+      if (!Array.isArray(smp) || (smp as any).d) continue;
       const t = num(smp[0]), v = num(smp[1]);
       if (!t) continue;
       if (v === 0 && h.length && h[h.length - 1][1] > 0) continue;
@@ -116,13 +116,24 @@ function goldTotalSeries(byChar: any, charsObj: any, oldHist: any[]): [number, n
 export function buildModel(db: any) {
   const members = obj(db?.group?.members);
   const kicked = obj(db?.group?.kicked);
+  const friends = obj(db?.friends);
+  // Dublet-ID'er (Groups.lua): følg members[id].dup til det ID, vennens data ligger på. Ældre
+  // addon-versioner kunne efterlade en ring (A.dup = B og B.dup = A), når det viste ID skiftede.
+  // Så vælges det ID i kæden, der har data i friends, så vennen aldrig forsvinder (v0.33.2).
   const canon = (id: string) => {
-    const m = members[id];
-    return m && m.dup && members[m.dup] ? String(m.dup) : id;
+    const chain = [id];
+    let cur = id;
+    for (;;) {
+      const d = members[cur]?.dup;
+      if (typeof d !== "string" || !members[d] || chain.includes(d)) break;
+      chain.push(d);
+      cur = d;
+    }
+    if (friends[cur]) return cur;
+    return chain.find((x) => friends[x]) ?? cur;
   };
   const name = (id: string) => String(members[canon(id)]?.n || id);
 
-  const friends = obj(db?.friends);
   const ids = Object.keys(friends).filter((id) => !kicked[id] && canon(id) === id);
   const events = list(db?.events).filter((e) => e && !e.demo && e.friend)
     .sort((a, b) => num(b.time) - num(a.time));

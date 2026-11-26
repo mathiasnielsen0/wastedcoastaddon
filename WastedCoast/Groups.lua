@@ -302,6 +302,10 @@ local function Dedupe(list)
         local keep = best[Find(e)]
         if keep == e then
             out[#out + 1] = e
+            -- Det viste ID er ikke selv en dublet. Skifter det viste ID (den anden blev mere aktiv),
+            -- ville en gammel kobling ellers give en ring (A.dup = B og B.dup = A), som websitet
+            -- ikke kunne finde ud af (v0.33.2). Koblingen huskes stadig hos det skjulte ID.
+            e.m.dup = nil
         else
             ns.memberAlias[e.id] = keep.id
             e.m.dup = keep.id

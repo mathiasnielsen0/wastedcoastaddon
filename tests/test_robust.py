@@ -492,6 +492,12 @@ do
     check(RS.uMCANDZE2 and not RS.uMCANDZE3 and #R == before + 1, "det senest aktive ID vises")
     check(db.friends.uMCANDZE2 and db.friends.uMCANDZE2.chars.Murer and db.friends.uMCANDZE2.chars.Oldchar,
           "karaktererne følger med ved skiftet")
+    -- v0.33.2: ingen ring i koblingen (gamle.dup = nye og nye.dup = gamle), som fik websitet til at skjule vennen
+    check(g.members.uMCANDZE3.dup == "uMCANDZE2" and g.members.uMCANDZE2.dup == nil,
+          "det viste ID mister sin gamle kobling, det skjulte peger på det viste")
+    g.members.uMCANDZE2.dup = "uMCANDZE3"   -- en ring fra en ældre version heles ved næste genopbygning
+    ns.RebuildRoster()
+    check(RS.uMCANDZE2 and g.members.uMCANDZE2.dup == nil and #R == before + 1, "en gammel ring heles")
     -- Dig selv vinder altid over en dublet med dit navn
     g.members.uMEDUPLCX = { n = ns.core.Name(db.me), nt = 1, j = 1 }
     ns.RebuildRoster()

@@ -123,6 +123,8 @@ local addonName, ns = ...
 --   * v0.33.1: guldgrafen dykker ikke længere til 0 mellem hver session. Spillet svarer 0 på GetMoney() ved
 --             logout, og det blev gemt og sendt som karakterens guld. Nu bruges det senest kendte beløb, en 0
 --             lige efter et beløb afvises (også fra ældre versioner), og de gamle nuller fjernes fra historikken
+--   * v0.33.2: en ven med to ID'er kunne forsvinde fra websitet. Skiftede det viste ID, beholdt det sin gamle
+--             dublet-kobling, så de to ID'er pegede på hinanden. Det viste ID ryddes nu, og gamle ringe heles
 -- =============================================================================
 
 local PREFIX = "WCOAST"   -- addon-besked prefix (max 16 tegn)
