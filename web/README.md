@@ -27,6 +27,7 @@ Sender flere, vinder den nyeste upload pr. spilversion (`_forever_`, `_anniversa
 | `lib/lua.ts` | Læser SavedVariables-formatet (Lua-tabeller) |
 | `lib/model.ts` | Addonets data -> det, siden viser (Skammens hat, trofæer, ranglisten ...) |
 | `lib/store.ts` | Neon-tabellen `savedvars` (oprettes selv ved første upload) |
+| `vercel.json` | Funktionerne kører i Frankfurt (`fra1`), tæt på Neon-databasen |
 
 Får addonet nye felter (docs/data.md), skal de bare læses i `lib/model.ts` og vises i `components/Site.tsx`.
 
